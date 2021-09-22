@@ -45,11 +45,6 @@ namespace Content.Server.Explosion
 
         public DamageSpecifier BaseExplosionDamage = new();
 
-        /// <summary>
-        ///     How much explosion damage needs to rack up on a tile before it becomes permeable to explosions?
-        /// </summary>
-        private Dictionary<GridId, Dictionary<Vector2i, int>> _gridTileTolerances = new();
-
         public override void Initialize()
         {
             base.Initialize();
