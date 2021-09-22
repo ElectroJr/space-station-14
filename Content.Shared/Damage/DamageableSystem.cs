@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Damage.Prototypes;
@@ -196,6 +197,98 @@ namespace Content.Shared.Damage
                 component.Damage = newDamage;
                 DamageChanged(component, delta);
             }
+        }
+
+        /// <summary>
+        ///     Figure out how much you need to scale some baseDamage such that the final total damage after resistances
+        ///     are applied is at least equal to the requested amount. Basically "I have an object with X resistances.
+        ///     How much damage to I need to deal to it to ACTUALLY damage it by at-least a given amount"?
+        /// </summary>
+        /// <returns></returns>
+        public float InverseResistanceSolve(DamageableComponent component, DamageSpecifier baseDamage, int damageTarget, float maxScale = 100, float precision = 1)
+        {
+            if (damageTarget == 0)
+                return 0;
+
+            // First, we take out base input damage and remove any damage types that are not actually applicable to the target
+            DamageSpecifier damage = new(baseDamage);
+            foreach (var type in damage.DamageDict.Keys)
+            {
+                if (!component.Damage.DamageDict.ContainsKey(type))
+                    damage.DamageDict.Remove(type);
+            }
+
+            // Is there even any applicable damage?
+            damage.TrimZeros();
+            if (damage.Empty)
+                return float.NaN;
+
+            // Resolve this component's damage modifier
+            DamageModifierSetPrototype? modifier = null;
+            if (component.DamageModifierSetId != null)
+            {
+                IoCManager.Resolve<IPrototypeManager>().TryIndex(component.DamageModifierSetId, out modifier);
+            }
+
+            // using the modifier, define a function that maps a damage scaling factor to the distance from the desired damage
+            Func<float, int> damageDelta;
+            int sign = Math.Sign(damageTarget);
+            if (modifier == null)
+                damageDelta = scale => sign * ((scale * damage).Total - damageTarget);
+            else
+                damageDelta = scale => sign * (DamageSpecifier.ApplyModifierSet(scale * damage, modifier).Total - damageTarget);
+
+            // Note that resultingDamage is not a monotonic function. Consider a resistance set that has:
+            // - maps burn damage 1:1
+            // - reduces blunt damage by 20 (to a min of zero), and then multiplies by -5 (healing)
+            // initially, as damage increases the burn damage goes up, and total damage goes up.
+            // but when input blunt damage becomes larger than 20, the blunt damage will be begin healing, eventually overpowering the burn damage.
+
+            // the scale factor only goes as low as 0. We use this as one endpoint of our search
+            // the damageDelta at x0 is always negative
+            float x0 = 0;
+
+            // for the other search endpoint (x1) we use the maximum scale.
+            // here the damage delta SHOULD always be positive
+            float x1 = maxScale;
+            var y1 = damageDelta(x1);
+
+            if (damageDelta(x1) < 0)
+            {
+                // Well apparently it isn't positive for this x1 value.
+                // MAYBE the maxScale is not big enough. OR MAYBE there is a root, but as mentioned the function is not monotonic, so we can't be sure.
+                // so lets try another endpoint.
+
+                // what scale is needed if the target has NO resistance set?
+                x1 = (float) damageTarget / damage.Total;
+
+                if (damageDelta(x1) < 0)
+                {
+                    // welp at least we tried
+                    return float.NaN;
+                }
+            }
+
+            // begin a bisection search.
+            // If the output wasn't an integer, id use some sort of gradient based search. there probably is some way of doing it with ints, but eh fuck it.
+            float xGuess;
+            int result;
+            do
+            {
+                xGuess = (x0 + x1) / 2;
+                result = damageDelta(x1);
+
+                if (result == 0)
+                    break;
+
+                if (result < 0)
+                    x0 = xGuess;
+                else
+                    x1 = xGuess;
+
+            } while (Math.Abs(x1 - x0) > precision);
+
+            return xGuess;
         }
     }
 
