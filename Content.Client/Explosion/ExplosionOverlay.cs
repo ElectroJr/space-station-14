@@ -6,6 +6,7 @@ using Robust.Shared.Enums;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
+using Robust.Shared.Maths;
 using Robust.Shared.Timing;
 
 namespace Content.Client.Explosion
@@ -19,17 +20,29 @@ namespace Content.Client.Explosion
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
 
-        // TODO: When worldHandle can do DrawCircle change this.
-        public override OverlaySpace Space => OverlaySpace.ScreenSpace;
+        public override OverlaySpace Space => OverlaySpace.WorldSpace;
 
         public ExplosionOverlay()
         {
             IoCManager.InjectDependencies(this);
         }
 
+
+        public Box2 GetBounds(TileRef tileRef)
+        {
+            var grid = _mapManager.GetGrid(tileRef.GridIndex);
+            var gridXform = _componentManager.GetComponent<ITransformComponent>(grid.GridEntityId);
+
+            var center = gridXform.WorldMatrix.Transform((Vector2) tileRef.GridIndices + 0.5f);
+            return Box2.UnitCentered.Translated(center);
+            //return new Box2Rotated(Box2.UnitCentered.Translated(center), -gridXform.WorldRotation, center);
+        }
+
+
         protected override void Draw(in OverlayDrawArgs args)
         {
-            // PVS should control the overlay pretty well so the overlay doesn't get instantiated unless we're near one...
+            var handle = args.WorldHandle;
+
             var playerEntity = _playerManager.LocalPlayer?.ControlledEntity;
 
             if (playerEntity == null)
@@ -37,32 +50,14 @@ namespace Content.Client.Explosion
                 return;
             }
 
-            var elapsedTime = (float) (_gameTiming.CurTime - _lastTick).TotalSeconds;
-            _lastTick = _gameTiming.CurTime;
+            var id = playerEntity.Transform.GridID;
+            if (!_mapManager.TryGetGrid(id, out var grid))
+                return;
 
-            var radiationPulses = _componentManager
-                .EntityQuery<RadiationPulseComponent>(true)
-                .ToList();
+            var tileRef = grid.GetTileRef(playerEntity.Transform.Coordinates);
 
-            var screenHandle = args.ScreenHandle;
-            var viewport = _eyeManager.GetWorldViewport();
-
-            foreach (var grid in _mapManager.FindGridsIntersecting(playerEntity.Transform.MapID, viewport))
-            {
-                foreach (var pulse in radiationPulses)
-                {
-                    if (!pulse.Draw || grid.Index != pulse.Owner.Transform.GridID) continue;
-
-                    // TODO: Check if viewport intersects circle
-                    var circlePosition = args.ViewportControl!.WorldToScreen(pulse.Owner.Transform.WorldPosition);
-
-                    // change to worldhandle when implemented
-                    screenHandle.DrawCircle(
-                        circlePosition,
-                        pulse.Range * 64,
-                        GetColor(pulse.Owner, pulse.Decay ? elapsedTime : 0, pulse.EndTime));
-                }
-            }
+            handle.DrawRect(GetBounds(tileRef), Color.FromHex("#f00f"), filled: false);
+            handle.DrawRect(GetBounds(tileRef), Color.FromHex("#f005"), filled: false);
         }
     }
 }

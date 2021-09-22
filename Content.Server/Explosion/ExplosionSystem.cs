@@ -42,6 +42,7 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
+        [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
 
         public DamageSpecifier BaseExplosionDamage = new();
 
@@ -107,13 +108,20 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <param name="epicenter"></param>
         /// <param name="strength"></param>
-        public void SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
+        public List<HashSet<Vector2i>>? SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
         {
+            // A sorted list of sets of tiles that will be targeted by explosions.
+            List<HashSet<Vector2i>> explodedTiles = new();
+            // Each set of tiles receives the same explosion intensity.
+            // The order in which the sets appear in the list corresponds to the "effective distance" to the epicenter (walls increase effective distance).
+
+            // The "distance" is related to the list index via: distance = -0.5 +(index/2)
+
             if (strength == 0)
-                return;
+                return explodedTiles;
 
             if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return;
+                return explodedTiles;
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
             // PlaySound(epicenterTile.ToEntityCoordinates(grid.Index, _mapManager));
@@ -127,13 +135,6 @@ namespace Content.Server.Explosion
             // A queue of tiles that are receiving damage, but will only let the explosion spread to neighbors after some delay.
             // The delay duration depends on
             Dictionary<int, Dictionary<Vector2i, int>> blockedTiles = new();
-
-            // A sorted list of sets of tiles that will be targeted by explosions.
-            List<HashSet<Vector2i>> explodedTiles = new();
-            // Each set of tiles receives the same explosion intensity.
-            // The order in which the sets appear in the list corresponds to the "effective distance" to the epicenter (walls increase effective distance).
-
-            // The "distance" is related to the list index via: distance = -0.5 +(index/2)
 
 
 
@@ -194,6 +195,17 @@ namespace Content.Server.Explosion
                 iteration += 1;
                 distributedStrength += encounteredTiles.Count();
             }
+
+            // add the delayed tiles back into the main list for damage calculations
+            foreach (var value in blockedTiles.Values)
+            {
+                foreach (var (tile, originalIteration) in value)
+                {
+                    explodedTiles[originalIteration].Add(tile);
+                }
+            }
+
+            return explodedTiles;
         }
 
         /// <summary>
@@ -202,7 +214,7 @@ namespace Content.Server.Explosion
         private Dictionary<Vector2i, int> GetImpassableTiles(HashSet<Vector2i> tiles, GridId grid)
         {
             Dictionary<Vector2i, int> impassable = new();
-            if (!_gridTileTolerances.TryGetValue(grid, out var tileTolerances))
+            if (!_explosionBlockerSystem.BlockerMap.TryGetValue(grid, out var tileTolerances))
                 return impassable;
 
             foreach (var tile in tiles)
@@ -218,34 +230,6 @@ namespace Content.Server.Explosion
             }
 
             return impassable;
-        }
-
-        private Tuple<HashSet<Vector2i>, HashSet<Vector2i>> GetNeighbors(IEnumerable<Vector2i> tiles, HashSet<Vector2i> existingTiles)
-        {
-            HashSet<Vector2i> adjacentTiles = new();
-            HashSet<Vector2i> diagonalTiles = new();
-            foreach (var tile in tiles)
-            {
-                // Hashset question: Is it better to:
-                //      A) create a HashSet of tiles, then do ExceptWith after finishing adding all elements
-                //      B) only add to a HashSet if the new member is not in the intersection?
-                // A) probably has more allocating, but maybe however HashSet intersections are done is inherently faster?
-                // So lets use A) for now....
-                adjacentTiles.Add(tile + (0, 1));
-                adjacentTiles.Add(tile + (1, 0));
-                adjacentTiles.Add(tile + (0, -1));
-                adjacentTiles.Add(tile + (-1, 0));
-                diagonalTiles.Add(tile + (1, 1));
-                diagonalTiles.Add(tile + (1, -1));
-                diagonalTiles.Add(tile + (-1, 1));
-                diagonalTiles.Add(tile + (-1, -1));
-            }
-
-            adjacentTiles.ExceptWith(existingTiles);
-            diagonalTiles.ExceptWith(existingTiles);
-            diagonalTiles.ExceptWith(adjacentTiles);
-
-            return Tuple.Create(adjacentTiles, diagonalTiles);
         }
 
         private HashSet<Vector2i> GetAdjacentTiles(IEnumerable<Vector2i> tiles, HashSet<Vector2i> existingTiles)
