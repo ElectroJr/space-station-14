@@ -14,6 +14,31 @@ namespace Content.Server.Explosion
 {
 
 
+
+
+
+/// <summary>
+///
+/// add option for directional explosion spawn
+/// -- creates initial list of "already encountered" tiles to artificially stop spread
+/// -- to create them: create circle of size X around center. explude tiles in a wedge pointing in a given direction
+/// -- restrict those tiles.
+/// -- --> will be directed, but CAN spread outwards after distance X
+/// --> will lead to very oddly shaped explosion if you have a weakly directed nuke
+///
+/// explosion overlay: add flash radius
+///
+/// make flash happen AFTER explosion
+///
+/// 
+/// 
+/// add explosion prototypes (damage specifier + flash radius + propagation speed)
+///
+/// use explosion overlay, reuse atmos fire indicator
+///
+/// future: cross tile explosions
+/// future: all explosions tied to reagents
+/// </summary>
     public sealed class ExplosionSystem : EntitySystem
     {
         // Todo create explosion prototypes.
@@ -117,7 +142,7 @@ namespace Content.Server.Explosion
 
             // The "distance" is related to the list index via: distance = -0.5 +(index/2)
 
-            if (strength == 0)
+            if (strength <= 0)
                 return explodedTiles;
 
             if (!_mapManager.TryFindGridAt(epicenter, out var grid))

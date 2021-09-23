@@ -74,6 +74,12 @@ namespace Content.Client.EscapeMenu.UI.Tabs
                 _keyControls.Add(function, control);
             }
 
+            AddHeader("DEBUG");
+            AddButton(ContentKeyFunctions.IncreaseStrength);
+            AddButton(ContentKeyFunctions.DecreaseStrength);
+            AddButton(ContentKeyFunctions.IncreaseDamage);
+            AddButton(ContentKeyFunctions.DecreaseDamage);
+
             AddHeader("ui-options-header-movement");
             AddButton(EngineKeyFunctions.MoveUp);
             AddButton(EngineKeyFunctions.MoveLeft);

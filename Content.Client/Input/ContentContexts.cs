@@ -99,6 +99,12 @@ namespace Content.Client.Input
             common.AddFunction(ContentKeyFunctions.OpenSandboxWindow);
             common.AddFunction(ContentKeyFunctions.OpenTileSpawnWindow);
             common.AddFunction(ContentKeyFunctions.OpenAdminMenu);
+
+
+            common.AddFunction(ContentKeyFunctions.IncreaseStrength);
+            common.AddFunction(ContentKeyFunctions.DecreaseStrength);
+            common.AddFunction(ContentKeyFunctions.IncreaseDamage);
+            common.AddFunction(ContentKeyFunctions.DecreaseDamage);
         }
     }
 }
