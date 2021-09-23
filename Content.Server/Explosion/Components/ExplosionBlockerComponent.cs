@@ -12,7 +12,7 @@ namespace Content.Server.Explosion.Components
     ///     required to destroy walls.
     /// </remarks>
     [RegisterComponent]
-    public class ExplosionBlocker : Component
+    public class ExplosionBlockerComponent : Component
     {
         public override string Name => "ExplosionBlocker";
 
@@ -26,7 +26,7 @@ namespace Content.Server.Explosion.Components
         ///     structures like walls should definitely specify this. This value will also be updated whenever the
         ///     entity takes damage.
         /// </remarks>
-        [DataField("strength")]
-        public int Strength;
+        [DataField("tolerance")]
+        public int Tolerance;
     }
 }

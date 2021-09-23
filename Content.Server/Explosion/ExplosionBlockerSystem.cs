@@ -45,10 +45,17 @@ namespace Content.Server.Explosion
         {
             base.Initialize();
 
-            SubscribeLocalEvent<ExplosionBlocker, ComponentInit>(InitializeExplosionBlocker);
-            SubscribeLocalEvent<ExplosionBlocker, DamageChangedEvent>(HandleDamageChanged);
-            SubscribeLocalEvent<ExplosionBlocker, AnchoredEvent>(HandleEntityAnchored);
-            SubscribeLocalEvent<ExplosionBlocker, UnanchoredEvent>(HandleEntityUnanchored);
+            SubscribeLocalEvent<ExplosionBlockerComponent, ComponentInit>(InitializeExplosionBlocker);
+            SubscribeLocalEvent<ExplosionBlockerComponent, ComponentShutdown>(ShutdownExplosionBlocker);
+            SubscribeLocalEvent<ExplosionBlockerComponent, DamageChangedEvent>(HandleDamageChanged);
+            SubscribeLocalEvent<ExplosionBlockerComponent, AnchoredEvent>(HandleEntityAnchored);
+            SubscribeLocalEvent<ExplosionBlockerComponent, UnanchoredEvent>(HandleEntityUnanchored);
+        }
+
+        private void ShutdownExplosionBlocker(EntityUid uid, ExplosionBlockerComponent component, ComponentShutdown args)
+        {
+            component.Tolerance = 0;
+            UpdateTileStrength(uid, component);
         }
 
         public override void Update(float frameTime)
@@ -59,7 +66,7 @@ namespace Content.Server.Explosion
                 UpdateTolerance(_outdatedEntities.Dequeue());
         }
 
-        private void HandleEntityUnanchored(EntityUid uid, ExplosionBlocker component, UnanchoredEvent args)
+        private void HandleEntityUnanchored(EntityUid uid, ExplosionBlockerComponent component, UnanchoredEvent args)
         {
             // TODO QUESTION these should really be event arguments, no?
             // get the grid & tile
@@ -74,7 +81,7 @@ namespace Content.Server.Explosion
             if (!tileTolerances.TryGetValue(tile, out var tolerance))
                 return;
 
-            if (tolerance > component.Strength)
+            if (tolerance > component.Tolerance)
                 return;
 
             // This component was (or was tied with) the most resilient anchored entity on this tile.
@@ -82,55 +89,60 @@ namespace Content.Server.Explosion
             UpdateTileStrength(grid, tile);
         }
 
-        private void HandleEntityAnchored(EntityUid uid, ExplosionBlocker component, AnchoredEvent args)
+        private void HandleEntityAnchored(EntityUid uid, ExplosionBlockerComponent component, AnchoredEvent args)
         {
-            if (component.Strength == 0)
+            if (component.Tolerance == 0)
+                return;
+
+            if (!ComponentManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
 
             // get the grid & tile
-            var entity = EntityManager.GetEntity(uid);
-            var grid = _mapManager.GetGrid(entity.Transform.GridID);
-            var tile = grid.CoordinatesToTile(entity.Transform.Coordinates);
+            var grid = _mapManager.GetGrid(transform.GridID);
+            var tile = grid.CoordinatesToTile(transform.Coordinates);
 
             if (!BlockerMap.ContainsKey(grid.Index))
             {
-                BlockerMap.Add(grid.Index, new() { { tile, component.Strength } });
+                BlockerMap.Add(grid.Index, new() { { tile, component.Tolerance } });
                 return;
             }
 
-            var tileTolerances = BlockerMap[grid.Index];
+            Dictionary<Vector2i, int>? tileTolerances;
+            if (!BlockerMap.TryGetValue(grid.Index, out tileTolerances))
+            {
+                tileTolerances = new();
+                BlockerMap.Add(grid.Index, tileTolerances);
+            }
 
-            if (tileTolerances.ContainsKey(tile))
-                tileTolerances[tile] = Math.Max(tileTolerances[tile], component.Strength);
-            else
-                tileTolerances.Add(tile, component.Strength);
+            tileTolerances[tile] = Math.Max(tileTolerances[tile], component.Tolerance);
         }
 
-        private void InitializeExplosionBlocker(EntityUid uid, ExplosionBlocker component, ComponentInit args)
+        private void InitializeExplosionBlocker(EntityUid uid, ExplosionBlockerComponent component, ComponentInit args)
         {
-            if (component.Strength == 0)
+            if (component.Tolerance == 0)
             {
                 // No tolerance was specified, we have to compute our own.
                 _outdatedEntities.Enqueue(uid);
                 return;
             }
 
-            UpdateToleranceTile(uid, component);
+            UpdateTileStrength(uid, component);
         }
 
         /// <summary>
-        ///     Check if an entity is anchored. If it is, maybe update the tolerance map
+        ///     The strength of an entity was updated. IF it is anchored, update the tolerance of the tile it is on.
         /// </summary>
-        private void UpdateToleranceTile(EntityUid uid, ExplosionBlocker? component = null)
+        private void UpdateTileStrength(EntityUid uid, ExplosionBlockerComponent? component = null, ITransformComponent? transform = null)
         {
-            if (!Resolve(uid, ref component))
+            if (!Resolve(uid, ref component, ref transform))
                 return;
 
-            // check if anchored
+            if (!transform.Anchored)
+                return;
 
-            // Get tile coords
-
-            // set tile tolerance to the larger value
+            var grid = _mapManager.GetGrid(transform.GridID);
+            var tile = grid.CoordinatesToTile(transform.Coordinates);
+            UpdateTileStrength(grid, tile);
         }
 
         /// <summary>
@@ -141,12 +153,24 @@ namespace Content.Server.Explosion
             int strength = 0;
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
-                if (ComponentManager.TryGetComponent(uid, out ExplosionBlocker? blocker))
-                    strength = Math.Max(strength, blocker.Strength);
-            }    
+                if (ComponentManager.TryGetComponent(uid, out ExplosionBlockerComponent? blocker))
+                    strength = Math.Max(strength, blocker.Tolerance);
+            }
+
+            Dictionary<Vector2i, int>? tileTolerances;
+            if (!BlockerMap.TryGetValue(grid.Index, out tileTolerances))
+            {
+                tileTolerances = new();
+                BlockerMap.Add(grid.Index, tileTolerances);
+            }
+
+            if (strength > 0)
+                tileTolerances[tile] = strength;
+            else if (tileTolerances.ContainsKey(tile))
+                tileTolerances.Remove(tile);
         }
 
-        private void HandleDamageChanged(EntityUid uid, ExplosionBlocker component, DamageChangedEvent args)
+        private void HandleDamageChanged(EntityUid uid, ExplosionBlockerComponent component, DamageChangedEvent args)
         {
             _outdatedEntities.Enqueue(uid);
         }
@@ -160,14 +184,14 @@ namespace Content.Server.Explosion
         /// </remarks>
         private void UpdateTolerance(
             EntityUid uid,
-            ExplosionBlocker? blocker = null,
+            ExplosionBlockerComponent? blocker = null,
             DamageableComponent? damageable = null,
             DestructibleComponent? destructible = null)
         {
             if (!Resolve(uid, ref blocker, ref damageable, ref destructible))
                 return;
 
-            blocker.Strength = int.MaxValue;
+            blocker.Tolerance = int.MaxValue;
 
             // Note we have nested for loops, but the vast majority of components only have one threshold with 1-3 behaviors.
             // Really, this should JUST be a property of the damageable component.
@@ -197,9 +221,9 @@ namespace Content.Server.Explosion
             var scale = _damageableSystem.InverseResistanceSolve(damageable, _explosionSystem.BaseExplosionDamage, damageNeeded, maxScale);
 
             if (scale != float.NaN)
-                blocker.Strength = (int) scale;
+                blocker.Tolerance = (int) Math.Ceiling(scale);
 
-            UpdateToleranceTile(uid, blocker);
+            UpdateTileStrength(uid, blocker);
         }
 
 

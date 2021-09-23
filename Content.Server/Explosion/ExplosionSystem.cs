@@ -12,8 +12,15 @@ using Robust.Shared.Player;
 
 namespace Content.Server.Explosion
 {
+    // do chemistry slideshow
 
-
+    // issues:
+    // atmos airtight instead of my thing
+    // grid-jump
+    // launch direction is gonna be hard
+    // flash will be easier.. maybe? (after explosion, unobstructed from viewer
+    // or maybe leverage explosion overlay/ clientside rendering:
+    // IF overlay rendered explosion (had LOS), blind according to highest intensity tile seen?
 
 
 
@@ -82,11 +89,11 @@ namespace Content.Server.Explosion
         // add explosion predictor overlay?
 
         // test going around corners and through walls
-        // test different shielding ammounts
-        // test enclosed spaces cause directional explosins
-        // test that a fully enclosed space ramps up damage untill the weakest link dies
-        // test that en enclosed space with two weak points, with one a bit weaker than the other, both break asymetrically
-        // test girders //ExplosivePassable do not block explosions
+        // test different shielding amounts
+        // test enclosed spaces cause directional explosions
+        // test that a fully enclosed space ramps up damage until the weakest link dies
+        // test that an enclosed space with two weak points, with one a bit weaker than the other, both break asymmetrically
+        // test girders / ExplosionPassable do not block explosions
 
 
         ///
@@ -150,7 +157,7 @@ namespace Content.Server.Explosion
         /// <param name="targetStrength"></param>
         public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration)
         {
-            if (remainingStrength < 1)
+            if (remainingStrength < 1 || damagePerIteration < 1)
                 return (null, null);
 
             // A sorted list of sets of tiles that will be targeted by explosions.
@@ -205,14 +212,12 @@ namespace Content.Server.Explosion
                 tilesInIteration.Add(adjacentTiles.Count);
                 strengthPerIteration.Add(1);
                 remainingStrength -= adjacentTiles.Count;
+                encounteredTiles.UnionWith(adjacentTiles);
 
-                // check if any of the new tiles are impassable
+                // check if any of the new tiles are impassable.
                 impassableTiles = GetImpassableTiles(adjacentTiles, grid.Index);
                 adjacentTiles.ExceptWith(impassableTiles.Keys);
-
-                // remove impassable tiles
                 explodedTiles.Add(adjacentTiles);
-                encounteredTiles.UnionWith(adjacentTiles);
 
                 // add impassable delays to the set of blocked tiles.
                 // these tiles will be added to some future iteration.
@@ -221,7 +226,8 @@ namespace Content.Server.Explosion
                     // How many iterations later would this tile become passable (i.e., when is the wall destroyed and
                     // the explosion can propagate)?
 
-                    var delay = (int) Math.Ceiling((float) tolerance / damagePerIteration);
+                    var delay = - 1 + (int) Math.Ceiling((float) tolerance / damagePerIteration);
+                    // (- 1 + ... ) because if a single set of explosion damage is enough to kill this obstacle, there is no delay.
 
                     // Add these tiles to some delayed future iteration
                     if (blockedTiles.ContainsKey(iteration + delay))
@@ -248,14 +254,12 @@ namespace Content.Server.Explosion
 
                 tilesInIteration[iteration] += diagonalTiles.Count;
                 remainingStrength -= diagonalTiles.Count;
+                encounteredTiles.UnionWith(diagonalTiles);
 
                 // check if any of the new tiles are impassable
                 impassableTiles = GetImpassableTiles(diagonalTiles, grid.Index);
                 diagonalTiles.ExceptWith(impassableTiles.Keys);
-
-                // remove impassable tiles
                 explodedTiles.Last().UnionWith(diagonalTiles);
-                encounteredTiles.UnionWith(diagonalTiles);
 
                 // add impassable delays to the set of blocked tiles.
                 // these tiles will be added to some future iteration.

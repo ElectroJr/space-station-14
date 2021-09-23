@@ -68,7 +68,6 @@ namespace Content.Client.Explosion
                     DrawWorld(args);
                     break;
             }
-
         }
 
         private void DrawScreen(OverlayDrawArgs args)
@@ -143,7 +142,7 @@ namespace Content.Client.Explosion
             bottomLeft += (0, -24);
 
             handle.DrawString(_smallFont, topLeft, TargetTotalStrength.ToString(), Color.Black);
-            handle.DrawString(_smallFont, topRight, actualTotalStrength.ToString("F1"), Color.Black);
+            //handle.DrawString(_smallFont, topRight, actualTotalStrength.ToString("F1"), Color.Black);
             handle.DrawString(_smallFont, bottomLeft, Damage.ToString(), Color.Black);
         }
 

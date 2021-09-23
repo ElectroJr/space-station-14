@@ -4,6 +4,7 @@
   placement:
     mode: SnapgridCenter
   components:
+  - type: ExplosionBlocker
   - type: Transform
     anchored: true
   - type: Clickable

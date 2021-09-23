@@ -17,8 +17,19 @@ namespace Content.Client.Explosion
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
 
-        private int _strength;
-        private int _damage;
+        public int Strength
+        {
+            get => _strength;
+            set => _strength = Math.Max(value, 0);
+        }
+        public int Damage
+        {
+            get => _damage;
+            set => _damage = Math.Max(value, 1);
+        }
+
+        private int _strength = 1;
+        private int _damage = 1;
 
         private GridId? _currentGrid;
         private Vector2i? _currentTile;
@@ -78,50 +89,50 @@ namespace Content.Client.Explosion
                 return true;
             }
 
-            var (tiles, damage) = _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, _strength, _damage);
-            RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, damage, _currentGrid, _strength, _damage), session.ConnectedClient);
+            var (tiles, damage) = _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage);
+            RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, damage, _currentGrid, Strength, Damage), session.ConnectedClient);
 
             return true;
         }
 
         private bool HandleDecreaseStrength(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            _strength--;
+            Strength--;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleIncreaseStrength(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            _strength++;
+            Strength++;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleIncreaseDamage(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            _damage++;
+            Damage++;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleDecreaseDamage(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            _damage--;
+            Damage--;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleIncreaseStrengthRelative(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            _strength = (int) (_strength * 1.25f);
+            Strength = (int) (Strength * 1.25f);
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleDecreaseStrengthRelative(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            _strength = (int) (_strength * 0.8f);
+            Strength = (int) (Strength * 0.8f);
             UpdateExplosion(session, null, uid);
             return true;
         }
