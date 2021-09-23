@@ -103,6 +103,8 @@ namespace Content.Client.Input
             common.AddFunction(ContentKeyFunctions.Explode);
             common.AddFunction(ContentKeyFunctions.IncreaseStrength);
             common.AddFunction(ContentKeyFunctions.DecreaseStrength);
+            common.AddFunction(ContentKeyFunctions.IncreaseStrengthRelative);
+            common.AddFunction(ContentKeyFunctions.DecreaseStrengthRelative);
             common.AddFunction(ContentKeyFunctions.IncreaseDamage);
             common.AddFunction(ContentKeyFunctions.DecreaseDamage);
         }

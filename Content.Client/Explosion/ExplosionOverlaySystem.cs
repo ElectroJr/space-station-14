@@ -1,12 +1,8 @@
 using Content.Shared.Explosion;
 using Robust.Client.Graphics;
 using Robust.Shared.GameObjects;
-using Robust.Shared.GameStates;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
-using System;
-using System.Collections.Generic;
 
 namespace Content.Client.Explosion
 {
@@ -34,15 +30,15 @@ namespace Content.Client.Explosion
             if (Overlay == null)
                 return;
 
-            Overlay.ReversedExplosionData = args.ExplosionData;
-            Overlay.ReversedExplosionData?.Reverse();
-            Overlay.TotalStrength = args.TotalStrength;
+            Overlay.Tiles = args.Tiles;
+            Overlay.Strength = args.Strength;
+            Overlay.TargetTotalStrength = args.TargetTotalStrength;
             Overlay.Damage = args.Damage;
 
-            if (args.GridData == null)
+            if (args.Grid == null)
                 Overlay.Grid = null;
             else
-                _mapManager.TryGetGrid((GridId) args.GridData, out Overlay.Grid);
+                _mapManager.TryGetGrid((GridId) args.Grid, out Overlay.Grid);
         }
 
         public override void Shutdown()

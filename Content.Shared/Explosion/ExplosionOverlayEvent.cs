@@ -10,19 +10,22 @@ namespace Content.Shared.Explosion
     [Serializable, NetSerializable]
     public class ExplosionOverlayEvent : EntityEventArgs
     {
-        public List<HashSet<Vector2i>>? ExplosionData;
+        public List<HashSet<Vector2i>>? Tiles;
 
-        public GridId? GridData;
+        public List<float>? Strength;
+
+        public GridId? Grid;
 
         public int Damage;
 
-        public int TotalStrength;
+        public int TargetTotalStrength;
 
-        public ExplosionOverlayEvent(List<HashSet<Vector2i>>? explosionData, GridId? gridData, int totalStrength, int damage)
+        public ExplosionOverlayEvent(List<HashSet<Vector2i>>? tiles, List<float>? strength, GridId? grid, int targetTotalStrength, int damage)
         {
-            ExplosionData = explosionData;
-            GridData = gridData;
-            TotalStrength = totalStrength;
+            Tiles = tiles;
+            Grid = grid;
+            Strength = strength;
+            TargetTotalStrength = targetTotalStrength;
             Damage = damage;
         }
     }

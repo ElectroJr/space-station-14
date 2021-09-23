@@ -15,13 +15,12 @@ namespace Content.Client.Explosion
     public sealed class ExplosionOverlay : Overlay
     {
         [Dependency] private readonly IComponentManager _componentManager = default!;
-        //[Dependency] private readonly IMapManager _mapManager = default!;
-        [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
 
-        public List<HashSet<Vector2i>>? ReversedExplosionData;
+        public List<HashSet<Vector2i>>? Tiles;
+        public List<float>? Strength;
         public IMapGrid? Grid;
-        public int TotalStrength;
+        public int TargetTotalStrength;
         public int Damage;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpace | OverlaySpace.ScreenSpace;
@@ -33,7 +32,6 @@ namespace Content.Client.Explosion
         public ExplosionOverlay()
         {
             IoCManager.InjectDependencies(this);
-
 
             var cache = IoCManager.Resolve<IResourceCache>();
             _font = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 16);
@@ -55,10 +53,10 @@ namespace Content.Client.Explosion
         protected override void Draw(in OverlayDrawArgs args)
         {
 
-            if (ReversedExplosionData == null || Grid == null)
+            if (Tiles == null || Grid == null)
                 return;
 
-            if (ReversedExplosionData.Count < 2 || ReversedExplosionData[ReversedExplosionData.Count-2].Count != 1)
+            if (Tiles.Count < 2 || Tiles[1].Count != 1)
                 return;
 
             switch (args.Space)
@@ -77,37 +75,37 @@ namespace Content.Client.Explosion
         {
             var handle = args.ScreenHandle;
 
-            int str = 1;
-            foreach (var tileSet in ReversedExplosionData!)
+            float actualTotalStrength = 0;
+
+            for (int i = 0; i < Tiles!.Count; i++)
             {
-                foreach (var tile in tileSet)
+                foreach (var tile in Tiles[i])
                 {
-                    DrawTile(handle, Grid!, tile, str);
+                    DrawTile(handle, Grid!, tile, Strength![i]);
                 }
-                str++;
+                actualTotalStrength += Strength![i] * Tiles[i].Count;
             }
 
-            foreach (var epicenter in ReversedExplosionData[str-3])
+            foreach (var epicenter in Tiles[1])
             {
-                DrawEpicenterData(handle, Grid!, epicenter);
+                DrawEpicenterData(handle, Grid!, epicenter, actualTotalStrength);
             }
         }
 
         private void DrawWorld(in OverlayDrawArgs args)
         {
             var handle = args.WorldHandle;
-            int str = 1;
-            foreach (var tileSet in ReversedExplosionData!)
+
+            for (int i = 0; i < Tiles!.Count; i++)
             {
-                foreach (var tile in tileSet)
+                foreach (var tile in Tiles[i])
                 {
-                    DrawTile(handle, Grid!, tile, str);
+                    DrawTile(handle, Grid!, tile, Strength![i]);
                 }
-                str++;
             }
         }
 
-        private void DrawTile(DrawingHandleWorld handle, IMapGrid grid, Vector2i tile, int strength)
+        private void DrawTile(DrawingHandleWorld handle, IMapGrid grid, Vector2i tile, float strength)
         {
             var bb = GetBounds(grid, tile);
             var color = ColorMap(strength);
@@ -117,38 +115,42 @@ namespace Content.Client.Explosion
             handle.DrawRect(bb, color);
         }
 
-        private void DrawTile(DrawingHandleScreen handle, IMapGrid grid, Vector2i tile, int strength)
+        private void DrawTile(DrawingHandleScreen handle, IMapGrid grid, Vector2i tile, float strength)
         {
             var coords = _eyeManager.WorldToScreen(GetCenter(grid, tile));
 
             if (strength > 9)
-                coords += (-16, -16);
+                coords += (-26, -16);
             else
-                coords += (-8, -16);
+                coords += (-18, -16);
 
-            handle.DrawString(_font, coords, strength.ToString());
+            handle.DrawString(_font, coords, strength.ToString("F1"));
         }
 
-        private void DrawEpicenterData(DrawingHandleScreen handle, IMapGrid grid, Vector2i tile)
+        private void DrawEpicenterData(DrawingHandleScreen handle, IMapGrid grid, Vector2i tile, float actualTotalStrength)
         {
             var bb = GetBounds(grid, tile);
 
             var topLeft = _eyeManager.WorldToScreen(bb.TopLeft);
             var topRight = _eyeManager.WorldToScreen(bb.TopRight);
+            var bottomLeft = _eyeManager.WorldToScreen(bb.BottomLeft);
 
-            if (Damage < 10)
-                topRight -= (12, 0);
+            if (actualTotalStrength < 10)
+                topRight -= (28, 0);
             else
-                topRight -= (24, 0);
+                topRight -= (30, 0);
 
-            handle.DrawString(_smallFont, topLeft, TotalStrength.ToString(), Color.Black);
-            handle.DrawString(_smallFont, topRight, Damage.ToString(), Color.Black);
+            bottomLeft += (0, -24);
+
+            handle.DrawString(_smallFont, topLeft, TargetTotalStrength.ToString(), Color.Black);
+            handle.DrawString(_smallFont, topRight, actualTotalStrength.ToString("F1"), Color.Black);
+            handle.DrawString(_smallFont, bottomLeft, Damage.ToString(), Color.Black);
         }
 
 
-        private Color ColorMap(int strength, bool transparent = false)
+        private Color ColorMap(float strength)
         {
-            var interp = 1 - (float) strength / 10;
+            var interp = 1- strength / Strength![1];
             Color result;
             if (interp < 0.5f)
             {

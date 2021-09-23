@@ -78,6 +78,8 @@ namespace Content.Client.EscapeMenu.UI.Tabs
             AddButton(ContentKeyFunctions.Explode);
             AddButton(ContentKeyFunctions.IncreaseStrength);
             AddButton(ContentKeyFunctions.DecreaseStrength);
+            AddButton(ContentKeyFunctions.IncreaseStrengthRelative);
+            AddButton(ContentKeyFunctions.DecreaseStrengthRelative);
             AddButton(ContentKeyFunctions.IncreaseDamage);
             AddButton(ContentKeyFunctions.DecreaseDamage);
 

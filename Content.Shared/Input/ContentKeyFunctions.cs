@@ -82,6 +82,8 @@ namespace Content.Shared.Input
         public static readonly BoundKeyFunction Explode = "Explode";
         public static readonly BoundKeyFunction IncreaseStrength = "StrengthUp";
         public static readonly BoundKeyFunction DecreaseStrength = "StrengthDown";
+        public static readonly BoundKeyFunction IncreaseStrengthRelative = "StrengthUpRelative";
+        public static readonly BoundKeyFunction DecreaseStrengthRelative = "StrengthDownRelative";
         public static readonly BoundKeyFunction IncreaseDamage = "DamageUp";
         public static readonly BoundKeyFunction DecreaseDamage = "DamageDown";
     }

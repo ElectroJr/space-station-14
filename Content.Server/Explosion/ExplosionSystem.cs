@@ -104,13 +104,13 @@ namespace Content.Server.Explosion
             SoundSystem.Play( Filter.Broadcast(), _explosionSound.GetSound(), coords);
         }
 
-        public List<HashSet<Vector2i>>? SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
+        public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
         {
             if (strength <= 0)
-                return null;
+                return (null, null);
 
             if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return null;
+                return (null, null);
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
@@ -147,11 +147,11 @@ namespace Content.Server.Explosion
         /// 
         /// </summary>
         /// <param name="epicenter"></param>
-        /// <param name="strength"></param>
-        public List<HashSet<Vector2i>>? SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int strength, int damagePerIteration)
+        /// <param name="targetStrength"></param>
+        public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration)
         {
-            if (strength <= 0)
-                return null;
+            if (remainingStrength < 1)
+                return (null, null);
 
             // A sorted list of sets of tiles that will be targeted by explosions.
             List<HashSet<Vector2i>> explodedTiles = new();
@@ -174,11 +174,16 @@ namespace Content.Server.Explosion
             explodedTiles.Add(new HashSet<Vector2i> { epicenterTile });
             explodedTiles.Add(new HashSet<Vector2i>());
 
-            var distributedStrength = 0;
+            var strengthPerIteration = new List<float> { 2, 1, 0 };
+            var tilesInIteration = new List<int> { 0, 1, 0 };
+
             var iteration = 3;// the tile set iteration we are CURRENTLY adding in every loop
-            HashSet<Vector2i> newTiles;
+            HashSet<Vector2i> adjacentTiles, diagonalTiles;
+            Dictionary< Vector2i, int> impassableTiles;
             Dictionary<Vector2i, int>? clearedTiles;
-            while (strength > distributedStrength)
+            bool done = false;
+            remainingStrength--;
+            while (remainingStrength > 0)
             {
                 // get the iterator that tells us what tiles we want to find the adjacent neighbors of. usually this is just
                 // explodedTiles[index], but it's possible a wall was destroyed and we want to start adding it's
@@ -187,25 +192,29 @@ namespace Content.Server.Explosion
                     ? explodedTiles[iteration - 2].Concat(clearedTiles.Keys)
                     : explodedTiles[iteration - 2];
 
-                // Next, repeat but get the tiles that should explode due to diagonal adjacency
-                IEnumerable<Vector2i> diagonalIterator = blockedTiles.TryGetValue(iteration - 3, out clearedTiles)
-                    ? explodedTiles[iteration - 3].Concat(clearedTiles.Keys)
-                    : explodedTiles[iteration - 3];
+                adjacentTiles = GetAdjacentTiles(adjacentIterator, encounteredTiles);
 
-                newTiles = GetAdjacentTiles(adjacentIterator, encounteredTiles);
-                newTiles.UnionWith(GetDiagonalTiles(diagonalIterator, encounteredTiles));
+                // Does this bring us over the damage limit?
+                if (adjacentTiles.Count >= remainingStrength)
+                {
+                    strengthPerIteration.Add((float) remainingStrength / adjacentTiles.Count());
+                    explodedTiles.Add(adjacentTiles);
+                    break;
+                }
 
-                // add the new tiles to the list of encountered tiles. this prevents the explosion from looping back on itself
-                encounteredTiles.UnionWith(newTiles);
+                tilesInIteration.Add(adjacentTiles.Count);
+                strengthPerIteration.Add(1);
+                remainingStrength -= adjacentTiles.Count;
 
                 // check if any of the new tiles are impassable
-                var impassableTiles = GetImpassableTiles(newTiles, grid.Index);
+                impassableTiles = GetImpassableTiles(adjacentTiles, grid.Index);
+                adjacentTiles.ExceptWith(impassableTiles.Keys);
 
                 // remove impassable tiles
-                newTiles.ExceptWith(impassableTiles.Keys);
-                explodedTiles.Add(newTiles);
+                explodedTiles.Add(adjacentTiles);
+                encounteredTiles.UnionWith(adjacentTiles);
 
-                // add impassable delays to the set of blocked tiled.
+                // add impassable delays to the set of blocked tiles.
                 // these tiles will be added to some future iteration.
                 foreach (var (tile, tolerance) in impassableTiles)
                 {
@@ -221,8 +230,67 @@ namespace Content.Server.Explosion
                         blockedTiles.Add(iteration + delay, new() { { tile, iteration } });
                 }
 
+                // Next, repeat but get the tiles that should explode due to diagonal adjacency
+                IEnumerable<Vector2i> diagonalIterator = blockedTiles.TryGetValue(iteration - 3, out clearedTiles)
+                    ? explodedTiles[iteration - 3].Concat(clearedTiles.Keys)
+                    : explodedTiles[iteration - 3];
+
+                diagonalTiles = GetDiagonalTiles(diagonalIterator, encounteredTiles);
+
+                // Does this bring us over the damage limit?
+                if (diagonalTiles.Count >= remainingStrength)
+                {
+                    // add this as a new iteration with fractional damage
+                    strengthPerIteration.Add((float) remainingStrength / diagonalTiles.Count());
+                    explodedTiles.Add(diagonalTiles);
+                    break;
+                }
+
+                tilesInIteration[iteration] += diagonalTiles.Count;
+                remainingStrength -= diagonalTiles.Count;
+
+                // check if any of the new tiles are impassable
+                impassableTiles = GetImpassableTiles(diagonalTiles, grid.Index);
+                diagonalTiles.ExceptWith(impassableTiles.Keys);
+
+                // remove impassable tiles
+                explodedTiles.Last().UnionWith(diagonalTiles);
+                encounteredTiles.UnionWith(diagonalTiles);
+
+                // add impassable delays to the set of blocked tiles.
+                // these tiles will be added to some future iteration.
+                foreach (var (tile, tolerance) in impassableTiles)
+                {
+                    // How many iterations later would this tile become passable (i.e., when is the wall destroyed and
+                    // the explosion can propagate)?
+
+                    var delay = (int) Math.Ceiling((float) tolerance / damagePerIteration);
+
+                    // Add these tiles to some delayed future iteration
+                    if (blockedTiles.ContainsKey(iteration + delay))
+                        blockedTiles[iteration + delay].Add(tile, iteration);
+                    else
+                        blockedTiles.Add(iteration + delay, new() { { tile, iteration } });
+                }
+
+                // then for each previous iteration, we start increasing the damage.
+                for (var i = 1; i < iteration; i++)
+                {
+
+                    if (tilesInIteration[i] >= remainingStrength)
+                    {
+                        // there is not enough damage left. add a fraction amount and break.
+                        strengthPerIteration[i] += (float) remainingStrength / tilesInIteration[i];
+                        done = true;
+                        break;
+                    }
+
+                    remainingStrength -= tilesInIteration[i];
+                    strengthPerIteration[i]++;
+                }
+                if (done) break;
+
                 iteration += 1;
-                distributedStrength += encounteredTiles.Count();
             }
 
             // add the delayed tiles back into the main list for damage calculations
@@ -234,7 +302,7 @@ namespace Content.Server.Explosion
                 }
             }
 
-            return explodedTiles;
+            return (explodedTiles, strengthPerIteration);
         }
 
         /// <summary>
