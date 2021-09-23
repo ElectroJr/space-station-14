@@ -89,7 +89,7 @@ namespace Content.Client.Explosion
                 return true;
             }
 
-            var (tiles, damage) = _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage);
+            var (tiles, damage) = _explosionSystem.SpawnDirectedExplosion(grid2, (Vector2i) _currentTile, Strength, Damage);
             RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, damage, _currentGrid, Strength, Damage), session.ConnectedClient);
 
             return true;

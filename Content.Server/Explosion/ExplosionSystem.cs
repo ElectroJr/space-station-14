@@ -124,8 +124,36 @@ namespace Content.Server.Explosion
             return SpawnExplosion(grid, epicenterTile, strength, damagePerIteration);
         }
 
+        public (List<HashSet<Vector2i>>?, List<float>?) SpawnDirectedExplosion(IMapGrid grid, Vector2i tile, int remainingStrength, int damagePerIteration)
+        {
+            // explosion directability is limited by BOX not radius
+            // should probably fix that.
+
+            // this is a hackjob for the demo
+
+            int radius = 8;
+            var direction =  Angle.FromDegrees(40);
+            var degreeWidth = 50;
+
+            var gridXform = ComponentManager.GetComponent<ITransformComponent>(grid.GridEntityId);
+            var center = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
+            var circle = new Circle(center, radius);
 
 
+
+            HashSet<Vector2i> excluded = new();
+
+            foreach (var tileRef in grid.GetTilesIntersecting(circle, ignoreEmpty: false))
+            {
+                var otherCenter = gridXform.WorldMatrix.Transform((Vector2) tileRef.GridIndices + 0.5f);
+
+                var angle = direction - new Angle(center - otherCenter);
+                if (Math.Abs(angle.Degrees) * 2 > degreeWidth)
+                    excluded.Add(tileRef.GridIndices);
+            }
+
+            return SpawnExplosion(grid, tile, remainingStrength, damagePerIteration, excluded);
+        }
         /// <summary>
         ///     This flood a grid, exploring neighbours.
         ///     Each tile has some distance metric that determines damage.
@@ -155,7 +183,7 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <param name="epicenter"></param>
         /// <param name="targetStrength"></param>
-        public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration)
+        public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
         {
             if (remainingStrength < 1 || damagePerIteration < 1)
                 return (null, null);
@@ -169,7 +197,8 @@ namespace Content.Server.Explosion
 
             // The set of all tiles that will be targeted by this explosion.
             // This is used to stop adding the same tile twice if an explosion loops around an obstacle / encounters itself.
-            HashSet<Vector2i> encounteredTiles = new() { epicenterTile };
+            encounteredTiles ??= new();
+            encounteredTiles.Add(epicenterTile);
 
             // A queue of tiles that are receiving damage, but will only let the explosion spread to neighbors after some delay.
             // The delay duration depends on
