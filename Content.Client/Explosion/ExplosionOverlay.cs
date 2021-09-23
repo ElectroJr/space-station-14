@@ -7,6 +7,7 @@ using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using System.Collections.Generic;
 
 namespace Content.Client.Explosion
 {
@@ -14,14 +15,20 @@ namespace Content.Client.Explosion
     public sealed class ExplosionOverlay : Overlay
     {
         [Dependency] private readonly IComponentManager _componentManager = default!;
-        [Dependency] private readonly IMapManager _mapManager = default!;
+        //[Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
+
+        public List<HashSet<Vector2i>>? ReversedExplosionData;
+        public IMapGrid? Grid;
+        public int TotalStrength;
+        public int Damage;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpace | OverlaySpace.ScreenSpace;
 
 
         private readonly Font _font;
+        private readonly Font _smallFont;
 
         public ExplosionOverlay()
         {
@@ -30,64 +37,77 @@ namespace Content.Client.Explosion
 
             var cache = IoCManager.Resolve<IResourceCache>();
             _font = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 16);
+            _smallFont = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 12);
         }
 
-        public Vector2 GetCenter(IMapGrid grid, TileRef tileRef)
+        public Vector2 GetCenter(IMapGrid grid, Vector2i tile)
         {
             var gridXform = _componentManager.GetComponent<ITransformComponent>(grid.GridEntityId);
 
-            return gridXform.WorldMatrix.Transform((Vector2) tileRef.GridIndices + 0.5f);
+            return gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
         }
 
-        public Box2 GetBounds(IMapGrid grid, TileRef tileRef) => Box2.UnitCentered.Translated(GetCenter(grid, tileRef));
+        public Box2 GetBounds(IMapGrid grid, Vector2i tile) => Box2.UnitCentered.Translated(GetCenter(grid, tile));
         //return new Box2Rotated(Box2.UnitCentered.Translated(center), -gridXform.WorldRotation, center);
 
 
         /// <inheritdoc />
         protected override void Draw(in OverlayDrawArgs args)
         {
-            var playerEntity = _playerManager.LocalPlayer?.ControlledEntity;
 
-            if (playerEntity == null)
+            if (ReversedExplosionData == null || Grid == null)
                 return;
 
-            if (!playerEntity.TryGetComponent(out ExplosionOverlayComponent? explosion) ||
-                explosion.ExplosionData == null ||
-                explosion.GridData == null)
+            if (ReversedExplosionData.Count < 2 || ReversedExplosionData[ReversedExplosionData.Count-2].Count != 1)
                 return;
-
-            var id = playerEntity.Transform.GridID;
-            if (!_mapManager.TryGetGrid(id, out var grid))
-                return;
-
-            var tileRef = grid.GetTileRef(playerEntity.Transform.Coordinates);
 
             switch (args.Space)
             {
                 case OverlaySpace.ScreenSpace:
-                    DrawScreen(args, grid, tileRef, explosion.ExplosionData.Count);
+                    DrawScreen(args);
                     break;
                 case OverlaySpace.WorldSpace:
-                    DrawWorld(args, grid, tileRef, explosion.ExplosionData.Count);
+                    DrawWorld(args);
                     break;
             }
 
         }
 
-        private void DrawScreen(OverlayDrawArgs args, IMapGrid grid, TileRef tile, int strength)
+        private void DrawScreen(OverlayDrawArgs args)
         {
             var handle = args.ScreenHandle;
-            DrawTile(handle, grid, tile, strength);
+
+            int str = 1;
+            foreach (var tileSet in ReversedExplosionData!)
+            {
+                foreach (var tile in tileSet)
+                {
+                    DrawTile(handle, Grid!, tile, str);
+                }
+                str++;
+            }
+
+            foreach (var epicenter in ReversedExplosionData[str-3])
+            {
+                DrawEpicenterData(handle, Grid!, epicenter);
+            }
         }
 
-        private void DrawWorld(in OverlayDrawArgs args, IMapGrid grid, TileRef tile, int strength)
+        private void DrawWorld(in OverlayDrawArgs args)
         {
             var handle = args.WorldHandle;
-            DrawTile(handle, grid, tile, strength);
+            int str = 1;
+            foreach (var tileSet in ReversedExplosionData!)
+            {
+                foreach (var tile in tileSet)
+                {
+                    DrawTile(handle, Grid!, tile, str);
+                }
+                str++;
+            }
         }
 
-
-        private void DrawTile(DrawingHandleWorld handle, IMapGrid grid, TileRef tile, int strength)
+        private void DrawTile(DrawingHandleWorld handle, IMapGrid grid, Vector2i tile, int strength)
         {
             var bb = GetBounds(grid, tile);
             var color = ColorMap(strength);
@@ -97,7 +117,7 @@ namespace Content.Client.Explosion
             handle.DrawRect(bb, color);
         }
 
-        private void DrawTile(DrawingHandleScreen handle, IMapGrid grid, TileRef tile, int strength)
+        private void DrawTile(DrawingHandleScreen handle, IMapGrid grid, Vector2i tile, int strength)
         {
             var coords = _eyeManager.WorldToScreen(GetCenter(grid, tile));
 
@@ -108,6 +128,23 @@ namespace Content.Client.Explosion
 
             handle.DrawString(_font, coords, strength.ToString());
         }
+
+        private void DrawEpicenterData(DrawingHandleScreen handle, IMapGrid grid, Vector2i tile)
+        {
+            var bb = GetBounds(grid, tile);
+
+            var topLeft = _eyeManager.WorldToScreen(bb.TopLeft);
+            var topRight = _eyeManager.WorldToScreen(bb.TopRight);
+
+            if (Damage < 10)
+                topRight -= (12, 0);
+            else
+                topRight -= (24, 0);
+
+            handle.DrawString(_smallFont, topLeft, TotalStrength.ToString(), Color.Black);
+            handle.DrawString(_smallFont, topRight, Damage.ToString(), Color.Black);
+        }
+
 
         private Color ColorMap(int strength, bool transparent = false)
         {

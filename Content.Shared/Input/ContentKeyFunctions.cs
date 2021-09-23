@@ -79,7 +79,7 @@ namespace Content.Shared.Input
         public static readonly BoundKeyFunction Vote8 = "Vote8";
         public static readonly BoundKeyFunction Vote9 = "Vote9";
 
-
+        public static readonly BoundKeyFunction Explode = "Explode";
         public static readonly BoundKeyFunction IncreaseStrength = "StrengthUp";
         public static readonly BoundKeyFunction DecreaseStrength = "StrengthDown";
         public static readonly BoundKeyFunction IncreaseDamage = "DamageUp";

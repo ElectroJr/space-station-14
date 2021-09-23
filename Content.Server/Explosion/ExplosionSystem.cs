@@ -104,6 +104,21 @@ namespace Content.Server.Explosion
             SoundSystem.Play( Filter.Broadcast(), _explosionSound.GetSound(), coords);
         }
 
+        public List<HashSet<Vector2i>>? SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
+        {
+            if (strength <= 0)
+                return null;
+
+            if (!_mapManager.TryFindGridAt(epicenter, out var grid))
+                return null;
+
+            var epicenterTile = grid.TileIndicesFor(epicenter);
+
+            return SpawnExplosion(grid, epicenterTile, strength, damagePerIteration);
+        }
+
+
+
         /// <summary>
         ///     This flood a grid, exploring neighbours.
         ///     Each tile has some distance metric that determines damage.
@@ -133,25 +148,17 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <param name="epicenter"></param>
         /// <param name="strength"></param>
-        public List<HashSet<Vector2i>>? SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
+        public List<HashSet<Vector2i>>? SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int strength, int damagePerIteration)
         {
+            if (strength <= 0)
+                return null;
+
             // A sorted list of sets of tiles that will be targeted by explosions.
             List<HashSet<Vector2i>> explodedTiles = new();
             // Each set of tiles receives the same explosion intensity.
             // The order in which the sets appear in the list corresponds to the "effective distance" to the epicenter (walls increase effective distance).
 
             // The "distance" is related to the list index via: distance = -0.5 +(index/2)
-
-            if (strength <= 0)
-                return explodedTiles;
-
-            if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return explodedTiles;
-
-            var epicenterTile = grid.TileIndicesFor(epicenter);
-            // PlaySound(epicenterTile.ToEntityCoordinates(grid.Index, _mapManager));
-
-
 
             // The set of all tiles that will be targeted by this explosion.
             // This is used to stop adding the same tile twice if an explosion loops around an obstacle / encounters itself.
@@ -161,14 +168,11 @@ namespace Content.Server.Explosion
             // The delay duration depends on
             Dictionary<int, Dictionary<Vector2i, int>> blockedTiles = new();
 
-
-
             // Initialize list with some sets. The first three entries are trivial, but make the following for loop
             // logic nicer. Some of these will be filled in during the iteration.
             explodedTiles.Add(new HashSet<Vector2i>());
             explodedTiles.Add(new HashSet<Vector2i> { epicenterTile });
             explodedTiles.Add(new HashSet<Vector2i>());
-
 
             var distributedStrength = 0;
             var iteration = 3;// the tile set iteration we are CURRENTLY adding in every loop
