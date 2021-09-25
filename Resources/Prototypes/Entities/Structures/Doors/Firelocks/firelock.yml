@@ -8,6 +8,8 @@
     - type: Damageable
       damageContainer: Inorganic
       damageModifierSet: Metallic
+    - type: ExplosionBlocker
+      tolerance: 1
     - type: Destructible
       thresholds:
       - trigger:

@@ -1,3 +1,4 @@
+using Content.Server.CombatMode;
 using Content.Server.Explosion;
 using Content.Shared.Explosion;
 using Content.Shared.Input;
@@ -91,27 +92,27 @@ namespace Content.Client.Explosion
                 return true;
             }
 
-            Stopwatch sw = new();
-            sw.Start();
 
-            var (tiles, damage, box) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage);
-
-            var time = sw.Elapsed.TotalMilliseconds;
-
+            if (session.AttachedEntity != null)
+            {
+                if (session.AttachedEntity.TryGetComponent(out CombatModeComponent? combat))
+                {
+                    if (combat.IsInCombatMode)
+                    {
+                        RaiseNetworkEvent(new ExplosionOverlayEvent(null, null, _currentGrid, Strength, Damage), session.ConnectedClient);
+                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage);
+                    }
+                    else
+                    {
+                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage);
+                        RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, _currentGrid, Strength, Damage), session.ConnectedClient);
+                        return true;
+                    }
+                }
+            }
             
 
-            if (box != null)
-            {
-                var total = 0;
-                foreach (var tileset in tiles!)
-                {
-                    total += tileset.Count;
-                }
-                Logger.Info($"\n{Strength}, {Box2.Area((Box2) box)}, {total}, {time}");
-            }
-
-
-            RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, damage, _currentGrid, Strength, Damage), session.ConnectedClient);
+            
 
             return true;
         }

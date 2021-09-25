@@ -23,7 +23,7 @@ namespace Content.Client.Explosion
         public int TargetTotalStrength;
         public int Damage;
 
-        public override OverlaySpace Space => OverlaySpace.WorldSpace | OverlaySpace.ScreenSpace;
+        public override OverlaySpace Space => OverlaySpace.WorldSpace; // | OverlaySpace.ScreenSpace;
 
 
         private readonly Font _font;

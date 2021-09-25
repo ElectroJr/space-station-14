@@ -50,8 +50,10 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
+        [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
-        
+
+        public Queue<Tuple<List<EntityUid>, float>> EntitiesToDamage = new();
 
         public DamageSpecifier BaseExplosionDamage = new();
 
@@ -68,67 +70,24 @@ namespace Content.Server.Explosion
             SoundSystem.Play( Filter.Broadcast(), _explosionSound.GetSound(), coords);
         }
 
-        private List<List<EntityUid>> GetEntitiesFast(List<HashSet<Vector2i>> tileSetList, IMapGrid grid, Box2i bounds)
+        public override void Update(float frameTime)
         {
-            // So _gridTileLookupSystem is not suitable for our purpose becase:
+            base.Update(frameTime);
 
-            // 1 it includes entities in containers. This is a waste, as we would have to check each entity, see if it is in a container, and then ignore it.
+            if (!EntitiesToDamage.TryDequeue(out var tuple))
+                return;
 
-            // 2 it does not treat entities as points. they can intersect more than one tile.
-            // This complicates everything. Every entity would have to be added to a list, then we get the tiles PER entity, then take the average to get the damage.
-            // it is much easier to just take the damage based on the tile at which the entity is centered. Then again, maybe for giant entities taking an average would be desirable...
+            Stopwatch sw = new();
+            sw.Start();
 
-            // so fuck it, ill do it myself.
+            DamageEntities(tuple.Item1, tuple.Item2);
 
-            // It would be nice to have function from entityGridLookup that provides a way to get ALL the entities on a grid.
-            // Instead we need to either:
-            // A) Use GetEntitiesIntersecting on a BB that contains out tiles, then refine
-            // B) Use ALL entities, then refine
-            // AFAIK there is no reson not to just use B
+            var time = sw.Elapsed.TotalMilliseconds;
 
-
-            Dictionary<Vector2i, List<EntityUid>> entitiesInBounds = new();
-            List<IEntity> list = new ();
-
-            var gridLookup = ComponentManager.GetComponent<EntityLookupComponent>(grid.GridEntityId);
-
-            // Get unanchored entities in bounding box
-            foreach (var entity in gridLookup.Tree)
-            {
-                if (entity.Deleted) continue;
-                var scaledPosition = entity.Transform.LocalPosition / grid.TileSize;
-                Vector2i index = new((int) MathF.Floor(scaledPosition.X), (int) MathF.Floor(scaledPosition.Y));
-
-                if (!bounds.Contains(index))
-                    continue;
-
-                if (entitiesInBounds.ContainsKey(index))
-                    entitiesInBounds[index].Add(entity.Uid);
-                else
-                    entitiesInBounds.Add(index, new() { entity.Uid });
-            }
-
-            // Associate each entity with a tile generation
-            List<List<EntityUid>> result = new();
-            foreach (var tileSet in tileSetList)
-            {
-                result.Add(new());
-                foreach (var tile in tileSet)
-                {
-                    // Add anchored entities
-                    result.Last().AddRange(grid.GetAnchoredEntities(tile));
-
-                    if (entitiesInBounds.ContainsKey(tile))
-                    {
-                        result.Last().AddRange(entitiesInBounds[tile]);
-                        entitiesInBounds.Remove(tile);
-                    }
-                }
-            }
-            return result;
+            Logger.Info($"Damage time: {sw.Elapsed.TotalMilliseconds} ms");
         }
 
-        private List<List<EntityUid>> GetEntities(List<HashSet<Vector2i>> tileSetList, IMapGrid grid, Box2i bounds)
+        public List<List<EntityUid>> GetEntities(List<HashSet<Vector2i>> tileSetList, IMapGrid grid)
         {
             HashSet<EntityUid> known = new();
 
@@ -159,20 +118,20 @@ namespace Content.Server.Explosion
         }
 
 
-        public (List<HashSet<Vector2i>>?, List<float>?, Box2i?) GetExplosionTiles(MapCoordinates epicenter, int strength, int damagePerIteration)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, int strength, int damagePerIteration)
         {
             if (strength <= 0)
-                return (null, null, null);
+                return (null, null);
 
             if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return (null, null, null);
+                return (null, null);
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
             return GetExplosionTiles(grid, epicenterTile, strength, damagePerIteration);
         }
 
-        public (List<HashSet<Vector2i>>?, List<float>?, Box2i?) GetDirectedExplosionTiles(
+        public (List<HashSet<Vector2i>>?, List<float>?) GetDirectedExplosionTiles(
             IMapGrid grid,
             Vector2i tile,
             int totalStrength,
@@ -198,10 +157,10 @@ namespace Content.Server.Explosion
             return GetExplosionTiles(grid, tile, totalStrength, damagePerIteration, excluded);
         }
 
-        public (List<HashSet<Vector2i>>?, List<float>?, Box2i?) GetExplosionTiles(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
         {
             if (remainingStrength < 1 || damagePerIteration < 1)
-                return (null, null, null);
+                return (null, null);
 
             // A sorted list of sets of tiles that will be targeted by explosions.
             List<HashSet<Vector2i>> explodedTiles = new();
@@ -350,19 +309,40 @@ namespace Content.Server.Explosion
                 }
             }
 
-            // Get bounding box
-            Vector2i bottomLeft = new();
-            Vector2i topRight = new();
-            foreach (var tile in encounteredTiles)
+            return (explodedTiles, strengthPerIteration);
+        }
+
+        public void SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
+        {
+            var (explodedTiles, strength) = GetExplosionTiles(grid, epicenterTile, remainingStrength, damagePerIteration, encounteredTiles);
+
+            if (explodedTiles == null)
+                return;
+
+            int a = 0;
+            foreach (var e in GetEntities(explodedTiles, grid))
             {
-                topRight = Vector2i.ComponentMax(topRight, tile);
-                bottomLeft = Vector2i.ComponentMin(bottomLeft, tile);
+                EntitiesToDamage.Enqueue(Tuple.Create(e, strength![a]*damagePerIteration));
             }
-            var bounds = new Box2i(bottomLeft, topRight);
+        }
 
-            var result = GetEntities(explodedTiles, grid, bounds);
+        public void DamageEntities(List<List<EntityUid>> entityLists, List<float> intensityList, int damageScale)
+        {
+            int i = 0;
+            foreach (var list in entityLists)
+            {
+                DamageEntities(list, damageScale * intensityList[i]);
+                i++;
+            }
+        }
 
-            return (explodedTiles, strengthPerIteration, bounds);
+        public void DamageEntities(List<EntityUid> entities, float scale)
+        {
+            var damage = BaseExplosionDamage * scale;
+            foreach (var entity in entities)
+            {
+                _damageableSystem.TryChangeDamage(entity, damage);
+            }
         }
 
         /// <summary>

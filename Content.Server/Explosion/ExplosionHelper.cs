@@ -117,13 +117,14 @@ namespace Content.Server.Explosion
             // be able to spawn a new entity. I.e Wall -> Girder.
             // Girder has a tag ExplosivePassable, and the predicate make it so the entities with this tag are ignored
             var epicenterMapPos = epicenter.ToMap(entityManager);
+            Dictionary<EntityUid, ExplosionSeverity> result = new();
             foreach (var (entity, distance) in impassableEntities)
             {
                 if (!entity.InRangeUnobstructed(epicenterMapPos, maxRange, ignoreInsideBlocker: true, predicate: IgnoreExplosivePassable))
                 {
                     continue;
                 }
-                exAct.HandleExplosion(epicenter, entity, CalculateSeverity(distance, devastationRange, heaveyRange));
+                result.Add(entity.Uid, CalculateSeverity(distance, devastationRange, heaveyRange));
             }
 
             // Impassable entities were handled first so NonImpassable entities have a bigger chance to get hit. As now
@@ -134,7 +135,7 @@ namespace Content.Server.Explosion
                 {
                     continue;
                 }
-                exAct.HandleExplosion(epicenter, entity, CalculateSeverity(distance, devastationRange, heaveyRange));
+                result.Add(entity.Uid, CalculateSeverity(distance, devastationRange, heaveyRange));
             }
         }
 
@@ -314,18 +315,8 @@ namespace Content.Server.Explosion
             var boundingBox = new Box2(epicenterMapPos - new Vector2(maxRange, maxRange),
                 epicenterMapPos + new Vector2(maxRange, maxRange));
 
-            SoundSystem.Play(Filter.Broadcast(), _explosionSound.GetSound(), epicenter);
             DamageEntitiesInRange(epicenter, boundingBox, devastationRange, heavyImpactRange, maxRange, mapId);
 
-            var mapGridsNear = mapManager.FindGridsIntersecting(mapId, boundingBox);
-
-            foreach (var gridId in mapGridsNear)
-            {
-                DamageTilesInRange(epicenter, gridId.Index, boundingBox, devastationRange, heavyImpactRange, maxRange);
-            }
-
-            CameraShakeInRange(epicenter, maxRange);
-            FlashInRange(epicenter, flashRange);
         }
     }
 }
