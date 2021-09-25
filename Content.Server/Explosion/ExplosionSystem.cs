@@ -3,78 +3,55 @@ using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Damage;
 using Content.Shared.Sound;
+using Robust.Server.GameObjects;
 using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Player;
+using Robust.Shared.Timing;
 
 namespace Content.Server.Explosion
 {
-    // do chemistry slideshow
 
-    // issues:
+    //todo make diagonal walls block explosions
+
+    // todo:
     // atmos airtight instead of my thing
     // grid-jump
     // launch direction is gonna be hard
-    // flash will be easier.. maybe? (after explosion, unobstructed from viewer
-    // or maybe leverage explosion overlay/ clientside rendering:
-    // IF overlay rendered explosion (had LOS), blind according to highest intensity tile seen?
+
+
+    // Todo create explosion prototypes.
+    // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
+    // Each explosion type will need it's own threshold map
+
+    // TODO
+    // Make explosion progress in steps?
+    // Avioids dumping all of the damage change events into a single tick.
 
 
 
-/// <summary>
-///
-/// add option for directional explosion spawn
-/// -- creates initial list of "already encountered" tiles to artificially stop spread
-/// -- to create them: create circle of size X around center. explude tiles in a wedge pointing in a given direction
-/// -- restrict those tiles.
-/// -- --> will be directed, but CAN spread outwards after distance X
-/// --> will lead to very oddly shaped explosion if you have a weakly directed nuke
-///
-/// explosion overlay: add flash radius
-///
-/// make flash happen AFTER explosion
-///
-/// 
-/// 
-/// add explosion prototypes (damage specifier + flash radius + propagation speed)
-///
-/// use explosion overlay, reuse atmos fire indicator
-///
-/// future: cross tile explosions
-/// future: all explosions tied to reagents
-/// </summary>
+    // test going around corners and through walls
+    // test different shielding amounts
+    // test enclosed spaces cause directional explosions
+    // test that a fully enclosed space ramps up damage until the weakest link dies
+    // test that an enclosed space with two weak points, with one a bit weaker than the other, both break asymmetrically
+    // test girders / ExplosionPassable do not block explosions
+
+    // TODO explosion audio & shake
+
     public sealed class ExplosionSystem : EntitySystem
     {
-        // Todo create explosion prototypes.
-        // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
-        // Each explosion type will need it's own threshold map
-
-
-        // TODO
-        // Make explosion progress in steps?
-        // Avioids dumping all of the damage change events into a single tick.
-
-        // TODO remove tag ExplosivePassable
-
-        // Instead of looking for anchored entities and getting explosion tolerance per tile
-        // Really a explosion tolerance should be a PROPERTY of that tile that is updated when anchoring or damaging anchored entities.
-
-
-        // TODO take final tile set. Turn into grid bound. look for foreign grids intersecting or contained within.
-        // For those grids, take their boundary tiles, find what tiles they touch, and use the border to initialize an explosion on the foreign tile.
-        // issue: if you have a foreign grid in the center of our station. and make that grid a line of reinforced walls.
-        // these will NOT block damage to other grids
-        // buut I guess thats fine? not attached --> no roof/ceiling --> explosion goes around?
-
         private static SoundSpecifier _explosionSound = new SoundCollectionSpecifier("explosion");
 
         [Dependency] private readonly IMapManager _mapManager = default!;
-        [Dependency] private readonly IEntityManager _entityManager = default!;
-        [Dependency] private readonly DamageableSystem _damageableSystem = default!;
+        [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
+        [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
+        
 
         public DamageSpecifier BaseExplosionDamage = new();
 
@@ -85,108 +62,146 @@ namespace Content.Server.Explosion
             BaseExplosionDamage.DamageDict = new() { { "Heat", 5 }, { "Blunt", 5 }, { "Piercing", 5 } };
         }
 
-
-        // add explosion predictor overlay?
-
-        // test going around corners and through walls
-        // test different shielding amounts
-        // test enclosed spaces cause directional explosions
-        // test that a fully enclosed space ramps up damage until the weakest link dies
-        // test that an enclosed space with two weak points, with one a bit weaker than the other, both break asymmetrically
-        // test girders / ExplosionPassable do not block explosions
-
-
-        ///
-        ///Damage is determined by distance
-        ///Distance is determined by shortest path
-        ///Can travel through walls but is "longer"
-        ///pathing on 2d grid makes explosions not perfectly circular
-
-
         private void PlaySound(EntityCoordinates coords)
         {
-            // Apparently sound system does not accept map coordinates!?
-            // TODO set distance based on explosion strength?
 
             SoundSystem.Play( Filter.Broadcast(), _explosionSound.GetSound(), coords);
         }
 
-        public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(MapCoordinates epicenter, int strength, int damagePerIteration)
+        private List<List<EntityUid>> GetEntitiesFast(List<HashSet<Vector2i>> tileSetList, IMapGrid grid, Box2i bounds)
+        {
+            // So _gridTileLookupSystem is not suitable for our purpose becase:
+
+            // 1 it includes entities in containers. This is a waste, as we would have to check each entity, see if it is in a container, and then ignore it.
+
+            // 2 it does not treat entities as points. they can intersect more than one tile.
+            // This complicates everything. Every entity would have to be added to a list, then we get the tiles PER entity, then take the average to get the damage.
+            // it is much easier to just take the damage based on the tile at which the entity is centered. Then again, maybe for giant entities taking an average would be desirable...
+
+            // so fuck it, ill do it myself.
+
+            // It would be nice to have function from entityGridLookup that provides a way to get ALL the entities on a grid.
+            // Instead we need to either:
+            // A) Use GetEntitiesIntersecting on a BB that contains out tiles, then refine
+            // B) Use ALL entities, then refine
+            // AFAIK there is no reson not to just use B
+
+
+            Dictionary<Vector2i, List<EntityUid>> entitiesInBounds = new();
+            List<IEntity> list = new ();
+
+            var gridLookup = ComponentManager.GetComponent<EntityLookupComponent>(grid.GridEntityId);
+
+            // Get unanchored entities in bounding box
+            foreach (var entity in gridLookup.Tree)
+            {
+                if (entity.Deleted) continue;
+                var scaledPosition = entity.Transform.LocalPosition / grid.TileSize;
+                Vector2i index = new((int) MathF.Floor(scaledPosition.X), (int) MathF.Floor(scaledPosition.Y));
+
+                if (!bounds.Contains(index))
+                    continue;
+
+                if (entitiesInBounds.ContainsKey(index))
+                    entitiesInBounds[index].Add(entity.Uid);
+                else
+                    entitiesInBounds.Add(index, new() { entity.Uid });
+            }
+
+            // Associate each entity with a tile generation
+            List<List<EntityUid>> result = new();
+            foreach (var tileSet in tileSetList)
+            {
+                result.Add(new());
+                foreach (var tile in tileSet)
+                {
+                    // Add anchored entities
+                    result.Last().AddRange(grid.GetAnchoredEntities(tile));
+
+                    if (entitiesInBounds.ContainsKey(tile))
+                    {
+                        result.Last().AddRange(entitiesInBounds[tile]);
+                        entitiesInBounds.Remove(tile);
+                    }
+                }
+            }
+            return result;
+        }
+
+        private List<List<EntityUid>> GetEntities(List<HashSet<Vector2i>> tileSetList, IMapGrid grid, Box2i bounds)
+        {
+            HashSet<EntityUid> known = new();
+
+            // Associate each entity with a tile generation
+            List<List<EntityUid>> result = new();
+            foreach (var tileSet in tileSetList)
+            {
+                // In a circular explosion, this tileSet is a ring of constant distance
+
+                result.Add(new());
+                foreach (var tile in tileSet)
+                {
+                    foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile))
+                    {
+                        if (entity.Transform.ParentUid != grid.GridEntityId)
+                            continue;
+
+                        if (known.Contains(entity.Uid))
+                            continue;
+
+                        result.Last().Add(entity.Uid);
+                        known.Add(entity.Uid);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+
+        public (List<HashSet<Vector2i>>?, List<float>?, Box2i?) GetExplosionTiles(MapCoordinates epicenter, int strength, int damagePerIteration)
         {
             if (strength <= 0)
-                return (null, null);
+                return (null, null, null);
 
             if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return (null, null);
+                return (null, null, null);
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
-            return SpawnExplosion(grid, epicenterTile, strength, damagePerIteration);
+            return GetExplosionTiles(grid, epicenterTile, strength, damagePerIteration);
         }
 
-        public (List<HashSet<Vector2i>>?, List<float>?) SpawnDirectedExplosion(IMapGrid grid, Vector2i tile, int remainingStrength, int damagePerIteration)
+        public (List<HashSet<Vector2i>>?, List<float>?, Box2i?) GetDirectedExplosionTiles(
+            IMapGrid grid,
+            Vector2i tile,
+            int totalStrength,
+            int damagePerIteration,
+            Angle fanDirection,
+            int fanWidthDegrees,
+            int fanRadius)
         {
-            // explosion directability is limited by BOX not radius
-            // should probably fix that.
-
-            // this is a hackjob for the demo
-
-            int radius = 8;
-            var direction =  Angle.FromDegrees(40);
-            var degreeWidth = 50;
-
             var gridXform = ComponentManager.GetComponent<ITransformComponent>(grid.GridEntityId);
             var center = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
-            var circle = new Circle(center, radius);
-
-
+            var circle = new Circle(center, fanRadius);
 
             HashSet<Vector2i> excluded = new();
-
             foreach (var tileRef in grid.GetTilesIntersecting(circle, ignoreEmpty: false))
             {
                 var otherCenter = gridXform.WorldMatrix.Transform((Vector2) tileRef.GridIndices + 0.5f);
 
-                var angle = direction - new Angle(center - otherCenter);
-                if (Math.Abs(angle.Degrees) * 2 > degreeWidth)
+                var angle = fanDirection - new Angle(center - otherCenter);
+                if (Math.Abs(angle.Degrees) * 2 > fanWidthDegrees)
                     excluded.Add(tileRef.GridIndices);
             }
 
-            return SpawnExplosion(grid, tile, remainingStrength, damagePerIteration, excluded);
+            return GetExplosionTiles(grid, tile, totalStrength, damagePerIteration, excluded);
         }
-        /// <summary>
-        ///     This flood a grid, exploring neighbours.
-        ///     Each tile has some distance metric that determines damage.
-        ///     The issue is, how do we flood / get distance.
-        ///     straight distance to center doesn't work, then rounding corners etc doesn't properly reduce damage
-        ///
-        ///
-        ///     Fill all neighbours (inc diagonals) makes all explosions blocky
-        ///     fill cardinal neighbours makrs all explosions diamond-ey
-        ///
-        ///     In reality: most explosions will be constrained by walls, and these geometric shapes will not be noticable.
-        ///     MAYBE noticable when nuking a station, but at least the edges (when walls start surviving) will still be fussy.
-        ///     SO: for computational simplicitly we could use those.
-        ///
-        ///     But I say NO!
-        ///
-        ///     Alternative: method of measuring distances: "Double every other diagonal".
-        ///     That looks circlish enough.
-        /// 
-        ///     Other alternative: just take diagonals to be "sqrt(2)" distance metric away
-        ///     Yeah that can also work.... but... what if.... sqrt(2) = 1.5....
-        ///     and then we just... count all generations as two distances away
-        ///
-        ///     then we can avoid assosciating each generation with a specific damage number, and just have damage decreased per generation.
-        ///
-        /// 
-        /// </summary>
-        /// <param name="epicenter"></param>
-        /// <param name="targetStrength"></param>
-        public (List<HashSet<Vector2i>>?, List<float>?) SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
+
+        public (List<HashSet<Vector2i>>?, List<float>?, Box2i?) GetExplosionTiles(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
         {
             if (remainingStrength < 1 || damagePerIteration < 1)
-                return (null, null);
+                return (null, null, null);
 
             // A sorted list of sets of tiles that will be targeted by explosions.
             List<HashSet<Vector2i>> explodedTiles = new();
@@ -335,7 +350,19 @@ namespace Content.Server.Explosion
                 }
             }
 
-            return (explodedTiles, strengthPerIteration);
+            // Get bounding box
+            Vector2i bottomLeft = new();
+            Vector2i topRight = new();
+            foreach (var tile in encounteredTiles)
+            {
+                topRight = Vector2i.ComponentMax(topRight, tile);
+                bottomLeft = Vector2i.ComponentMin(bottomLeft, tile);
+            }
+            var bounds = new Box2i(bottomLeft, topRight);
+
+            var result = GetEntities(explodedTiles, grid, bounds);
+
+            return (explodedTiles, strengthPerIteration, bounds);
         }
 
         /// <summary>
@@ -356,7 +383,6 @@ namespace Content.Server.Explosion
                     continue;
 
                 impassable.Add(tile, tolerance);
-
             }
 
             return impassable;

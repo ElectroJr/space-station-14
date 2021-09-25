@@ -4,9 +4,11 @@ using Content.Shared.Input;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Input.Binding;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Players;
+using Robust.Shared.Timing;
 using System;
 
 namespace Content.Client.Explosion
@@ -89,7 +91,26 @@ namespace Content.Client.Explosion
                 return true;
             }
 
-            var (tiles, damage) = _explosionSystem.SpawnDirectedExplosion(grid2, (Vector2i) _currentTile, Strength, Damage);
+            Stopwatch sw = new();
+            sw.Start();
+
+            var (tiles, damage, box) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage);
+
+            var time = sw.Elapsed.TotalMilliseconds;
+
+            
+
+            if (box != null)
+            {
+                var total = 0;
+                foreach (var tileset in tiles!)
+                {
+                    total += tileset.Count;
+                }
+                Logger.Info($"\n{Strength}, {Box2.Area((Box2) box)}, {total}, {time}");
+            }
+
+
             RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, damage, _currentGrid, Strength, Damage), session.ConnectedClient);
 
             return true;
