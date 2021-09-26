@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Content.Server.Camera;
 using Content.Server.Explosion.Components;
+using Content.Server.Throwing;
 using Content.Shared.Damage;
 using Content.Shared.Sound;
 using Robust.Server.GameObjects;
@@ -15,6 +16,11 @@ using Robust.Shared.Player;
 
 namespace Content.Server.Explosion
 {
+    // test that explosions are properly de-queued
+
+    // todo if not fix at least figure out whyL some of the entities spawned by killing things DONT get thrown by secondary explosions
+    // --> UNTILL I pick them up and drop them. are they considered children of the map or the entity that died?
+
 
     //todo make diagonal walls block explosions
 
@@ -45,15 +51,12 @@ namespace Content.Server.Explosion
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
 
+        public const int MaxTilesPerTick = 20;
+
         /// <summary>
         ///     Queue for delayed processing of explosions.
         /// </summary>
         private Queue<Explosion> _explosions = new();
-
-        /// <summary>
-        ///     Max # of entities to damage every update. At least one set is processed every tick.
-        /// </summary>
-        public int MaxEntitities = 20;
 
         public DamageSpecifier BaseExplosionDamage = new();
 
@@ -77,16 +80,14 @@ namespace Content.Server.Explosion
         {
             base.Update(frameTime);
 
-            int totalProcessed = 0;
-            while (_explosions.TryDequeue(out var tuple))
+            int tilesToProcess = MaxTilesPerTick;
+            while (tilesToProcess > 0 && _explosions.TryPeek(out var explosion))
             {
-                DamageEntities(tuple.Item1, tuple.Item2);
-                ThrowEntities(tuple.Item1, tuple.Item2);
+                var processed = explosion.Process(tilesToProcess);
+                tilesToProcess -= processed;
 
-                totalProcessed += tuple.Item1.Count;
-
-                if (_explosions.TryPeek(out var next) && totalProcessed + next.Item1.Count > MaxEntitities)
-                    break;
+                if (processed == 0)
+                    _explosions.Dequeue();
             }
         }
 
@@ -117,48 +118,6 @@ namespace Content.Server.Explosion
         /// </summary>
         public float IntensityToRadius(float intensity) => MathF.Cbrt(intensity) / (2 * MathF.PI / 3);
 
-        /// <summary>
-        ///     Given a list of tile-sets, get the entities that occupy those tiles.
-        /// </summary>
-        /// <remarks>
-        ///     This is used to map the explosion-intensity-tiles to entities that need to be damaged.
-        /// </remarks>
-        public List<EntityUid> GetEntities(List<HashSet<Vector2i>> tileSetList, IMapGrid grid)
-        {
-            List<List<EntityUid>> result = new();
-
-            // Some entities straddle more than one tile. We do not want to add them twice. The damage they take will
-            // depend on the highest-intensity tile they intersect.
-            HashSet<EntityUid> known = new();
-
-            // Here we iterate over tile sets. In a circular explosion, each tile set is a ring of constant distance.
-            foreach (var tileSet in tileSetList)
-            {
-                result.Add(new());
-                foreach (var tile in tileSet)
-                {
-                    // For each tile in this ring, we need to find the intersecting entities. Fortunately
-                    // _gridTileLookupSystem is pretty fast.
-                    foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile))
-                    {
-                        // Entities in containers will be damaged if the container decides to pass the damage along. We
-                        // do not damage them directly.
-                        if (entity.Transform.ParentUid != grid.GridEntityId)
-                            continue;
-
-                        // Did we already add this entity?
-                        if (known.Contains(entity.Uid))
-                            continue;
-
-                        result.Last().Add(entity.Uid);
-                        known.Add(entity.Uid);
-                    }
-                }
-            }
-
-            return result;
-        }
-
         public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, int intensity, int damageScale, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid, epicenter, intensity, damageScale, maxTileIntensity, excludedTiles);
@@ -166,22 +125,19 @@ namespace Content.Server.Explosion
             if (tileSetList == null)
                 return;
 
-
+            _explosions.Enqueue(new Explosion(
+                                    tileSetList,
+                                    tileSetIntensity!,
+                                    grid,
+                                    grid.GridTileToWorld(epicenter),
+                                    this,
+                                    BaseExplosionDamage * damageScale) );
 
             // sound & screen shake
             var range = 5*MathF.Max(IntensityToRadius(intensity), (tileSetList.Count-2) * grid.TileSize);
             var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
             SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
             CameraShakeInRange(filter, grid.GridTileToWorld(epicenter));
-        }
-
-        public void DamageEntities(List<EntityUid> entities, float scale)
-        {
-            var damage = BaseExplosionDamage * scale;
-            foreach (var entity in entities)
-            {
-                _damageableSystem.TryChangeDamage(entity, damage);
-            }
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
@@ -207,78 +163,100 @@ namespace Content.Server.Explosion
             }
         }
 
-        private void ThrowEntities(List<EntityUid> entities, float force)
+        private void ThrowEntity(IEntity entity, MapCoordinates epicenter, float intensity)
         {
-            foreach (var entity in entities)
-            {
-                if (!ComponentManager.HasComponent<ExplosionLaunchedComponent>(entity))
-                    continue;
+            if (!entity.HasComponent<ExplosionLaunchedComponent>())
+                return;
 
-            }
+            var targetLocation = entity.Transform.Coordinates.ToMap(EntityManager);
+            var direction = (targetLocation.Position - epicenter.Position).Normalized;
+            var throwForce = 10 * MathF.Sqrt(intensity);
 
-            var sourceLocation = eventArgs.Source;
-            var targetLocation = eventArgs.Target.Transform.Coordinates;
-
-            if (sourceLocation.Equals(targetLocation)) return;
-
-            var direction = (targetLocation.ToMapPos(Owner.EntityManager) - sourceLocation.ToMapPos(Owner.EntityManager)).Normalized;
-
-            var throwForce = eventArgs.Severity switch
-            {
-                ExplosionSeverity.Heavy => 30,
-                ExplosionSeverity.Light => 20,
-                _ => 0,
-            };
-
-            Owner.TryThrow(direction, throwForce);
+            entity.TryThrow(direction, throwForce);
         }
 
-
-        class Explosion
+        public void ExplodeTile(Vector2i tile, IMapGrid grid, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
         {
-            public HashSet<EntityUid> Entities = new();
-            public List<HashSet<Vector2i>> TileSetList;
-            public List<float> TileSetIntensity;
-            public EntityCoordinates Epicenter;
+            // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
+            var entities = _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray();
 
-            private int _processSubIndex = 0;
-            private int _processIndex = 1;
-
-            /// <summary>
-            ///     Deal damage, throw entities, and break tiles.
-            /// </summary>
-            private bool Process()
+            foreach (var entity in entities)
             {
-                if (TileSetList.Count == _processIndex)
-                    // we are done processing
-                    return true;
+                // Entities in containers will be damaged if the container decides to pass the damage along. We
+                // do not damage them directly. Similarly, we can just throw the container, not each individual entity.
+                if (entity.Transform.ParentUid != grid.GridEntityId)
+                    continue;
 
-                var tileset = TileSetList[_processIndex];
+                if (!ignored.Add(entity.Uid))
+                    continue;
 
-                while (_processSubIndex < tileset.Count)
-                {
-                    GetEntities(tileSetList, grid)
-                }
-                foreach (var entitySet in GetEntities(tileSetList, grid))
-                {
-                    
-                }
-
-
-                if (explosion.Entities == null)
-                {
-
-                }
-
-                _processIndex++;
-                _processSubIndex = 0;
-
-                return (TileSetList.Count == _processIndex);
+                _damageableSystem.TryChangeDamage(entity.Uid, damage);
+                ThrowEntity(entity, epicenter, intensity);
             }
 
+            // damage tile
         }
     }
 
+    class Explosion
+    {
+        private readonly HashSet<EntityUid> _entities = new();
+        private readonly List<HashSet<Vector2i>> _tileSetList;
+        private readonly List<float> _tileSetIntensity;
+        private readonly MapCoordinates _epicenter;
+        private readonly ExplosionSystem _system;
+        private readonly IMapGrid _grid;
+        private DamageSpecifier _explosionDamage;
+        private IEnumerator<Vector2i> _currentTileEnumerator;
+        private float _intensity;
 
+        public Explosion(List<HashSet<Vector2i>> tileSetList, List<float> tileSetIntensity, IMapGrid grid, MapCoordinates epicenter, ExplosionSystem system, DamageSpecifier explosionDamage)
+        {
+            _tileSetList = tileSetList;
+            _tileSetIntensity = tileSetIntensity;
+            _epicenter = epicenter;
+            _system = system;
+            _grid = grid;
+            _explosionDamage = explosionDamage;
 
+            // We will delete tile sets as we process, starting from what was the first element. So reverse order for faster List.RemoveAt();
+            _tileSetList.Reverse();
+            _tileSetIntensity.Reverse();
+
+            // Get the first tile enumerator set up
+            _currentTileEnumerator = _tileSetList.Last().GetEnumerator();
+            _intensity = _tileSetIntensity.Last();
+            _tileSetList.RemoveAt(_tileSetList.Count - 1);
+            _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
+        }
+
+        /// <summary>
+        ///     Deal damage, throw entities, and break tiles. Returns the number tiles that were processed.
+        /// </summary>
+        public int Process(int tilesToProcess)
+        {
+            var processedTiles = 0;
+
+            while (processedTiles < tilesToProcess)
+            {
+                // do we need to get the next enumerator?
+                if (!_currentTileEnumerator.MoveNext())
+                {
+                    // are there any more left?
+                    if (_tileSetList.Count == 0)
+                        break;
+
+                    _currentTileEnumerator = _tileSetList.Last().GetEnumerator();
+                    _intensity = _tileSetIntensity.Last();
+                    _tileSetList.RemoveAt(_tileSetList.Count - 1);
+                    _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
+                }
+
+                _system.ExplodeTile(_currentTileEnumerator.Current, _grid, _intensity, _intensity*_explosionDamage, _epicenter, _entities);
+                processedTiles++;
+            }
+
+            return processedTiles;
+        }
+    }
 }
