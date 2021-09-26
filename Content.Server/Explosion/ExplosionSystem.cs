@@ -1,17 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Content.Server.Camera;
+using Content.Server.Explosion.Components;
 using Content.Shared.Damage;
 using Content.Shared.Sound;
 using Robust.Server.GameObjects;
 using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Player;
-using Robust.Shared.Timing;
 
 namespace Content.Server.Explosion
 {
@@ -24,36 +24,36 @@ namespace Content.Server.Explosion
     // launch direction is gonna be hard
 
 
+
+    // damage values:
+    // Light => 20 --> intensity = 2
+    // Heavy => 60 -> intensity = 4
+    // Destruction -> 250, 15*15 = 225, so severity ~ 15
+
+
     // Todo create explosion prototypes.
     // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
     // Each explosion type will need it's own threshold map
 
-    // TODO
-    // Make explosion progress in steps?
-    // Avioids dumping all of the damage change events into a single tick.
-
-
-
-    // test going around corners and through walls
-    // test different shielding amounts
-    // test enclosed spaces cause directional explosions
-    // test that a fully enclosed space ramps up damage until the weakest link dies
-    // test that an enclosed space with two weak points, with one a bit weaker than the other, both break asymmetrically
-    // test girders / ExplosionPassable do not block explosions
-
-    // TODO explosion audio & shake
-
-    public sealed class ExplosionSystem : EntitySystem
+    public sealed partial class ExplosionSystem : EntitySystem
     {
-        private static SoundSpecifier _explosionSound = new SoundCollectionSpecifier("explosion");
+        private SoundSpecifier _explosionSound = default!;
+        private AudioParams _explosionSoundParams = default!;
 
         [Dependency] private readonly IMapManager _mapManager = default!;
-        [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
 
-        public Queue<Tuple<List<EntityUid>, float>> EntitiesToDamage = new();
+        /// <summary>
+        ///     Queue for delayed processing of explosions.
+        /// </summary>
+        private Queue<Explosion> _explosions = new();
+
+        /// <summary>
+        ///     Max # of entities to damage every update. At least one set is processed every tick.
+        /// </summary>
+        public int MaxEntitities = 20;
 
         public DamageSpecifier BaseExplosionDamage = new();
 
@@ -61,50 +61,92 @@ namespace Content.Server.Explosion
         {
             base.Initialize();
 
+            _explosionSoundParams  = AudioParams.Default.WithAttenuation(Attenuation.InverseDistanceClamped);
+            _explosionSoundParams.RolloffFactor = 10f; // Why does attenuation not work??
+            _explosionSoundParams.Volume = -10;
+
+            // TODO EXPLOSIONS change volume based on intensity? Given that explosions deal damage iteratively, maybe
+            // also match sound duration or modulate the sound as the explosion progresses?
+
+            // TODO YAML prototypes
+            _explosionSound = new SoundCollectionSpecifier("explosion");
             BaseExplosionDamage.DamageDict = new() { { "Heat", 5 }, { "Blunt", 5 }, { "Piercing", 5 } };
-        }
-
-        private void PlaySound(EntityCoordinates coords)
-        {
-
-            SoundSystem.Play( Filter.Broadcast(), _explosionSound.GetSound(), coords);
         }
 
         public override void Update(float frameTime)
         {
             base.Update(frameTime);
 
-            if (!EntitiesToDamage.TryDequeue(out var tuple))
-                return;
+            int totalProcessed = 0;
+            while (_explosions.TryDequeue(out var tuple))
+            {
+                DamageEntities(tuple.Item1, tuple.Item2);
+                ThrowEntities(tuple.Item1, tuple.Item2);
 
-            Stopwatch sw = new();
-            sw.Start();
+                totalProcessed += tuple.Item1.Count;
 
-            DamageEntities(tuple.Item1, tuple.Item2);
-
-            var time = sw.Elapsed.TotalMilliseconds;
-
-            Logger.Info($"Damage time: {sw.Elapsed.TotalMilliseconds} ms");
+                if (_explosions.TryPeek(out var next) && totalProcessed + next.Item1.Count > MaxEntitities)
+                    break;
+            }
         }
 
-        public List<List<EntityUid>> GetEntities(List<HashSet<Vector2i>> tileSetList, IMapGrid grid)
+        /// <summary>
+        ///     Find the strength needed to generate an explosion of a given radius
+        /// </summary>
+        /// <remarks>
+        ///     This assumes the explosion is in a vacuum / unobstructed. Given that explosions are not perfectly
+        ///     circular, here radius actually means the sqrt(Area/(2*pi)), where the area is the total number of tiles
+        ///     covered by the explosion. Until you get to radius 30+, this is functionally equivalent to the
+        ///     actual radius.
+        /// </remarks>
+        public int RadiusToIntensity(float radius)
         {
+            // This formula came from fitting data, but if you want an intuitive explanation, then consider the
+            // intensity of each tile in an explosion to be a height. Then a circular explosion is shaped like a cone.
+            // So total intensity is like the volume of a cone with height = 2 * radius
+
+            // Of course, as the explosions are not perfectly circular, this formula isn't perfect. But the formula
+            // works **really** well. The error stays below 1 tile up until a radius of 30, and only goes up to 1.4 with
+            // a radius of ~60.
+
+            return (int) ( 2 * MathF.PI / 3  * MathF.Pow(radius, 3));
+        }
+
+        /// <summary>
+        ///     The inverse of <see cref="RadiusToIntensity(float)"/>
+        /// </summary>
+        public float IntensityToRadius(float intensity) => MathF.Cbrt(intensity) / (2 * MathF.PI / 3);
+
+        /// <summary>
+        ///     Given a list of tile-sets, get the entities that occupy those tiles.
+        /// </summary>
+        /// <remarks>
+        ///     This is used to map the explosion-intensity-tiles to entities that need to be damaged.
+        /// </remarks>
+        public List<EntityUid> GetEntities(List<HashSet<Vector2i>> tileSetList, IMapGrid grid)
+        {
+            List<List<EntityUid>> result = new();
+
+            // Some entities straddle more than one tile. We do not want to add them twice. The damage they take will
+            // depend on the highest-intensity tile they intersect.
             HashSet<EntityUid> known = new();
 
-            // Associate each entity with a tile generation
-            List<List<EntityUid>> result = new();
+            // Here we iterate over tile sets. In a circular explosion, each tile set is a ring of constant distance.
             foreach (var tileSet in tileSetList)
             {
-                // In a circular explosion, this tileSet is a ring of constant distance
-
                 result.Add(new());
                 foreach (var tile in tileSet)
                 {
+                    // For each tile in this ring, we need to find the intersecting entities. Fortunately
+                    // _gridTileLookupSystem is pretty fast.
                     foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile))
                     {
+                        // Entities in containers will be damaged if the container decides to pass the damage along. We
+                        // do not damage them directly.
                         if (entity.Transform.ParentUid != grid.GridEntityId)
                             continue;
 
+                        // Did we already add this entity?
                         if (known.Contains(entity.Uid))
                             continue;
 
@@ -117,223 +159,20 @@ namespace Content.Server.Explosion
             return result;
         }
 
-
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, int strength, int damagePerIteration)
+        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, int intensity, int damageScale, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
-            if (strength <= 0)
-                return (null, null);
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid, epicenter, intensity, damageScale, maxTileIntensity, excludedTiles);
 
-            if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return (null, null);
-
-            var epicenterTile = grid.TileIndicesFor(epicenter);
-
-            return GetExplosionTiles(grid, epicenterTile, strength, damagePerIteration);
-        }
-
-        public (List<HashSet<Vector2i>>?, List<float>?) GetDirectedExplosionTiles(
-            IMapGrid grid,
-            Vector2i tile,
-            int totalStrength,
-            int damagePerIteration,
-            Angle fanDirection,
-            int fanWidthDegrees,
-            int fanRadius)
-        {
-            var gridXform = ComponentManager.GetComponent<ITransformComponent>(grid.GridEntityId);
-            var center = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
-            var circle = new Circle(center, fanRadius);
-
-            HashSet<Vector2i> excluded = new();
-            foreach (var tileRef in grid.GetTilesIntersecting(circle, ignoreEmpty: false))
-            {
-                var otherCenter = gridXform.WorldMatrix.Transform((Vector2) tileRef.GridIndices + 0.5f);
-
-                var angle = fanDirection - new Angle(center - otherCenter);
-                if (Math.Abs(angle.Degrees) * 2 > fanWidthDegrees)
-                    excluded.Add(tileRef.GridIndices);
-            }
-
-            return GetExplosionTiles(grid, tile, totalStrength, damagePerIteration, excluded);
-        }
-
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
-        {
-            if (remainingStrength < 1 || damagePerIteration < 1)
-                return (null, null);
-
-            // A sorted list of sets of tiles that will be targeted by explosions.
-            List<HashSet<Vector2i>> explodedTiles = new();
-            // Each set of tiles receives the same explosion intensity.
-            // The order in which the sets appear in the list corresponds to the "effective distance" to the epicenter (walls increase effective distance).
-
-            // The "distance" is related to the list index via: distance = -0.5 +(index/2)
-
-            // The set of all tiles that will be targeted by this explosion.
-            // This is used to stop adding the same tile twice if an explosion loops around an obstacle / encounters itself.
-            encounteredTiles ??= new();
-            encounteredTiles.Add(epicenterTile);
-
-            // A queue of tiles that are receiving damage, but will only let the explosion spread to neighbors after some delay.
-            // The delay duration depends on
-            Dictionary<int, Dictionary<Vector2i, int>> blockedTiles = new();
-
-            // Initialize list with some sets. The first three entries are trivial, but make the following for loop
-            // logic nicer. Some of these will be filled in during the iteration.
-            explodedTiles.Add(new HashSet<Vector2i>());
-            explodedTiles.Add(new HashSet<Vector2i> { epicenterTile });
-            explodedTiles.Add(new HashSet<Vector2i>());
-
-            var strengthPerIteration = new List<float> { 2, 1, 0 };
-            var tilesInIteration = new List<int> { 0, 1, 0 };
-
-            var iteration = 3;// the tile set iteration we are CURRENTLY adding in every loop
-            HashSet<Vector2i> adjacentTiles, diagonalTiles;
-            Dictionary< Vector2i, int> impassableTiles;
-            Dictionary<Vector2i, int>? clearedTiles;
-            bool done = false;
-            remainingStrength--;
-            while (remainingStrength > 0)
-            {
-                // get the iterator that tells us what tiles we want to find the adjacent neighbors of. usually this is just
-                // explodedTiles[index], but it's possible a wall was destroyed and we want to start adding it's
-                // neighbors.
-                IEnumerable<Vector2i> adjacentIterator = blockedTiles.TryGetValue(iteration - 2, out clearedTiles)
-                    ? explodedTiles[iteration - 2].Concat(clearedTiles.Keys)
-                    : explodedTiles[iteration - 2];
-
-                adjacentTiles = GetAdjacentTiles(adjacentIterator, encounteredTiles);
-
-                // Does this bring us over the damage limit?
-                if (adjacentTiles.Count >= remainingStrength)
-                {
-                    strengthPerIteration.Add((float) remainingStrength / adjacentTiles.Count());
-                    explodedTiles.Add(adjacentTiles);
-                    break;
-                }
-
-                tilesInIteration.Add(adjacentTiles.Count);
-                strengthPerIteration.Add(1);
-                remainingStrength -= adjacentTiles.Count;
-                encounteredTiles.UnionWith(adjacentTiles);
-
-                // check if any of the new tiles are impassable.
-                impassableTiles = GetImpassableTiles(adjacentTiles, grid.Index);
-                adjacentTiles.ExceptWith(impassableTiles.Keys);
-                explodedTiles.Add(adjacentTiles);
-
-                // add impassable delays to the set of blocked tiles.
-                // these tiles will be added to some future iteration.
-                foreach (var (tile, tolerance) in impassableTiles)
-                {
-                    // How many iterations later would this tile become passable (i.e., when is the wall destroyed and
-                    // the explosion can propagate)?
-
-                    var delay = - 1 + (int) Math.Ceiling((float) tolerance / damagePerIteration);
-                    // (- 1 + ... ) because if a single set of explosion damage is enough to kill this obstacle, there is no delay.
-
-                    // Add these tiles to some delayed future iteration
-                    if (blockedTiles.ContainsKey(iteration + delay))
-                        blockedTiles[iteration + delay].Add(tile, iteration);
-                    else
-                        blockedTiles.Add(iteration + delay, new() { { tile, iteration } });
-                }
-
-                // Next, repeat but get the tiles that should explode due to diagonal adjacency
-                IEnumerable<Vector2i> diagonalIterator = blockedTiles.TryGetValue(iteration - 3, out clearedTiles)
-                    ? explodedTiles[iteration - 3].Concat(clearedTiles.Keys)
-                    : explodedTiles[iteration - 3];
-
-                diagonalTiles = GetDiagonalTiles(diagonalIterator, encounteredTiles);
-
-                // Does this bring us over the damage limit?
-                if (diagonalTiles.Count >= remainingStrength)
-                {
-                    // add this as a new iteration with fractional damage
-                    strengthPerIteration.Add((float) remainingStrength / diagonalTiles.Count());
-                    explodedTiles.Add(diagonalTiles);
-                    break;
-                }
-
-                tilesInIteration[iteration] += diagonalTiles.Count;
-                remainingStrength -= diagonalTiles.Count;
-                encounteredTiles.UnionWith(diagonalTiles);
-
-                // check if any of the new tiles are impassable
-                impassableTiles = GetImpassableTiles(diagonalTiles, grid.Index);
-                diagonalTiles.ExceptWith(impassableTiles.Keys);
-                explodedTiles.Last().UnionWith(diagonalTiles);
-
-                // add impassable delays to the set of blocked tiles.
-                // these tiles will be added to some future iteration.
-                foreach (var (tile, tolerance) in impassableTiles)
-                {
-                    // How many iterations later would this tile become passable (i.e., when is the wall destroyed and
-                    // the explosion can propagate)?
-
-                    var delay = (int) Math.Ceiling((float) tolerance / damagePerIteration);
-
-                    // Add these tiles to some delayed future iteration
-                    if (blockedTiles.ContainsKey(iteration + delay))
-                        blockedTiles[iteration + delay].Add(tile, iteration);
-                    else
-                        blockedTiles.Add(iteration + delay, new() { { tile, iteration } });
-                }
-
-                // then for each previous iteration, we start increasing the damage.
-                for (var i = 1; i < iteration; i++)
-                {
-
-                    if (tilesInIteration[i] >= remainingStrength)
-                    {
-                        // there is not enough damage left. add a fraction amount and break.
-                        strengthPerIteration[i] += (float) remainingStrength / tilesInIteration[i];
-                        done = true;
-                        break;
-                    }
-
-                    remainingStrength -= tilesInIteration[i];
-                    strengthPerIteration[i]++;
-                }
-                if (done) break;
-
-                iteration += 1;
-            }
-
-            // add the delayed tiles back into the main list for damage calculations
-            foreach (var value in blockedTiles.Values)
-            {
-                foreach (var (tile, originalIteration) in value)
-                {
-                    explodedTiles[originalIteration].Add(tile);
-                }
-            }
-
-            return (explodedTiles, strengthPerIteration);
-        }
-
-        public void SpawnExplosion(IMapGrid grid, Vector2i epicenterTile, int remainingStrength, int damagePerIteration, HashSet<Vector2i>? encounteredTiles = null)
-        {
-            var (explodedTiles, strength) = GetExplosionTiles(grid, epicenterTile, remainingStrength, damagePerIteration, encounteredTiles);
-
-            if (explodedTiles == null)
+            if (tileSetList == null)
                 return;
 
-            int a = 0;
-            foreach (var e in GetEntities(explodedTiles, grid))
-            {
-                EntitiesToDamage.Enqueue(Tuple.Create(e, strength![a]*damagePerIteration));
-            }
-        }
 
-        public void DamageEntities(List<List<EntityUid>> entityLists, List<float> intensityList, int damageScale)
-        {
-            int i = 0;
-            foreach (var list in entityLists)
-            {
-                DamageEntities(list, damageScale * intensityList[i]);
-                i++;
-            }
+
+            // sound & screen shake
+            var range = 5*MathF.Max(IntensityToRadius(intensity), (tileSetList.Count-2) * grid.TileSize);
+            var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
+            SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
+            CameraShakeInRange(filter, grid.GridTileToWorld(epicenter));
         }
 
         public void DamageEntities(List<EntityUid> entities, float scale)
@@ -345,62 +184,101 @@ namespace Content.Server.Explosion
             }
         }
 
-        /// <summary>
-        ///     Given a set of tiles, get a list of the ones that are impassable to explosions.
-        /// </summary>
-        private Dictionary<Vector2i, int> GetImpassableTiles(HashSet<Vector2i> tiles, GridId grid)
+        private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
         {
-            Dictionary<Vector2i, int> impassable = new();
-            if (!_explosionBlockerSystem.BlockerMap.TryGetValue(grid, out var tileTolerances))
-                return impassable;
-
-            foreach (var tile in tiles)
+            foreach (var player in filter.Recipients)
             {
-                if (!tileTolerances.TryGetValue(tile, out var tolerance))
+                if (player.AttachedEntity == null)
                     continue;
 
-                if (tolerance == 0)
+                if (!ComponentManager.TryGetComponent(player.AttachedEntity.Uid, out CameraRecoilComponent? recoil))
                     continue;
 
-                impassable.Add(tile, tolerance);
-            }
+                var playerPos = player.AttachedEntity.Transform.WorldPosition;
+                var delta = epicenter.Position - playerPos;
 
-            return impassable;
+                var distance = delta.Length;
+                var effect = 10 * (1 / (1 + distance));
+                if (effect > 0.01f)
+                {
+                    var kick = - delta.Normalized * effect;
+                    recoil.Kick(kick);
+                }
+            }
         }
 
-        private HashSet<Vector2i> GetAdjacentTiles(IEnumerable<Vector2i> tiles, HashSet<Vector2i> existingTiles)
+        private void ThrowEntities(List<EntityUid> entities, float force)
         {
-            HashSet<Vector2i> adjacentTiles = new();
-            foreach (var tile in tiles)
+            foreach (var entity in entities)
             {
-                // Hashset question: Is it better to:
-                //      A) create a HashSet of tiles, then do ExceptWith after finishing adding all elements
-                //      B) only add to a HashSet if the new member is not in the intersection?
-                // A) probably has more allocating, but maybe however HashSet intersections are done is inherently faster?
-                // So lets use A) for now....
-                adjacentTiles.Add(tile + (0, 1));
-                adjacentTiles.Add(tile + (1, 0));
-                adjacentTiles.Add(tile + (0, -1));
-                adjacentTiles.Add(tile + (-1, 0));
+                if (!ComponentManager.HasComponent<ExplosionLaunchedComponent>(entity))
+                    continue;
+
             }
 
-            adjacentTiles.ExceptWith(existingTiles);
-            return adjacentTiles;
+            var sourceLocation = eventArgs.Source;
+            var targetLocation = eventArgs.Target.Transform.Coordinates;
+
+            if (sourceLocation.Equals(targetLocation)) return;
+
+            var direction = (targetLocation.ToMapPos(Owner.EntityManager) - sourceLocation.ToMapPos(Owner.EntityManager)).Normalized;
+
+            var throwForce = eventArgs.Severity switch
+            {
+                ExplosionSeverity.Heavy => 30,
+                ExplosionSeverity.Light => 20,
+                _ => 0,
+            };
+
+            Owner.TryThrow(direction, throwForce);
         }
 
-        private HashSet<Vector2i> GetDiagonalTiles(IEnumerable<Vector2i> tiles, HashSet<Vector2i> existingTiles)
+
+        class Explosion
         {
-            HashSet<Vector2i> diagonalTiles = new();
-            foreach (var tile in tiles)
+            public HashSet<EntityUid> Entities = new();
+            public List<HashSet<Vector2i>> TileSetList;
+            public List<float> TileSetIntensity;
+            public EntityCoordinates Epicenter;
+
+            private int _processSubIndex = 0;
+            private int _processIndex = 1;
+
+            /// <summary>
+            ///     Deal damage, throw entities, and break tiles.
+            /// </summary>
+            private bool Process()
             {
-                diagonalTiles.Add(tile + (1, 1));
-                diagonalTiles.Add(tile + (1, -1));
-                diagonalTiles.Add(tile + (-1, 1));
-                diagonalTiles.Add(tile + (-1, -1));
+                if (TileSetList.Count == _processIndex)
+                    // we are done processing
+                    return true;
+
+                var tileset = TileSetList[_processIndex];
+
+                while (_processSubIndex < tileset.Count)
+                {
+                    GetEntities(tileSetList, grid)
+                }
+                foreach (var entitySet in GetEntities(tileSetList, grid))
+                {
+                    
+                }
+
+
+                if (explosion.Entities == null)
+                {
+
+                }
+
+                _processIndex++;
+                _processSubIndex = 0;
+
+                return (TileSetList.Count == _processIndex);
             }
 
-            diagonalTiles.ExceptWith(existingTiles);
-            return diagonalTiles;
         }
     }
+
+
+
 }

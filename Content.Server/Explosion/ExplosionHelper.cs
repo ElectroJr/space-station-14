@@ -221,36 +221,6 @@ namespace Content.Server.Explosion
             }
         }
 
-        private static void CameraShakeInRange(EntityCoordinates epicenter, float maxRange)
-        {
-            var playerManager = IoCManager.Resolve<IPlayerManager>();
-            var players = playerManager.GetPlayersInRange(epicenter, (int) Math.Ceiling(maxRange));
-            foreach (var player in players)
-            {
-                if (player.AttachedEntity == null || !player.AttachedEntity.TryGetComponent(out CameraRecoilComponent? recoil))
-                {
-                    continue;
-                }
-
-                var entityManager = IoCManager.Resolve<IEntityManager>();
-
-                var playerPos = player.AttachedEntity.Transform.WorldPosition;
-                var delta = epicenter.ToMapPos(entityManager) - playerPos;
-
-                //Change if zero. Will result in a NaN later breaking camera shake if not changed
-                if (delta.EqualsApprox((0.0f, 0.0f)))
-                    delta = EpicenterDistance;
-
-                var distance = delta.LengthSquared;
-                var effect = 10 * (1 / (1 + distance));
-                if (effect > 0.01f)
-                {
-                    var kick = -delta.Normalized * effect;
-                    recoil.Kick(kick);
-                }
-            }
-        }
-
         private static void FlashInRange(EntityCoordinates epicenter, float flashrange)
         {
             if (flashrange > 0)
@@ -277,46 +247,6 @@ namespace Content.Server.Explosion
         public static void SpawnExplosion(this IEntity entity, int devastationRange = 0, int heavyImpactRange = 0,
             int lightImpactRange = 0, int flashRange = 0)
         {
-            // TODO: Need to refactor this stufferino
-
-            // If you want to directly set off the explosive
-            if (!entity.Deleted && entity.TryGetComponent(out ExplosiveComponent? explosive) && !explosive.Exploding)
-            {
-                EntitySystem.Get<TriggerSystem>().Explode(entity.Uid, explosive);
-            }
-            else
-            {
-                while (entity.TryGetContainer(out var cont))
-                {
-                    entity = cont.Owner;
-                }
-
-                var epicenter = entity.Transform.Coordinates;
-
-                SpawnExplosion(epicenter, devastationRange, heavyImpactRange, lightImpactRange, flashRange);
-            }
-        }
-
-        public static void SpawnExplosion(EntityCoordinates epicenter, int devastationRange = 0,
-            int heavyImpactRange = 0, int lightImpactRange = 0, int flashRange = 0)
-        {
-            var mapId = epicenter.GetMapId(IoCManager.Resolve<IEntityManager>());
-            if (mapId == MapId.Nullspace)
-            {
-                return;
-            }
-
-            var maxRange = MathHelper.Max(devastationRange, heavyImpactRange, lightImpactRange, 0);
-
-            var entityManager = IoCManager.Resolve<IEntityManager>();
-            var mapManager = IoCManager.Resolve<IMapManager>();
-
-            var epicenterMapPos = epicenter.ToMapPos(entityManager);
-            var boundingBox = new Box2(epicenterMapPos - new Vector2(maxRange, maxRange),
-                epicenterMapPos + new Vector2(maxRange, maxRange));
-
-            DamageEntitiesInRange(epicenter, boundingBox, devastationRange, heavyImpactRange, maxRange, mapId);
-
         }
     }
 }

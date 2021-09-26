@@ -25,6 +25,7 @@ namespace Content.Client.Explosion
             get => _strength;
             set => _strength = Math.Max(value, 0);
         }
+
         public int Damage
         {
             get => _damage;
@@ -93,6 +94,8 @@ namespace Content.Client.Explosion
             }
 
 
+            int maxTileIntensity = 999;
+
             if (session.AttachedEntity != null)
             {
                 if (session.AttachedEntity.TryGetComponent(out CombatModeComponent? combat))
@@ -100,19 +103,16 @@ namespace Content.Client.Explosion
                     if (combat.IsInCombatMode)
                     {
                         RaiseNetworkEvent(new ExplosionOverlayEvent(null, null, _currentGrid, Strength, Damage), session.ConnectedClient);
-                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage);
+                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage, maxTileIntensity);
                     }
                     else
                     {
-                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage);
+                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage, maxTileIntensity);
                         RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, _currentGrid, Strength, Damage), session.ConnectedClient);
                         return true;
                     }
                 }
             }
-            
-
-            
 
             return true;
         }
