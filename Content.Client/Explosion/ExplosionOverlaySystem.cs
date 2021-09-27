@@ -2,54 +2,69 @@ using Content.Shared.Explosion;
 using Robust.Client.Graphics;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
-using Robust.Shared.Map;
 
 namespace Content.Client.Explosion
 {
-    public class ExplosionOverlaySystem : EntitySystem
+    public sealed class ExplosionOverlaySystem : EntitySystem
     {
-        public ExplosionPreviewOverlay? Overlay;
+        private ExplosionOverlay _overlay = default!;
 
-        [Dependency] private readonly IMapManager _mapManager = default!;
+        /// <summary>
+        ///     Determines how quickly the visual explosion effect expands, in seconds per tile.
+        /// </summary>
+        public const float TimePerTile = 0.2f;
 
-
+        private float _accumulatedFrameTime;
 
         public override void Initialize()
         {
             base.Initialize();
 
-
-            SubscribeNetworkEvent<ExplosionOverlayEvent>(HandleExplosionOverlay);
+            SubscribeNetworkEvent<ExplosionEvent>(HandleExplosionOverlay);
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
-            Overlay = new ExplosionPreviewOverlay();
-            if (!overlayManager.HasOverlay<ExplosionPreviewOverlay>())
-                overlayManager.AddOverlay(Overlay);
+            _overlay = new ExplosionOverlay();
+            if (!overlayManager.HasOverlay<ExplosionOverlay>())
+                overlayManager.AddOverlay(_overlay);
         }
 
-        private void HandleExplosionOverlay(ExplosionOverlayEvent args)
+        /// <summary>
+        ///     Process explosion animations;
+        /// </summary>
+        /// <param name="frameTime"></param>
+        public override void Update(float frameTime)
         {
-            if (Overlay == null)
+            base.Update(frameTime);
+
+            if (_overlay.Explosions.Count == 0)
                 return;
 
-            Overlay.Tiles = args.Tiles;
-            Overlay.Intensity = args.Strength;
-            Overlay.TargetTotalStrength = args.TargetTotalStrength;
-            Overlay.Damage = args.Damage;
+            _accumulatedFrameTime += frameTime;
 
-            if (args.Grid == null)
-                Overlay.Grid = null;
-            else
-                _mapManager.TryGetGrid((GridId) args.Grid, out Overlay.Grid);
+            if (_accumulatedFrameTime < TimePerTile)
+                return;
+
+            _accumulatedFrameTime -= TimePerTile;
+
+            foreach (var explosion in _overlay.Explosions.ToArray())
+            {
+                explosion.Tiles.RemoveAt(explosion.Tiles.Count);
+                explosion.Intensity.RemoveAt(explosion.Intensity.Count);
+
+                if (explosion.Tiles.Count == 0)
+                    _overlay.Explosions.Remove(explosion);
+            }
         }
+
+        private void HandleExplosionOverlay(ExplosionEvent args) => _overlay.Explosions.Add(args);
 
         public override void Shutdown()
         {
             base.Shutdown();
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
-            if (overlayManager.HasOverlay<ExplosionPreviewOverlay>())
-                overlayManager.RemoveOverlay<ExplosionPreviewOverlay>();
+            if (overlayManager.HasOverlay<ExplosionOverlay>())
+                overlayManager.RemoveOverlay<ExplosionOverlay>();
         }
     }
 }

@@ -92,7 +92,7 @@ namespace Content.Server.Explosion
         /// effectively caps the damage that this explosion can do.</param>
         /// <param name="exclude">A set of tiles to exclude from the explosion.</param>
         /// <returns>Returns a list of tile-sets and a list of intensity values which describe the explosion.</returns>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(
+        public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
             IMapGrid grid,
             Vector2i epicenterTile,
             int intensity,
@@ -101,7 +101,7 @@ namespace Content.Server.Explosion
             HashSet<Vector2i>? exclude = null)
         {
             if (intensity < 1 || damageScale < 1)
-                return (null, null);
+                return (new(), new());
 
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.

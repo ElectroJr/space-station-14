@@ -18,6 +18,12 @@ using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
+    //AFTER fixing the grid-lookup bug:
+    // seperate the entity lookup for throwing and damage
+    // add a todo making it clear that it is inefficient / a possible computational cost cutting measure
+    // but at least it means that shards of glass will get flung outwards
+
+
     // Explosion grid hop.
     // First note: IF an explosion is CONSTRAINED then it will deal more damage on average to the tiles it does have (AKA: it will have MORE ITERATIONS and a HIGHER MAX INTENSITTY).
     // Conversely, if an explosion is free, it will always deal less damage, have fewer iterations, and a lower max intensity.
@@ -277,7 +283,7 @@ namespace Content.Server.Explosion
         private readonly MapCoordinates _epicenter;
         private readonly ExplosionSystem _system;
         private readonly IMapGrid _grid;
-        private DamageSpecifier _explosionDamage;
+        private readonly DamageSpecifier _explosionDamage;
         private IEnumerator<Vector2i> _currentTileEnumerator;
         private float _intensity;
 
@@ -324,7 +330,7 @@ namespace Content.Server.Explosion
                     continue;
                 }
 
-                _system.ExplodeTile(_currentTileEnumerator.Current, _grid, _intensity, _intensity*_explosionDamage, _epicenter, _entities);
+                _system.ExplodeTile(_currentTileEnumerator.Current, _grid, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
                 processedTiles++;
             }
 

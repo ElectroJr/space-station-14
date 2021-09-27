@@ -11,7 +11,7 @@ using System.Collections.Generic;
 namespace Content.Client.Explosion
 {
     [UsedImplicitly]
-    public sealed class ExplosionPreviewOverlay : Overlay
+    public sealed class ExplosionDebugOverlay : Overlay
     {
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
@@ -19,16 +19,15 @@ namespace Content.Client.Explosion
         public List<HashSet<Vector2i>>? Tiles;
         public List<float>? Intensity;
         public IMapGrid? Grid;
-        public int TargetTotalStrength;
+        public int TotalIntensity;
         public int Damage;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpace | OverlaySpace.ScreenSpace;
 
-
         private readonly Font _font;
         private readonly Font _smallFont;
 
-        public ExplosionPreviewOverlay()
+        public ExplosionDebugOverlay()
         {
             IoCManager.InjectDependencies(this);
 
@@ -87,7 +86,7 @@ namespace Content.Client.Explosion
 
                 bottomLeft += (0, -24);
 
-                handle.DrawString(_smallFont, topLeft, TargetTotalStrength.ToString(), Color.Black);
+                handle.DrawString(_smallFont, topLeft, TotalIntensity.ToString(), Color.Black);
                 handle.DrawString(_smallFont, bottomLeft, Damage.ToString(), Color.Black);
             }
         }

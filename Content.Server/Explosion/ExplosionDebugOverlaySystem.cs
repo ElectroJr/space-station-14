@@ -5,25 +5,23 @@ using Content.Shared.Input;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Input.Binding;
 using Robust.Shared.IoC;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Players;
-using Robust.Shared.Timing;
 using System;
 
-namespace Content.Client.Explosion
+namespace Content.server.Explosion
 {
-    public class ExplosionOverlaySystem : EntitySystem
+    public class ExplosionDebugOverlaySystem : EntitySystem
     {
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
 
-        public int Strength
+        public int TotalIntensity
         {
-            get => _strength;
-            set => _strength = Math.Max(value, 0);
+            get => _totalIntensity;
+            set => _totalIntensity = Math.Max(value, 0);
         }
 
         public int Damage
@@ -32,7 +30,7 @@ namespace Content.Client.Explosion
             set => _damage = Math.Max(value, 1);
         }
 
-        private int _strength = 1;
+        private int _totalIntensity = 1;
         private int _damage = 1;
 
         private GridId? _currentGrid;
@@ -57,7 +55,7 @@ namespace Content.Client.Explosion
                 new PointerInputCmdHandler(HandleIncreaseDamage))
             .Bind(ContentKeyFunctions.DecreaseDamage,
                 new PointerInputCmdHandler(HandleDecreaseDamage))
-            .Register<ExplosionOverlaySystem>();
+            .Register<ExplosionDebugOverlaySystem>();
         }
 
         private bool Explode(ICommonSession? session, EntityCoordinates coords, EntityUid uid) => UpdateExplosion(session, coords, uid);
@@ -89,7 +87,7 @@ namespace Content.Client.Explosion
 
             if (_currentGrid == null || _currentTile == null || !_mapManager.TryGetGrid((GridId) _currentGrid, out var grid2))
             {
-                RaiseNetworkEvent(new ExplosionOverlayEvent(null, null, null, 0, 0), session.ConnectedClient);
+                RaiseNetworkEvent(ExplosionPreviewEvent.Empty, session.ConnectedClient);
                 return true;
             }
 
@@ -102,14 +100,17 @@ namespace Content.Client.Explosion
                 {
                     if (combat.IsInCombatMode)
                     {
-                        RaiseNetworkEvent(new ExplosionOverlayEvent(null, null, _currentGrid, Strength, Damage), session.ConnectedClient);
-                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage, maxTileIntensity);
+                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Damage, maxTileIntensity);
+                        RaiseNetworkEvent(ExplosionPreviewEvent.Empty, session.ConnectedClient);
                     }
                     else
                     {
-                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage, maxTileIntensity);
-                        RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, _currentGrid, Strength, Damage), session.ConnectedClient);
-                        return true;
+                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Damage, maxTileIntensity);
+
+                        if (tiles == null || intensityList == null)
+                            return true;
+
+                        RaiseNetworkEvent(new ExplosionPreviewEvent(tiles, intensityList, (GridId) _currentGrid, Damage, TotalIntensity), session.ConnectedClient);
                     }
                 }
             }
@@ -119,14 +120,14 @@ namespace Content.Client.Explosion
 
         private bool HandleDecreaseStrength(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            Strength--;
+            TotalIntensity--;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleIncreaseStrength(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            Strength++;
+            TotalIntensity++;
             UpdateExplosion(session, null, uid);
             return true;
         }
@@ -147,14 +148,14 @@ namespace Content.Client.Explosion
 
         private bool HandleIncreaseStrengthRelative(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            Strength = (int) (Strength * 1.25f);
+            TotalIntensity = (int) (TotalIntensity * 1.25f);
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleDecreaseStrengthRelative(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            Strength = (int) (Strength * 0.8f);
+            TotalIntensity = (int) (TotalIntensity * 0.8f);
             UpdateExplosion(session, null, uid);
             return true;
         }

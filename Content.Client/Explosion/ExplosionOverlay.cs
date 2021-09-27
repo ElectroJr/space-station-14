@@ -1,12 +1,12 @@
+using Content.Shared.Explosion;
 using JetBrains.Annotations;
 using Robust.Client.Graphics;
-using Robust.Client.Player;
 using Robust.Client.ResourceManagement;
 using Robust.Shared.Enums;
-using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Random;
 using System;
 using System.Collections.Generic;
 
@@ -15,27 +15,27 @@ namespace Content.Client.Explosion
     [UsedImplicitly]
     public sealed class ExplosionOverlay : Overlay
     {
+        /// <summary>
+        ///     The size of the explosion annulus that is drawn at any given time
+        /// </summary>
+        public const int Size = 4;
+
+        /// <summary>
+        ///     The set of explosions to draw on the overlay.
+        /// </summary>
+        internal List<ExplosionEvent> Explosions = new();
+
         [Dependency] private readonly IResourceCache _resourceCache = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
-
-        public List<HashSet<Vector2i>>? Tiles;
-        public List<float>? Strength;
-        public IMapGrid? Grid;
-        public int TargetTotalStrength;
-        public int Damage;
+        [Dependency] private readonly IRobustRandom _robustRandom = default!;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpaceBelowFOV;
 
-        // Fire overlays, stolen from atmos
+        // Fire overlays, stolen from atmos.
         private const int FireStates = 3;
         private const string FireRsiPath = "/Textures/Effects/fire.rsi";
-
-        private readonly float[] _fireTimer = new float[FireStates];
-        private readonly float[][] _fireFrameDelays = new float[FireStates][];
-        private readonly int[] _fireFrameCounter = new int[FireStates];
         private readonly Texture[][] _fireFrames = new Texture[FireStates][];
-
 
         public ExplosionOverlay()
         {
@@ -49,35 +49,48 @@ namespace Content.Client.Explosion
                     throw new ArgumentOutOfRangeException($"Fire RSI doesn't have state \"{i}\"!");
 
                 _fireFrames[i] = state.GetFrames(RSI.State.Direction.South);
-                _fireFrameDelays[i] = state.GetDelays();
-                _fireFrameCounter[i] = 0;
             }
         }
-
         protected override void Draw(in OverlayDrawArgs args)
         {
             var drawHandle = args.WorldHandle;
             var mapId = _eyeManager.CurrentMap;
             var worldBounds = _eyeManager.GetWorldViewbounds();
 
-           /* foreach (var mapGrid in _mapManager.FindGridsIntersecting(mapId, worldBounds))
+            foreach (var explosion in Explosions)
             {
-                if (!_gasTileOverlaySystem.HasData(mapGrid.Index))
-                    continue;
+                var grid = _mapManager.GetGrid(explosion.Grid);
+                drawHandle.SetTransform(grid.WorldMatrix);
 
-                drawHandle.SetTransform(mapGrid.WorldMatrix);
-
-                foreach (var tile in mapGrid.GetTilesIntersecting(worldBounds))
+                for (var i = 1; i <= Size; i--)
                 {
-                    foreach (var (texture, color) in _gasTileOverlaySystem.GetOverlays(mapGrid.Index, tile.GridIndices))
-                    {
-                        drawHandle.DrawTexture(texture, new Vector2(tile.X, tile.Y), color);
-                    }
+                    if (i > explosion.Tiles.Count)
+                        break;
+
+                    DrawExplodingTiles(drawHandle, grid, explosion.Tiles[^i], explosion.Intensity[^i], worldBounds);
                 }
-            }*/
+            }
 
             drawHandle.SetTransform(Matrix3.Identity);
+        }
 
+        private int IntensityToState(float intensity)
+        {
+            return (int) Math.Min((intensity / 5), FireStates) - 1;
+        }
+
+        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, float intensity, Box2Rotated worldBounds)
+        {
+            var state = IntensityToState(intensity);
+
+            foreach (var tile in tiles)
+            {
+                if (!worldBounds.Contains(grid.GridTileToWorldPos(tile)))
+                    return;
+
+                var texture = _robustRandom.Pick(_fireFrames[state]);
+                drawHandle.DrawTexture(texture, new Vector2(tile.X, tile.Y));
+            }
         }
     }
 }
