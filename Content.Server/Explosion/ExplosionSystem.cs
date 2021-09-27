@@ -5,6 +5,7 @@ using Content.Server.Camera;
 using Content.Server.Explosion.Components;
 using Content.Server.Throwing;
 using Content.Shared.Damage;
+using Content.Shared.Maps;
 using Content.Shared.Sound;
 using Robust.Server.GameObjects;
 using Robust.Shared.Audio;
@@ -13,23 +14,34 @@ using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Player;
+using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
+    // Explosion grid hop.
+    // First note: IF an explosion is CONSTRAINED then it will deal more damage on average to the tiles it does have (AKA: it will have MORE ITERATIONS and a HIGHER MAX INTENSITTY).
+    // Conversely, if an explosion is free, it will always deal less damage, have fewer iterations, and a lower max intensity.
+    //
+    // Given that during the initial explosion iteration, if the explosion spreads over anohter grid, it propagats FREELY, this means that it NECESSARILY will have fewer overall iterations than it would otherwise.
+    // or put another way: IF we were to properly do a dynamic grid hop, unless that grid was COMPLETELY free of obstacles, it would result in fewer iterations.
+    //
+    // So: making a grid hop happen after the explosion has finishes propagating, and then just seeding a SECONDARY explosion, limited by the # of iterations rather than total strength, will ALWAYS deal less damaage over all.
+    //
+    // Is this a bad thing? I would argue no. A bit of sparation between the grids --> explosion leaks into spce--> less constrained --> less damage
+    // it's realistic, so fuck it just do it like that
+
     // test that explosions are properly de-queued
 
     // todo if not fix at least figure out whyL some of the entities spawned by killing things DONT get thrown by secondary explosions
     // --> UNTILL I pick them up and drop them. are they considered children of the map or the entity that died?
 
 
-    //todo make diagonal walls block explosions
+    // todo make diagonal walls block explosions
 
     // todo:
     // atmos airtight instead of my thing
     // grid-jump
-    // launch direction is gonna be hard
-
-
+    // beter admin gui
 
     // damage values:
     // Light => 20 --> intensity = 2
@@ -46,7 +58,10 @@ namespace Content.Server.Explosion
         private SoundSpecifier _explosionSound = default!;
         private AudioParams _explosionSoundParams = default!;
 
+        
         [Dependency] private readonly IMapManager _mapManager = default!;
+        [Dependency] private readonly IRobustRandom _robustRandom = default!;
+        [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
         [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
@@ -163,6 +178,58 @@ namespace Content.Server.Explosion
             }
         }
 
+        /// <summary>
+        ///     Decrease in intensity used for TileBreakChance calculation when repeatedly breaking a single tile.
+        /// </summary>
+        /// <remarks>
+        ///     Effectively, in order for an explosion to have a chance of double-breaking a tile, the intensity needs
+        ///     to be larger than 10. As eventually, this will lead to space tiles & a vacuum forming, this should not
+        ///     be set too small.
+        /// </remarks>
+        public const float TileBreakIntensityDecrease = 10f;
+
+        /// <summary>
+        ///     Explosion intensity dependent chance for a tile to break down to some base turf.
+        /// </summary>
+        private float TileBreakChance(float intensity)
+        {
+            // ~ 5% at intensity 2, 80% at intensity 8. For intensity 10+, nearly 100%.
+            // This means that with TileBreakIntensityDecrease = 10, intensity 12 -> ~5% chance of double break, 18 ->
+            // ~80% chance of double break and so on.
+            return (intensity < 1) ? 0 : (1 + MathF.Tanh(intensity/3 - 2)) / 2;
+        }
+
+        /// <summary>
+        ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
+        /// </summary>
+        private void DamageFloorTile(IMapGrid grid, Vector2i tileIndices, float intensity)
+        {
+            var tileRef = grid.GetTileRef(tileIndices);
+
+            if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
+                return;
+
+            var tileDef = _tileDefinitionManager[tileRef.Tile.TypeId];
+
+            while (_robustRandom.Prob(TileBreakChance(intensity)))
+            {
+                intensity -= TileBreakIntensityDecrease;
+
+                if (tileDef is not ContentTileDefinition contentTileDef)
+                    break;
+
+                // does this have a base-turf that we can break it down to?
+                if (contentTileDef.BaseTurfs.Count == 0)
+                    break;
+
+                // randomly select a new tile
+                tileDef = _tileDefinitionManager[_robustRandom.Pick(contentTileDef.BaseTurfs)];
+            }
+
+            if (tileDef.TileId != tileRef.Tile.TypeId)
+                grid.SetTile(tileIndices, new Tile(tileDef.TileId));
+        }
+
         private void ThrowEntity(IEntity entity, MapCoordinates epicenter, float intensity)
         {
             if (!entity.HasComponent<ExplosionLaunchedComponent>())
@@ -177,6 +244,10 @@ namespace Content.Server.Explosion
 
         public void ExplodeTile(Vector2i tile, IMapGrid grid, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
         {
+
+            DamageFloorTile(grid, tile, intensity);
+
+
             // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
             var entities = _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray();
 
@@ -250,6 +321,7 @@ namespace Content.Server.Explosion
                     _intensity = _tileSetIntensity.Last();
                     _tileSetList.RemoveAt(_tileSetList.Count - 1);
                     _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
+                    continue;
                 }
 
                 _system.ExplodeTile(_currentTileEnumerator.Current, _grid, _intensity, _intensity*_explosionDamage, _epicenter, _entities);

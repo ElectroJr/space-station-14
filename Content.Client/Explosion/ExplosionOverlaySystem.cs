@@ -8,9 +8,11 @@ namespace Content.Client.Explosion
 {
     public class ExplosionOverlaySystem : EntitySystem
     {
-        public ExplosionOverlay? Overlay;
+        public ExplosionPreviewOverlay? Overlay;
 
         [Dependency] private readonly IMapManager _mapManager = default!;
+
+
 
         public override void Initialize()
         {
@@ -20,8 +22,8 @@ namespace Content.Client.Explosion
             SubscribeNetworkEvent<ExplosionOverlayEvent>(HandleExplosionOverlay);
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
-            Overlay = new ExplosionOverlay();
-            if (!overlayManager.HasOverlay<ExplosionOverlay>())
+            Overlay = new ExplosionPreviewOverlay();
+            if (!overlayManager.HasOverlay<ExplosionPreviewOverlay>())
                 overlayManager.AddOverlay(Overlay);
         }
 
@@ -31,7 +33,7 @@ namespace Content.Client.Explosion
                 return;
 
             Overlay.Tiles = args.Tiles;
-            Overlay.Strength = args.Strength;
+            Overlay.Intensity = args.Strength;
             Overlay.TargetTotalStrength = args.TargetTotalStrength;
             Overlay.Damage = args.Damage;
 
@@ -46,8 +48,8 @@ namespace Content.Client.Explosion
             base.Shutdown();
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
-            if (overlayManager.HasOverlay<ExplosionOverlay>())
-                overlayManager.RemoveOverlay<ExplosionOverlay>();
+            if (overlayManager.HasOverlay<ExplosionPreviewOverlay>())
+                overlayManager.RemoveOverlay<ExplosionPreviewOverlay>();
         }
     }
 }
