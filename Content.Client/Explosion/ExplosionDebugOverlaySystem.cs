@@ -12,14 +12,11 @@ namespace Content.Client.Explosion
 
         [Dependency] private readonly IMapManager _mapManager = default!;
 
-
-
         public override void Initialize()
         {
             base.Initialize();
 
-
-            SubscribeNetworkEvent<ExplosionPreviewEvent>(HandleExplosionOverlay);
+            SubscribeNetworkEvent<ExplosionOverlayEvent>(HandleExplosionOverlay);
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
             Overlay = new ExplosionDebugOverlay();
@@ -27,7 +24,7 @@ namespace Content.Client.Explosion
                 overlayManager.AddOverlay(Overlay);
         }
 
-        private void HandleExplosionOverlay(ExplosionPreviewEvent args)
+        private void HandleExplosionOverlay(ExplosionOverlayEvent args)
         {
             if (Overlay == null)
                 return;

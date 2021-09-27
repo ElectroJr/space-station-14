@@ -48,8 +48,8 @@ namespace Content.Client.Explosion
 
             foreach (var explosion in _overlay.Explosions.ToArray())
             {
-                explosion.Tiles.RemoveAt(explosion.Tiles.Count);
-                explosion.Intensity.RemoveAt(explosion.Intensity.Count);
+                explosion.Tiles.RemoveAt(explosion.Tiles.Count - 1);
+                explosion.Intensity.RemoveAt(explosion.Intensity.Count - 1);
 
                 if (explosion.Tiles.Count == 0)
                     _overlay.Explosions.Remove(explosion);

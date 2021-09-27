@@ -11,16 +11,16 @@ using System;
 
 namespace Content.Server.Explosion
 {
-    public class ExplosionDebugOverlaySystem : EntitySystem
+    public class ExplosionOverlaySystem : EntitySystem
     {
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
 
-        public int TotalIntensity
+        public int Strength
         {
-            get => _totalIntensity;
-            set => _totalIntensity = Math.Max(value, 0);
+            get => _strength;
+            set => _strength = Math.Max(value, 0);
         }
 
         public int Damage
@@ -29,7 +29,7 @@ namespace Content.Server.Explosion
             set => _damage = Math.Max(value, 1);
         }
 
-        private int _totalIntensity = 1;
+        private int _strength = 1;
         private int _damage = 1;
 
         private GridId? _currentGrid;
@@ -99,17 +99,14 @@ namespace Content.Server.Explosion
                 {
                     if (combat.IsInCombatMode)
                     {
-                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Damage, maxTileIntensity);
                         RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
+                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, Strength, Damage, maxTileIntensity);
                     }
                     else
                     {
-                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Damage, maxTileIntensity);
-
-                        if (tiles == null || intensityList == null)
-                            return true;
-
-                        RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Damage, TotalIntensity), session.ConnectedClient);
+                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, Strength, Damage, maxTileIntensity);
+                        RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Strength, Damage), session.ConnectedClient);
+                        return true;
                     }
                 }
             }
@@ -119,14 +116,14 @@ namespace Content.Server.Explosion
 
         private bool HandleDecreaseStrength(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            TotalIntensity--;
+            Strength--;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleIncreaseStrength(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            TotalIntensity++;
+            Strength++;
             UpdateExplosion(session, null, uid);
             return true;
         }
@@ -147,14 +144,14 @@ namespace Content.Server.Explosion
 
         private bool HandleIncreaseStrengthRelative(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            TotalIntensity = (int) (TotalIntensity * 1.25f);
+            Strength = (int) (Strength * 1.25f);
             UpdateExplosion(session, null, uid);
             return true;
         }
 
         private bool HandleDecreaseStrengthRelative(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            TotalIntensity = (int) (TotalIntensity * 0.8f);
+            Strength = (int) (Strength * 0.8f);
             UpdateExplosion(session, null, uid);
             return true;
         }

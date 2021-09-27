@@ -31,12 +31,12 @@ namespace Content.Shared.Explosion
     ///     Used for Admin explosion spawning.
     /// </summary>
     [Serializable, NetSerializable]
-    public sealed class ExplosionPreviewEvent : ExplosionEvent
+    public sealed class ExplosionOverlayEvent : ExplosionEvent
     {
         public int Damage;
         public int TotalIntensity;
 
-        public ExplosionPreviewEvent(List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, int damage, int totalIntensity)
+        public ExplosionOverlayEvent(List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, int damage, int totalIntensity)
             : base(tiles, intensity, grid)
         {
             Damage = damage;
@@ -46,6 +46,6 @@ namespace Content.Shared.Explosion
         /// <summary>
         ///     Used to clear the currently shown overlay.
         /// </summary>
-        public static ExplosionPreviewEvent Empty = new(new List<HashSet<Vector2i>>(), new List<float> (), GridId.Invalid, 0, 0);
+        public static ExplosionOverlayEvent Empty = new(new List<HashSet<Vector2i>>(), new List<float> (), GridId.Invalid, 0, 0);
     }
 }

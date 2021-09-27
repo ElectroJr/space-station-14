@@ -18,7 +18,7 @@ namespace Content.Client.Explosion
         /// <summary>
         ///     The size of the explosion annulus that is drawn at any given time
         /// </summary>
-        public const int Size = 4;
+        public const int Size = 6;
 
         /// <summary>
         ///     The set of explosions to draw on the overlay.
@@ -62,7 +62,7 @@ namespace Content.Client.Explosion
                 var grid = _mapManager.GetGrid(explosion.Grid);
                 drawHandle.SetTransform(grid.WorldMatrix);
 
-                for (var i = 1; i <= Size; i--)
+                for (var i = 1; i <= Size; i++)
                 {
                     if (i > explosion.Tiles.Count)
                         break;
@@ -76,7 +76,7 @@ namespace Content.Client.Explosion
 
         private int IntensityToState(float intensity)
         {
-            return (int) Math.Min((intensity / 5), FireStates) - 1;
+            return (int) Math.Min((intensity / 5), FireStates - 1);
         }
 
         private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, float intensity, Box2Rotated worldBounds)

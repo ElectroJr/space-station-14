@@ -5,6 +5,7 @@ using Content.Server.Camera;
 using Content.Server.Explosion.Components;
 using Content.Server.Throwing;
 using Content.Shared.Damage;
+using Content.Shared.Explosion;
 using Content.Shared.Maps;
 using Content.Shared.Sound;
 using Robust.Server.GameObjects;
@@ -159,6 +160,9 @@ namespace Content.Server.Explosion
             var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
             SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
             CameraShakeInRange(filter, grid.GridTileToWorld(epicenter));
+
+            // Wow dem graphics
+            RaiseNetworkEvent(new ExplosionEvent(tileSetList, tileSetIntensity, grid.Index));
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
