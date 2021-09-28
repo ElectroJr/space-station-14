@@ -113,7 +113,7 @@ namespace Content.Server.Explosion
                 if (tiles == null || intensityList == null)
                     return true;
 
-                RaiseNetworkEvent(new ExplosionOverlayEvent(grid2.GridTileToWorld(_currentEpicenter), tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
+                RaiseNetworkEvent(new ExplosionOverlayEvent(grid2.GridTileToWorld((Vector2i) _currentEpicenter), tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
             }
 
             return true;
