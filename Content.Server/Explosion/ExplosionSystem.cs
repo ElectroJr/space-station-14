@@ -250,38 +250,46 @@ namespace Content.Server.Explosion
                 return;
 
             var targetLocation = entity.Transform.Coordinates.ToMap(EntityManager);
-            var direction = (targetLocation.Position - epicenter.Position).Normalized;
-            if (direction.EqualsApprox(Vector2.Zero))
-                direction = new(0.01f, 0);
-
             var throwForce = 10 * MathF.Sqrt(intensity);
 
-            entity.TryThrow(direction, throwForce);
+            entity.TryThrow(targetLocation.Position - epicenter.Position, throwForce);
         }
 
         public void ExplodeTile(Vector2i tile, IMapGrid grid, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
         {
-
-            DamageFloorTile(grid, tile, intensity);
-
             // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
-            var entities = _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray();
-
-            foreach (var entity in entities)
+            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
             {
                 // Entities in containers will be damaged if the container decides to pass the damage along. We
                 // do not damage them directly. Similarly, we can just throw the container, not each individual entity.
                 if (entity.Transform.ParentUid != grid.GridEntityId)
                     continue;
 
-                if (!ignored.Add(entity.Uid))
+                // note, here we ONLY check if they are ignored. we add them in the second for loop, which MAY be removed eventually.
+                if (ignored.Contains(entity.Uid))
                     continue;
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
+            }
+
+            // TODO EXPLOSIONS PERFORMANCE
+            // here, we get the intersecting entities AGAIN for throwing/
+            // This way, glass shards spawned from windows ill be flung outwards, and not stay where they spawned.
+            // BUT this is also somewhat unnecessary computational cost. Maybe change this later?
+            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
+            {
+                if (entity.Transform.ParentUid != grid.GridEntityId)
+                    continue;
+
+                // note here we actually add and check if they are ignored
+                if (!ignored.Add(entity.Uid))
+                    continue;
+
                 ThrowEntity(entity, epicenter, intensity);
             }
 
             // damage tile
+            DamageFloorTile(grid, tile, intensity);
         }
     }
 
