@@ -16,14 +16,14 @@ namespace Content.Client.Explosion
     public sealed class ExplosionOverlay : Overlay
     {
         /// <summary>
-        ///     The size of the explosion annulus that is drawn at any given time
-        /// </summary>
-        public const int Size = 6;
-
-        /// <summary>
         ///     The set of explosions to draw on the overlay.
         /// </summary>
         internal List<ExplosionEvent> Explosions = new();
+
+        /// <summary>
+        ///     The indices that determine what parts of an explosion should currently be drawn.
+        /// </summary>
+        internal List<int> ExplosionIndices = new();
 
         [Dependency] private readonly IResourceCache _resourceCache = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
@@ -31,6 +31,11 @@ namespace Content.Client.Explosion
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpaceBelowFOV;
+
+        /// <summary>
+        ///     How intense does the explosion have to be at a tile to advance to the next fire texture state?
+        /// </summary>
+        public const int IntensityPerState = 10;
 
         // Fire overlays, stolen from atmos.
         private const int FireStates = 3;
@@ -51,42 +56,36 @@ namespace Content.Client.Explosion
                 _fireFrames[i] = state.GetFrames(RSI.State.Direction.South);
             }
         }
+
         protected override void Draw(in OverlayDrawArgs args)
         {
             var drawHandle = args.WorldHandle;
-            var mapId = _eyeManager.CurrentMap;
             var worldBounds = _eyeManager.GetWorldViewbounds();
 
-            foreach (var explosion in Explosions)
+            for (var i = 0; i < Explosions.Count; i++)
             {
+                var explosion = Explosions[i];
                 var grid = _mapManager.GetGrid(explosion.Grid);
+                var gridBounds = grid.InvWorldMatrix.TransformBox(worldBounds);
                 drawHandle.SetTransform(grid.WorldMatrix);
 
-                for (var i = 1; i <= Size; i++)
+                var maxJ = Math.Min(explosion.Tiles.Count, ExplosionIndices[i]);
+                for (var j = 0; j < maxJ; j++)
                 {
-                    if (i > explosion.Tiles.Count)
-                        break;
-
-                    DrawExplodingTiles(drawHandle, grid, explosion.Tiles[^i], explosion.Intensity[^i], worldBounds);
+                    DrawExplodingTiles(drawHandle, grid, explosion.Tiles[j], explosion.Intensity[j], gridBounds);
                 }
             }
-
             drawHandle.SetTransform(Matrix3.Identity);
         }
 
-        private int IntensityToState(float intensity)
+        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, float intensity, Box2 bounds)
         {
-            return (int) Math.Min((intensity / 5), FireStates - 1);
-        }
-
-        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, float intensity, Box2Rotated worldBounds)
-        {
-            var state = IntensityToState(intensity);
+            var state = (int) Math.Min((intensity / IntensityPerState), FireStates - 1);
 
             foreach (var tile in tiles)
             {
-                if (!worldBounds.Contains(grid.GridTileToWorldPos(tile)))
-                    return;
+                if (!bounds.Contains(grid.GridTileToLocal(tile).Position))
+                    continue;
 
                 var texture = _robustRandom.Pick(_fireFrames[state]);
                 drawHandle.DrawTexture(texture, new Vector2(tile.X, tile.Y));

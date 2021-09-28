@@ -12,7 +12,13 @@ namespace Content.Client.Explosion
         /// <summary>
         ///     Determines how quickly the visual explosion effect expands, in seconds per tile.
         /// </summary>
-        public const float TimePerTile = 0.2f;
+        public const float TimePerTile = 0.03f;
+
+        /// <summary>
+        ///     This delays the disappearance of the explosion after it has been fully drawn/expanded, so that it stays on the screen a little bit longer.
+        ///     This is basically "padding" the radius, so that it stays on screen for Persistence*TimePerTile extra seconds
+        /// </summary>
+        public const float Persistence = 15;
 
         private float _accumulatedFrameTime;
 
@@ -46,17 +52,23 @@ namespace Content.Client.Explosion
 
             _accumulatedFrameTime -= TimePerTile;
 
-            foreach (var explosion in _overlay.Explosions.ToArray())
+            for (var i = 0; i < _overlay.Explosions.Count; i++)
             {
-                explosion.Tiles.RemoveAt(explosion.Tiles.Count - 1);
-                explosion.Intensity.RemoveAt(explosion.Intensity.Count - 1);
+                _overlay.ExplosionIndices[i]++;
 
-                if (explosion.Tiles.Count == 0)
-                    _overlay.Explosions.Remove(explosion);
+                if (_overlay.ExplosionIndices[i] > _overlay.Explosions[i].Tiles.Count + Persistence)
+                {
+                    _overlay.Explosions.RemoveAt(i);
+                    _overlay.ExplosionIndices.RemoveAt(i);
+                }
             }
         }
 
-        private void HandleExplosionOverlay(ExplosionEvent args) => _overlay.Explosions.Add(args);
+        private void HandleExplosionOverlay(ExplosionEvent args)
+        {
+            _overlay.Explosions.Add(args);
+            _overlay.ExplosionIndices.Add(4);
+        }
 
         public override void Shutdown()
         {

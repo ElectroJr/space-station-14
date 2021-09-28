@@ -147,13 +147,8 @@ namespace Content.Server.Explosion
             if (tileSetList == null)
                 return;
 
-            _explosions.Enqueue(new Explosion(
-                                    tileSetList,
-                                    tileSetIntensity!,
-                                    grid,
-                                    grid.GridTileToWorld(epicenter),
-                                    this,
-                                    BaseExplosionDamage * damageScale) );
+            // Wow dem graphics
+            RaiseNetworkEvent(new ExplosionEvent(tileSetList, tileSetIntensity, grid.Index));
 
             // sound & screen shake
             var range = 5*MathF.Max(IntensityToRadius(intensity), (tileSetList.Count-2) * grid.TileSize);
@@ -161,8 +156,13 @@ namespace Content.Server.Explosion
             SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
             CameraShakeInRange(filter, grid.GridTileToWorld(epicenter));
 
-            // Wow dem graphics
-            RaiseNetworkEvent(new ExplosionEvent(tileSetList, tileSetIntensity, grid.Index));
+            _explosions.Enqueue(new Explosion(
+                                    tileSetList,
+                                    tileSetIntensity!,
+                                    grid,
+                                    grid.GridTileToWorld(epicenter),
+                                    this,
+                                    BaseExplosionDamage * damageScale));
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
