@@ -14,7 +14,7 @@ namespace Content.Client.Explosion
         /// <summary>
         ///     Determines how quickly the visual explosion effect expands, in seconds per tile.
         /// </summary>
-        public const float TimePerTile = 2;// 0.03f;
+        public const float TimePerTile = 0.03f;
 
         /// <summary>
         ///     This delays the disappearance of the explosion after it has been fully drawn/expanded, so that it stays on the screen a little bit longer.

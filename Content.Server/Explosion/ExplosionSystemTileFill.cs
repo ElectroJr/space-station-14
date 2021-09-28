@@ -20,7 +20,7 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Get the list of tiles that will be damaged when the given explosion is spawned.
         /// </summary>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, int totalIntensity, float slope, int maxTileIntensity)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, float totalIntensity, float slope, int maxTileIntensity)
         {
             if (totalIntensity <= 0)
                 return (null, null);
@@ -85,9 +85,9 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <param name="grid">The grid where the epicenter tile is located</param>
         /// <param name="epicenterTile">The center of the explosion, specified as a tile index</param>
-        /// <param name="remainingIntensity">The final sum of the tile intensities. This governs the overall size of the
+        /// <param name="intensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
-        /// <param name="damageScale">Scales how destructive this explosion is.</param>
+        /// <param name="intensitySlope">How quickly does the intensity decrease when moving away from the epicenter.</param>
         /// <param name="maxTileIntensity">The maximum intensity that the explosion can have at any given tile. This
         /// effectively caps the damage that this explosion can do.</param>
         /// <param name="exclude">A set of tiles to exclude from the explosion.</param>
@@ -95,7 +95,7 @@ namespace Content.Server.Explosion
         public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
             IMapGrid grid,
             Vector2i epicenterTile,
-            int intensity,
+            float intensity,
             float intensitySlope,
             int maxTileIntensity,
             HashSet<Vector2i>? exclude = null)

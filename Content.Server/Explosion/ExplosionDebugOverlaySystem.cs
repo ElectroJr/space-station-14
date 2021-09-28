@@ -1,4 +1,3 @@
-using Content.Server.CombatMode;
 using Content.Shared.Explosion;
 using Content.Shared.Input;
 using Robust.Shared.GameObjects;
@@ -99,7 +98,7 @@ namespace Content.Server.Explosion
                 return true;
             }
 
-            int maxTileIntensity = 999;
+            int maxTileIntensity = 10;
 
             if (detonate)
             {

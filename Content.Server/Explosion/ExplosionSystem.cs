@@ -19,10 +19,10 @@ using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
-    //AFTER fixing the grid-lookup bug:
-    // seperate the entity lookup for throwing and damage
-    // add a todo making it clear that it is inefficient / a possible computational cost cutting measure
-    // but at least it means that shards of glass will get flung outwards
+    // add comments:
+    // capping intensity pancackes explosions
+    // squashes the sandpile/cone down
+    // --> more area
 
 
     // Explosion grid hop.
@@ -50,11 +50,6 @@ namespace Content.Server.Explosion
     // grid-jump
     // beter admin gui
 
-    // damage values:
-    // Light => 20 --> intensity = 2
-    // Heavy => 60 -> intensity = 4
-    // Destruction -> 250, 15*15 = 225, so severity ~ 15
-
 
     // Todo create explosion prototypes.
     // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
@@ -65,7 +60,6 @@ namespace Content.Server.Explosion
         private SoundSpecifier _explosionSound = default!;
         private AudioParams _explosionSoundParams = default!;
 
-        
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
@@ -122,22 +116,27 @@ namespace Content.Server.Explosion
         ///     covered by the explosion. Until you get to radius 30+, this is functionally equivalent to the
         ///     actual radius.
         /// </remarks>
-        public static int RadiusToIntensity(float radius, float slope)
+        public static float RadiusToIntensity(float radius, float slope, float maxIntensity = 0)
         {
             // This formula came from fitting data, but if you want an intuitive explanation, then consider the
             // intensity of each tile in an explosion to be a height. Then a circular explosion is shaped like a cone.
             // So total intensity is like the volume of a cone with height = slope * radius. Of course, as the
             // explosions are not perfectly circular, this formula isn't perfect, but the formula works reasonably well.
 
-            return (int) (slope * MathF.PI / 3  * MathF.Pow(radius, 3));
+            var coneVolume = (slope * MathF.PI / 3 * MathF.Pow(radius, 3));
+
+            if (maxIntensity <= 0 || slope * radius < maxIntensity)
+                return coneVolume;
+
+            // This explosion is limited by the maxIntensity.
+            // Instead of a cone, we have a conical frustum.
+
+            // Subtract the volume of the missing cone segment, with height:
+            var h =  slope * radius - maxIntensity;
+            return coneVolume - (h * MathF.PI / 3 * MathF.Pow(h / slope, 2));
         }
 
-        /// <summary>
-        ///     The inverse of <see cref="RadiusToIntensity(float)"/>
-        /// </summary>
-        public float IntensityToRadius(float intensity) => MathF.Cbrt(intensity) / (2 * MathF.PI / 3);
-
-        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, int intensity, float slope, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float intensity, float slope, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid, epicenter, intensity, slope, maxTileIntensity, excludedTiles);
 
@@ -148,7 +147,7 @@ namespace Content.Server.Explosion
             RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), tileSetList, tileSetIntensity, grid.Index));
 
             // sound & screen shake
-            var range = 5*MathF.Max(IntensityToRadius(intensity), (tileSetList.Count-2) * grid.TileSize);
+            var range = 3*(tileSetList.Count-2);
             var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
             SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
             CameraShakeInRange(filter, grid.GridTileToWorld(epicenter));
