@@ -20,7 +20,7 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Get the list of tiles that will be damaged when the given explosion is spawned.
         /// </summary>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, int totalIntensity, int damageScale, int maxTileIntensity)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, int totalIntensity, float slope, int maxTileIntensity)
         {
             if (totalIntensity <= 0)
                 return (null, null);
@@ -30,7 +30,7 @@ namespace Content.Server.Explosion
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
-            return GetExplosionTiles(grid, epicenterTile, totalIntensity, damageScale, maxTileIntensity);
+            return GetExplosionTiles(grid, epicenterTile, totalIntensity, slope, maxTileIntensity);
         }
 
         /// <summary>
@@ -46,7 +46,7 @@ namespace Content.Server.Explosion
             IMapGrid grid,
             Vector2i epicenter,
             int totalIntensity,
-            int damageScale,
+            float slope,
             int maxTileIntensity,
             Angle direction,
             int spreadDegrees = 46,
@@ -77,7 +77,7 @@ namespace Content.Server.Explosion
                     excluded.Add(tileRef.GridIndices);
             }
 
-            return GetExplosionTiles(grid, epicenter, totalIntensity, damageScale, maxTileIntensity, excluded);
+            return GetExplosionTiles(grid, epicenter, totalIntensity, slope, maxTileIntensity, excluded);
         }
 
         /// <summary>
@@ -85,7 +85,7 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <param name="grid">The grid where the epicenter tile is located</param>
         /// <param name="epicenterTile">The center of the explosion, specified as a tile index</param>
-        /// <param name="intensity">The final sum of the tile intensities. This governs the overall size of the
+        /// <param name="remainingIntensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
         /// <param name="damageScale">Scales how destructive this explosion is.</param>
         /// <param name="maxTileIntensity">The maximum intensity that the explosion can have at any given tile. This
@@ -96,12 +96,27 @@ namespace Content.Server.Explosion
             IMapGrid grid,
             Vector2i epicenterTile,
             int intensity,
-            int damageScale,
+            float intensitySlope,
             int maxTileIntensity,
             HashSet<Vector2i>? exclude = null)
         {
-            if (intensity < 1 || damageScale < 1)
+            var intensityStepSize = intensitySlope / 2;
+
+            if (intensity < 0  || intensityStepSize <= 0)
                 return (new(), new());
+
+            // This is the list of sets of tiles that will be targeted by our explosions.
+            // Here we initialize tileSetList. The first three entries are trivial, but make the following for loop
+            // logic neater. ALl things considered, this is a trivial waste of memory.
+            List<HashSet<Vector2i>> tileSetList = new();
+            tileSetList.Add(new HashSet<Vector2i>());
+            tileSetList.Add(new HashSet<Vector2i> { epicenterTile });
+            tileSetList.Add(new HashSet<Vector2i>());
+            var iteration = 3;
+
+            // is this even a multi-tile explosion?
+            if (intensity < intensitySlope)
+                return (tileSetList, new() { 0, intensity, 0 });
 
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.
@@ -109,9 +124,7 @@ namespace Content.Server.Explosion
             HashSet<Vector2i> allTiles = exclude ?? new();
             allTiles.Add(epicenterTile);
 
-            // This is the list of sets of tiles that will be targeted by our explosions.
-            List<HashSet<Vector2i>> tileSetList = new();
-            List<float> tileSetIntensity = new () { 2, 1, 0 };
+            List<float> tileSetIntensity = new () { 0, intensitySlope, 0 };
 
             // Keep track of the number of tiles in each tileSet. Tiles with walls/obstacles are not directly added to
             // `explodedTiles`, so we cannot just use the count function.
@@ -123,24 +136,19 @@ namespace Content.Server.Explosion
             // added to if they weren't blocked.
             Dictionary<int, Dictionary<Vector2i, int>> delayedTiles = new();
 
-            // Here we initialize tileSetList. The first three entries are trivial, but make the following for loop
-            // logic neater. ALl things considered, this is a trivial waste of memory.
-            tileSetList.Add(new HashSet<Vector2i>());
-            tileSetList.Add(new HashSet<Vector2i> { epicenterTile });
-            tileSetList.Add(new HashSet<Vector2i>());
-            intensity--;
-            var iteration = 3;
+
 
             HashSet<Vector2i> adjacentTiles, diagonalTiles;
             Dictionary<Vector2i, int> impassableTiles;
             Dictionary<Vector2i, int>? clearedTiles;
             bool exit = false;
-            int atMaxIntensityIndex = 1;
+            int maxIntensityIndex = 1;
+            float remainingIntensity = intensity - intensitySlope;
 
             // Main flood-fill loop
-            while (intensity > 0)
+            while (remainingIntensity > 0)
             {
-                var previousIntensity = intensity;
+                var previousIntensity = remainingIntensity;
 
                 // First, we want to fill in the tiles that are adjacent to those that were added two iterations ago.
                 adjacentTiles = new(GetAdjacentTiles(tileSetList[iteration - 2]));
@@ -154,21 +162,21 @@ namespace Content.Server.Explosion
                 adjacentTiles.ExceptWith(allTiles);
 
                 // Does adding these tiles bring us above the total target intensity?
-                if (adjacentTiles.Count >= intensity)
+                if (adjacentTiles.Count * intensityStepSize >= remainingIntensity)
                 {
-                    tileSetIntensity.Add((float) intensity / adjacentTiles.Count());
+                    tileSetIntensity.Add((float) remainingIntensity / adjacentTiles.Count());
                     tileSetList.Add(adjacentTiles);
                     break;
                 }
  
                 tilesInIteration.Add(adjacentTiles.Count);
-                tileSetIntensity.Add(1); 
-                intensity -= adjacentTiles.Count;
+                tileSetIntensity.Add(intensityStepSize); 
+                remainingIntensity -= adjacentTiles.Count * intensityStepSize;
                 allTiles.UnionWith(adjacentTiles);
 
                 // check if any of the new tiles are impassable.
                 impassableTiles = GetImpassableTiles(adjacentTiles, grid.Index);
-                AddDelayedTiles(impassableTiles, delayedTiles, iteration, damageScale, maxTileIntensity);
+                AddDelayedTiles(impassableTiles, delayedTiles, iteration, intensityStepSize, maxTileIntensity);
 
                 // add the free tiles to the main tile-set list
                 adjacentTiles.ExceptWith(impassableTiles.Keys);
@@ -182,43 +190,48 @@ namespace Content.Server.Explosion
                     diagonalTiles.UnionWith(GetAdjacentTiles(clearedTiles.Keys));
 
                 diagonalTiles.ExceptWith(allTiles);
-                if (diagonalTiles.Count >= intensity)
+                if (diagonalTiles.Count * intensityStepSize >= remainingIntensity)
                 {
                     // add as a NEW iteration with fractional damage, in order to keep separate from adjacent tiles,
                     // which have integer damage.
-                    tileSetIntensity.Add((float) intensity / diagonalTiles.Count());
+                    tileSetIntensity.Add((float) remainingIntensity / diagonalTiles.Count());
                     tileSetList.Add(diagonalTiles);
                     break;
                 }
 
                 // add diagonal tiles to the set of adjacent tiles.
                 tilesInIteration[iteration] += diagonalTiles.Count;
-                intensity -= diagonalTiles.Count;
+                remainingIntensity -= diagonalTiles.Count * intensityStepSize;
                 allTiles.UnionWith(diagonalTiles);
                 impassableTiles = GetImpassableTiles(diagonalTiles, grid.Index);
-                AddDelayedTiles(impassableTiles, delayedTiles, iteration, damageScale, maxTileIntensity);
+                AddDelayedTiles(impassableTiles, delayedTiles, iteration, intensityStepSize, maxTileIntensity);
                 diagonalTiles.ExceptWith(impassableTiles.Keys);
                 tileSetList.Last().UnionWith(diagonalTiles);
 
                 // Now that we added a complete new iteration of tiles, we try to  increase the intensity of previous
                 // iterations by 1.
-                for (var i = atMaxIntensityIndex; i < iteration; i++)
+                for (var i = maxIntensityIndex; i < iteration; i++)
                 {
-                    if (tilesInIteration[i] >= intensity)
+                    if (tilesInIteration[i] * intensityStepSize >= remainingIntensity &&
+                        tilesInIteration[i] * (maxTileIntensity - tileSetIntensity[i]) >= remainingIntensity)
                     {
                         // there is not enough left to distribute. add a fractional amount and break.
-                        if (tileSetIntensity[i] < maxTileIntensity)
-                            tileSetIntensity[i] += (float) intensity / tilesInIteration[i];
+                        tileSetIntensity[i] += (float) remainingIntensity / tilesInIteration[i];
                         exit = true;
                         break;
                     }
 
-                    tileSetIntensity[i]++;
-                    intensity -= tilesInIteration[i];
+                    tileSetIntensity[i] += intensityStepSize;
+                    remainingIntensity -= tilesInIteration[i] * intensityStepSize;
 
-                    if (tileSetIntensity[i] == maxTileIntensity)
-                        // reached max intensity, stop increasing intensity of this tile set
-                        atMaxIntensityIndex = i + 1;
+                    if (tileSetIntensity[i] >= maxTileIntensity)
+                    {
+                        // reached max intensity, stop increasing intensity of this tile set and refund some intensity
+                        remainingIntensity += tilesInIteration[i] * (tileSetIntensity[i] - maxTileIntensity);
+                        maxIntensityIndex = i + 1;
+                        tileSetIntensity[i] = maxTileIntensity;
+                    }
+                        
 
                 }
                 if (exit) break;
@@ -227,7 +240,7 @@ namespace Content.Server.Explosion
                     //Whooo! MAXCAP!
                     break;
 
-                if (intensity == previousIntensity)
+                if (remainingIntensity == previousIntensity)
                     // this can only happen if all tiles are at maxTileIntensity & there are no neighbors to expand to.
                     break;
 
@@ -254,18 +267,18 @@ namespace Content.Server.Explosion
             Dictionary<Vector2i, int> impassableTiles,
             Dictionary<int, Dictionary<Vector2i, int>> delayedTiles,
             int iteration,
-            int damageScale,
+            float tileIntensityChangePerIteration,
             int maxTileIntensity)
         {
             foreach (var (tile, sealIntegrity) in impassableTiles)
             {
                 // What intensity of explosion is needed to destroy this entity?
-                var intensityNeeded = (int) Math.Ceiling((float) sealIntegrity / damageScale);
+                var intensityNeeded = (int) Math.Ceiling((float) sealIntegrity);
 
                 // at what iteration is this tile cleared?
                 int clearIteration = (intensityNeeded > maxTileIntensity)
                     ? -1 //never
-                    : iteration + intensityNeeded;
+                    : iteration + (int) MathF.Ceiling(sealIntegrity / tileIntensityChangePerIteration);
 
                 // Add these tiles to some delayed future iteration
                 if (delayedTiles.ContainsKey(clearIteration))

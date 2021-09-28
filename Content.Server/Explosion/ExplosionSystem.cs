@@ -140,9 +140,9 @@ namespace Content.Server.Explosion
         /// </summary>
         public float IntensityToRadius(float intensity) => MathF.Cbrt(intensity) / (2 * MathF.PI / 3);
 
-        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, int intensity, int damageScale, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, int intensity, float slope, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid, epicenter, intensity, damageScale, maxTileIntensity, excludedTiles);
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid, epicenter, intensity, slope, maxTileIntensity, excludedTiles);
 
             if (tileSetList == null)
                 return;
@@ -162,7 +162,7 @@ namespace Content.Server.Explosion
                                     grid,
                                     grid.GridTileToWorld(epicenter),
                                     this,
-                                    BaseExplosionDamage * damageScale));
+                                    BaseExplosionDamage * slope));
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)

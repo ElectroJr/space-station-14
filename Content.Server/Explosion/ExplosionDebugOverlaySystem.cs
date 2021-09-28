@@ -23,7 +23,7 @@ namespace Content.Server.Explosion
             set => _totalIntensity = Math.Max(value, 0);
         }
 
-        public int Damage
+        public int Slope
         {
             get => _damage;
             set => _damage = Math.Max(value, 1);
@@ -51,9 +51,9 @@ namespace Content.Server.Explosion
             .Bind(ContentKeyFunctions.DecreaseStrengthRelative,
                 new PointerInputCmdHandler(HandleDecreaseStrengthRelative))
             .Bind(ContentKeyFunctions.IncreaseDamage,
-                new PointerInputCmdHandler(HandleIncreaseDamage))
+                new PointerInputCmdHandler(HandleIncreaseSlope))
             .Bind(ContentKeyFunctions.DecreaseDamage,
-                new PointerInputCmdHandler(HandleDecreaseDamage))
+                new PointerInputCmdHandler(HandleDecreaseSlope))
             .Register<ExplosionDebugOverlaySystem>();
         }
 
@@ -91,26 +91,24 @@ namespace Content.Server.Explosion
             }
 
 
-            int maxTileIntensity = 5;
+            int maxTileIntensity = 10;
 
             if (session.AttachedEntity != null)
             {
-                if (session.AttachedEntity.TryGetComponent(out CombatModeComponent? combat))
+                var combat = ComponentManager.EnsureComponent<CombatModeComponent>(session.AttachedEntity);
+                if (combat.IsInCombatMode)
                 {
-                    if (combat.IsInCombatMode)
-                    {
-                        _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Damage, maxTileIntensity);
-                        RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
-                    }
-                    else
-                    {
-                        var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Damage, maxTileIntensity);
+                    _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
+                    RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
+                }
+                else
+                {
+                    var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
 
-                        if (tiles == null || intensityList == null)
-                            return true;
+                    if (tiles == null || intensityList == null)
+                        return true;
 
-                        RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Damage, TotalIntensity), session.ConnectedClient);
-                    }
+                    RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
                 }
             }
 
@@ -131,16 +129,16 @@ namespace Content.Server.Explosion
             return true;
         }
 
-        private bool HandleIncreaseDamage(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
+        private bool HandleIncreaseSlope(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            Damage++;
+            Slope++;
             UpdateExplosion(session, null, uid);
             return true;
         }
 
-        private bool HandleDecreaseDamage(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
+        private bool HandleDecreaseSlope(ICommonSession? session, EntityCoordinates coords, EntityUid uid)
         {
-            Damage--;
+            Slope--;
             UpdateExplosion(session, null, uid);
             return true;
         }
