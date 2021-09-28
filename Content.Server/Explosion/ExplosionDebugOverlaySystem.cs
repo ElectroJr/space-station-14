@@ -42,6 +42,8 @@ namespace Content.Server.Explosion
             CommandBinds.Builder
             .Bind(ContentKeyFunctions.Explode,
                 new PointerInputCmdHandler(Explode))
+            .Bind(ContentKeyFunctions.Preview,
+                new PointerInputCmdHandler(Preview))
             .Bind(ContentKeyFunctions.IncreaseStrength,
                 new PointerInputCmdHandler(HandleIncreaseStrength))
             .Bind(ContentKeyFunctions.DecreaseStrength,
@@ -57,9 +59,11 @@ namespace Content.Server.Explosion
             .Register<ExplosionDebugOverlaySystem>();
         }
 
-        private bool Explode(ICommonSession? session, EntityCoordinates coords, EntityUid uid) => UpdateExplosion(session, coords, uid);
+        private bool Preview(ICommonSession? session, EntityCoordinates coords, EntityUid uid) => UpdateExplosion(session, coords, uid);
 
-        private bool UpdateExplosion(ICommonSession? session, EntityCoordinates? coords, EntityUid uid)
+        private bool Explode(ICommonSession? session, EntityCoordinates coords, EntityUid uid) => UpdateExplosion(session, coords, uid, detonate: true);
+
+        private bool UpdateExplosion(ICommonSession? session, EntityCoordinates? coords, EntityUid uid, bool detonate = false)
         {
             if (session == null)
                 return false;
@@ -68,7 +72,12 @@ namespace Content.Server.Explosion
             {
                 var mapCoords = ((EntityCoordinates) coords).ToMap(_entityManager);
                 if (!_mapManager.TryFindGridAt(mapCoords, out var grid))
-                    return false;
+                {
+
+                    var id = session.AttachedEntity?.Transform.GridID;
+                    if (id == null || !_mapManager.TryGetGrid((GridId) id, out grid))
+                        return false;
+                }
 
                 var epicenterTile = grid.TileIndicesFor(mapCoords);
 
@@ -90,26 +99,21 @@ namespace Content.Server.Explosion
                 return true;
             }
 
+            int maxTileIntensity = 999;
 
-            int maxTileIntensity = 10;
-
-            if (session.AttachedEntity != null)
+            if (detonate)
             {
-                var combat = ComponentManager.EnsureComponent<CombatModeComponent>(session.AttachedEntity);
-                if (combat.IsInCombatMode)
-                {
-                    _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
-                    RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
-                }
-                else
-                {
-                    var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
+                _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
+                RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
+            }
+            else
+            {
+                var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
 
-                    if (tiles == null || intensityList == null)
-                        return true;
+                if (tiles == null || intensityList == null)
+                    return true;
 
-                    RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
-                }
+                RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
             }
 
             return true;

@@ -76,6 +76,7 @@ namespace Content.Client.EscapeMenu.UI.Tabs
 
             AddHeader("DEBUG");
             AddButton(ContentKeyFunctions.Explode);
+            AddButton(ContentKeyFunctions.Preview);
             AddButton(ContentKeyFunctions.IncreaseStrength);
             AddButton(ContentKeyFunctions.DecreaseStrength);
             AddButton(ContentKeyFunctions.IncreaseStrengthRelative);

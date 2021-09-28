@@ -73,7 +73,7 @@ namespace Content.Client.Explosion
                     else
                         screenCenter += (-18, -16);
 
-                    handle.DrawString(_font, screenCenter, Intensity![i].ToString("F1"));
+                    handle.DrawString(_font, screenCenter, Intensity![i].ToString("F2"));
                 }
             }
 

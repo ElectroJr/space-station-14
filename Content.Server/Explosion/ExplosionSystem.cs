@@ -178,6 +178,9 @@ namespace Content.Server.Explosion
                 var playerPos = player.AttachedEntity.Transform.WorldPosition;
                 var delta = epicenter.Position - playerPos;
 
+                if (delta.EqualsApprox(Vector2.Zero))
+                    delta = new(0.01f, 0);
+
                 var distance = delta.Length;
                 var effect = 10 * (1 / (1 + distance));
                 if (effect > 0.01f)
@@ -193,8 +196,9 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <remarks>
         ///     Effectively, in order for an explosion to have a chance of double-breaking a tile, the intensity needs
-        ///     to be larger than 10. As eventually, this will lead to space tiles & a vacuum forming, this should not
-        ///     be set too small.
+        ///     to be larger than 10. As tile breaking will eventually lead to space tiles & a vacuum forming, this
+        ///     number should not be set too small. Otherwise even small explosions could punch a hole through the
+        ///     station.
         /// </remarks>
         public const float TileBreakIntensityDecrease = 10f;
 
@@ -203,7 +207,7 @@ namespace Content.Server.Explosion
         /// </summary>
         private float TileBreakChance(float intensity)
         {
-            // ~ 5% at intensity 2, 80% at intensity 8. For intensity 10+, nearly 100%.
+            // ~ 5% at intensity 2, ~ 80% at intensity 8. For intensity 10+, nearly 100%.
             // This means that with TileBreakIntensityDecrease = 10, intensity 12 -> ~5% chance of double break, 18 ->
             // ~80% chance of double break and so on.
             return (intensity < 1) ? 0 : (1 + MathF.Tanh(intensity/3 - 2)) / 2;
@@ -247,6 +251,9 @@ namespace Content.Server.Explosion
 
             var targetLocation = entity.Transform.Coordinates.ToMap(EntityManager);
             var direction = (targetLocation.Position - epicenter.Position).Normalized;
+            if (direction.EqualsApprox(Vector2.Zero))
+                direction = new(0.01f, 0);
+
             var throwForce = 10 * MathF.Sqrt(intensity);
 
             entity.TryThrow(direction, throwForce);
@@ -256,7 +263,6 @@ namespace Content.Server.Explosion
         {
 
             DamageFloorTile(grid, tile, intensity);
-
 
             // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
             var entities = _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray();
@@ -332,6 +338,11 @@ namespace Content.Server.Explosion
                     _tileSetList.RemoveAt(_tileSetList.Count - 1);
                     _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
                     continue;
+                }
+
+                if (_grid.TryGetTileRef(_currentTileEnumerator.Current, out var tile))
+                {
+
                 }
 
                 _system.ExplodeTile(_currentTileEnumerator.Current, _grid, _intensity, _intensity * _explosionDamage, _epicenter, _entities);

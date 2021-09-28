@@ -100,6 +100,7 @@ namespace Content.Client.Input
             common.AddFunction(ContentKeyFunctions.OpenTileSpawnWindow);
             common.AddFunction(ContentKeyFunctions.OpenAdminMenu);
 
+            common.AddFunction(ContentKeyFunctions.Preview);
             common.AddFunction(ContentKeyFunctions.Explode);
             common.AddFunction(ContentKeyFunctions.IncreaseStrength);
             common.AddFunction(ContentKeyFunctions.DecreaseStrength);
