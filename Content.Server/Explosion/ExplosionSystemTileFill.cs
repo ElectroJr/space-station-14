@@ -135,10 +135,13 @@ namespace Content.Server.Explosion
             Dictionary<Vector2i, int> impassableTiles;
             Dictionary<Vector2i, int>? clearedTiles;
             bool exit = false;
+            int atMaxIntensityIndex = 1;
 
             // Main flood-fill loop
             while (intensity > 0)
             {
+                var previousIntensity = intensity;
+
                 // First, we want to fill in the tiles that are adjacent to those that were added two iterations ago.
                 adjacentTiles = new(GetAdjacentTiles(tileSetList[iteration - 2]));
 
@@ -199,7 +202,7 @@ namespace Content.Server.Explosion
 
                 // Now that we added a complete new iteration of tiles, we try to  increase the intensity of previous
                 // iterations by 1.
-                for (var i = 1; i < iteration; i++)
+                for (var i = atMaxIntensityIndex; i < iteration; i++)
                 {
                     if (tilesInIteration[i] >= intensity)
                     {
@@ -210,15 +213,22 @@ namespace Content.Server.Explosion
                         break;
                     }
 
-                    if (tileSetIntensity[i] < maxTileIntensity)
-                        tileSetIntensity[i]++;
-
+                    tileSetIntensity[i]++;
                     intensity -= tilesInIteration[i];
+
+                    if (tileSetIntensity[i] == maxTileIntensity)
+                        // reached max intensity, stop increasing intensity of this tile set
+                        atMaxIntensityIndex = i + 1;
+
                 }
                 if (exit) break;
 
                 if (allTiles.Count >= MaxArea)
                     //Whooo! MAXCAP!
+                    break;
+
+                if (intensity == previousIntensity)
+                    // this can only happen if all tiles are at maxTileIntensity & there are no neighbors to expand to.
                     break;
 
                 iteration += 1;

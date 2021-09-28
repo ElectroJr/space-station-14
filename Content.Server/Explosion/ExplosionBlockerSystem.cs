@@ -23,6 +23,8 @@ namespace Content.Server.Explosion
         // currently do not support different maps.
         // shoudl really be using TileRefs
 
+        public const int EntitiesUpdatedPerTick = 10;
+
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
@@ -62,8 +64,12 @@ namespace Content.Server.Explosion
         {
             base.Update(frameTime);
 
-            if (_outdatedEntities.Count > 0)
-                UpdateTolerance(_outdatedEntities.Dequeue());
+            var toUpdate = EntitiesUpdatedPerTick;
+            while (toUpdate > 0 && _outdatedEntities.TryDequeue(out var entity))
+            {
+                UpdateTolerance(entity);
+                toUpdate--;
+            }
         }
 
         private void HandleEntityUnanchored(EntityUid uid, ExplosionBlockerComponent component, UnanchoredEvent args)

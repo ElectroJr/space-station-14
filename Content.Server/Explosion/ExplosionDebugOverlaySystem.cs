@@ -91,7 +91,7 @@ namespace Content.Server.Explosion
             }
 
 
-            int maxTileIntensity = 999;
+            int maxTileIntensity = 5;
 
             if (session.AttachedEntity != null)
             {
