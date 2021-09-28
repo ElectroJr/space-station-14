@@ -33,7 +33,7 @@ namespace Content.Server.Explosion
         private int _damage = 1;
 
         private GridId? _currentGrid;
-        private Vector2i? _currentTile;
+        private Vector2i? _currentEpicenter;
 
         public override void Initialize()
         {
@@ -81,19 +81,19 @@ namespace Content.Server.Explosion
 
                 var epicenterTile = grid.TileIndicesFor(mapCoords);
 
-                if (_currentGrid == grid.Index && _currentTile == epicenterTile)
+                if (_currentGrid == grid.Index && _currentEpicenter == epicenterTile)
                 {
                     _currentGrid = null;
-                    _currentTile = null;
+                    _currentEpicenter = null;
                 }
                 else
                 {
                     _currentGrid = grid.Index;
-                    _currentTile = epicenterTile;
+                    _currentEpicenter = epicenterTile;
                 }
             }
 
-            if (_currentGrid == null || _currentTile == null || !_mapManager.TryGetGrid((GridId) _currentGrid, out var grid2))
+            if (_currentGrid == null || _currentEpicenter == null || !_mapManager.TryGetGrid((GridId) _currentGrid, out var grid2))
             {
                 RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
                 return true;
@@ -103,17 +103,17 @@ namespace Content.Server.Explosion
 
             if (detonate)
             {
-                _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
+                _explosionSystem.SpawnExplosion(grid2, (Vector2i) _currentEpicenter, TotalIntensity, Slope, maxTileIntensity);
                 RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
             }
             else
             {
-                var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentTile, TotalIntensity, Slope, maxTileIntensity);
+                var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentEpicenter, TotalIntensity, Slope, maxTileIntensity);
 
                 if (tiles == null || intensityList == null)
                     return true;
 
-                RaiseNetworkEvent(new ExplosionOverlayEvent(tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
+                RaiseNetworkEvent(new ExplosionOverlayEvent(grid2.GridTileToWorld(_currentEpicenter), tiles, intensityList, (GridId) _currentGrid, Slope, TotalIntensity), session.ConnectedClient);
             }
 
             return true;

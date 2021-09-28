@@ -122,17 +122,14 @@ namespace Content.Server.Explosion
         ///     covered by the explosion. Until you get to radius 30+, this is functionally equivalent to the
         ///     actual radius.
         /// </remarks>
-        public int RadiusToIntensity(float radius)
+        public static int RadiusToIntensity(float radius, float slope)
         {
             // This formula came from fitting data, but if you want an intuitive explanation, then consider the
             // intensity of each tile in an explosion to be a height. Then a circular explosion is shaped like a cone.
-            // So total intensity is like the volume of a cone with height = 2 * radius
+            // So total intensity is like the volume of a cone with height = slope * radius. Of course, as the
+            // explosions are not perfectly circular, this formula isn't perfect, but the formula works reasonably well.
 
-            // Of course, as the explosions are not perfectly circular, this formula isn't perfect. But the formula
-            // works **really** well. The error stays below 1 tile up until a radius of 30, and only goes up to 1.4 with
-            // a radius of ~60.
-
-            return (int) ( 2 * MathF.PI / 3  * MathF.Pow(radius, 3));
+            return (int) (slope * MathF.PI / 3  * MathF.Pow(radius, 3));
         }
 
         /// <summary>
@@ -148,7 +145,7 @@ namespace Content.Server.Explosion
                 return;
 
             // Wow dem graphics
-            RaiseNetworkEvent(new ExplosionEvent(tileSetList, tileSetIntensity, grid.Index));
+            RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), tileSetList, tileSetIntensity, grid.Index));
 
             // sound & screen shake
             var range = 5*MathF.Max(IntensityToRadius(intensity), (tileSetList.Count-2) * grid.TileSize);

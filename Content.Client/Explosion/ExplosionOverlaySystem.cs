@@ -1,7 +1,9 @@
 using Content.Shared.Explosion;
+using Robust.Client.GameObjects;
 using Robust.Client.Graphics;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using System.Collections.Generic;
 
 namespace Content.Client.Explosion
 {
@@ -12,7 +14,7 @@ namespace Content.Client.Explosion
         /// <summary>
         ///     Determines how quickly the visual explosion effect expands, in seconds per tile.
         /// </summary>
-        public const float TimePerTile = 0.03f;
+        public const float TimePerTile = 2;// 0.03f;
 
         /// <summary>
         ///     This delays the disappearance of the explosion after it has been fully drawn/expanded, so that it stays on the screen a little bit longer.
@@ -21,6 +23,8 @@ namespace Content.Client.Explosion
         public const float Persistence = 15;
 
         private float _accumulatedFrameTime;
+
+        private readonly List<IEntity> _explosionLightSources = new();
 
         public override void Initialize()
         {
@@ -60,6 +64,8 @@ namespace Content.Client.Explosion
                 {
                     _overlay.Explosions.RemoveAt(i);
                     _overlay.ExplosionIndices.RemoveAt(i);
+                    EntityManager.QueueDeleteEntity(_explosionLightSources[i]);
+                    _explosionLightSources.RemoveAt(i);
                 }
             }
         }
@@ -68,6 +74,16 @@ namespace Content.Client.Explosion
         {
             _overlay.Explosions.Add(args);
             _overlay.ExplosionIndices.Add(4);
+
+            // Note that this is a SINGLE point source at the epicentre. for MOST purposes, this is good enough. but if
+            // the explosion snakes around a corner, it will not light it up properly.
+
+            // TODO EXPLOSION make the light source prototype defined by the explosion prototype
+            var explosionLight = EntityManager.SpawnEntity("Explosion", args.Epicenter);
+            var light = explosionLight.GetComponent<PointLightComponent>();
+            light.Radius = args.Tiles.Count;
+            light.Energy = light.Radius; // careful, don't look directly at the nuke.
+            _explosionLightSources.Add(explosionLight);
         }
 
         public override void Shutdown()
