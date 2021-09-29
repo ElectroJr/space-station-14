@@ -213,8 +213,11 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
         /// </summary>
-        private void DamageFloorTile(IMapGrid grid, TileRef tileRef, float intensity)
+        private void DamageFloorTile(IMapGrid grid, Vector2i tile, float intensity)
         {
+            if (!grid.TryGetTileRef(tile, out var tileRef))
+                return;
+
             if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
                 return;
 
@@ -250,15 +253,68 @@ namespace Content.Server.Explosion
             entity.TryThrow(location.Position - epicenter.Position, throwForce);
         }
 
-        public void ExplodeTile(IMapGrid grid, TileRef tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
+        /// <summary>
+        ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. Will also try to damage
+        ///     the tile's themselves (damage the floor of a grid).
+        /// </summary>
+        public void ExplodeTile(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
+        {
+            var gridBox =  Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
+
+            // todo remove list use other func
+            List<IEntity> list = new();
+
+            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
+            {
+                if (!ent.Deleted && !ignored.Contains(ent.Uid) && ent.Transform.GridID == grid.Index)
+                    list.Add(ent);
+                return true;
+            }, gridBox);
+
+            foreach (var uid in grid.GetAnchoredEntities(tile))
+            {
+                if (EntityManager.TryGetEntity(uid, out var ent))
+                    list.Add(ent);
+            }
+            foreach (var ent in list)
+            {
+                _damageableSystem.TryChangeDamage(ent.Uid, damage);
+            }
+
+            // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
+            // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
+            // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
+            list.Clear();
+            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
+            {
+                if (!ent.Deleted && !ignored.Contains(ent.Uid) && ent.Transform.GridID == grid.Index)
+                    list.Add(ent);
+                return true;
+            }, gridBox);
+            foreach (var ent in list)
+            {
+                // need to avoid moddifying the enumerator while iterating
+                ThrowEntity(ent, epicenter, intensity);
+            }
+
+            // damage tile
+            DamageFloorTile(grid, tile, intensity);
+        }
+
+
+        /// <summary>
+        ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. Will also try to damage
+        ///     the tile's themselves (damage the floor of a grid).
+        /// </summary>
+        public void ExplodeTileOLD(IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
         {
             // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
-            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(tile.GridIndex, tile.GridIndices).ToArray())
+            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
             {
                 // Entities in containers will be damaged if the container decides to pass the damage along. We
                 // do not damage them directly. Similarly, we can just throw the container, not each individual entity.
                 //TODO GRIDTILELOOKUPSYSTEM ffs, just let me exclude entities in containers directly. they are intentioanly added in seperately, it would be trivial.
-                if (entity.Transform.GridID != tile.GridIndex)
+                if (entity.Transform.GridID != grid.Index)
                     continue;
 
                 // This Check stops us from repeatedly throwing or damaging an entity as the explosion expands.
@@ -271,9 +327,9 @@ namespace Content.Server.Explosion
             // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
             // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
             // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
-            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(tile.GridIndex, tile.GridIndices).ToArray())
+            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
             {
-                if (entity.Transform.GridID != tile.GridIndex)
+                if (entity.Transform.GridID != grid.Index)
                     continue;
 
                 // Note that tis is where we actually add the encountered entities to the ignored list.
@@ -287,9 +343,54 @@ namespace Content.Server.Explosion
             DamageFloorTile(grid, tile, intensity);
         }
 
-        internal void ExplodeSpace(Box2 box2, float intensity, DamageSpecifier damageSpecifier, MapCoordinates epicenter, HashSet<EntityUid> entities)
+        /// <summary>
+        ///     Same as <see cref="ExplodeTile"/>, but using a slower entity lookup and without tiles to damage.
+        /// </summary>
+        internal void ExplodeSpace(EntityLookupComponent lookup, IMapGrid grid, Vector2 tilePosLocal, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
         {
-            
+            var worldBox = grid.WorldMatrix.TransformBox(Box2.UnitCentered.Translated(tilePosLocal));
+
+            List<IEntity> list = new();
+            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
+            {
+                if (!ent.Deleted &&
+                    Box2.UnitCentered.Contains(grid.WorldToLocal(ent.Transform.WorldPosition) - tilePosLocal) &&
+                    !ignored.Contains(ent.Uid))
+                {
+                    list.Add(ent);
+                }
+                return true;
+            }, worldBox);
+
+            // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
+            foreach (var entity in list)
+            {
+                if (entity.Transform.GridID != GridId.Invalid)
+                    continue;
+
+                _damageableSystem.TryChangeDamage(entity.Uid, damage);
+            }
+
+
+            list.Clear();
+            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
+            {
+                if (!ent.Deleted &&
+                    Box2.UnitCentered.Contains(grid.WorldToLocal(ent.Transform.WorldPosition) - tilePosLocal) &&
+                    ignored.Add(ent.Uid))
+                {
+                    list.Add(ent);
+                }
+                return true;
+            }, worldBox);
+
+            foreach (var entity in list)
+            {
+                if (entity.Transform.GridID != GridId.Invalid)
+                    continue;
+
+                ThrowEntity(entity, epicenter, intensity);
+            }
         }
     }
 
@@ -304,6 +405,8 @@ namespace Content.Server.Explosion
         private readonly DamageSpecifier _explosionDamage;
         private IEnumerator<Vector2i> _currentTileEnumerator;
         private float _intensity;
+        private EntityLookupComponent _mapLookup;
+        private EntityLookupComponent _gridLookup;
 
         public Explosion(List<HashSet<Vector2i>> tileSetList, List<float> tileSetIntensity, IMapGrid grid, MapCoordinates epicenter, ExplosionSystem system, DamageSpecifier explosionDamage)
         {
@@ -323,6 +426,9 @@ namespace Content.Server.Explosion
             _intensity = _tileSetIntensity.Last();
             _tileSetList.RemoveAt(_tileSetList.Count - 1);
             _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
+
+            _mapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId).GetComponent<EntityLookupComponent>();
+            _gridLookup = IoCManager.Resolve<EntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
         }
 
         /// <summary>
@@ -348,17 +454,22 @@ namespace Content.Server.Explosion
                     continue;
                 }
 
-                if (_grid.TryGetTileRef(_currentTileEnumerator.Current, out var tile))
-                {
-                    _system.ExplodeTile(_grid, tile, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
-                }
-                else
-                {
-                    var tileBox = Box2.UnitCentered.Translated(_grid.GridTileToWorldPos(_currentTileEnumerator.Current));
-                    _system.ExplodeSpace(_grid.InvWorldMatrix.TransformBox(tileBox), _intensity, _intensity * _explosionDamage, _epicenter, _entities);
-                }
 
-               
+                // First to find entities on the tile.
+                // Note that whether a grid indices exists according to GridTileLookupSystem and TryGetTileRef are not related.
+                // As far as I know, there is no way to know whether GridTileLookupSystem returned no entities because the tile is empty and we need to use another lookup, or whether it was actually empty
+                // so.
+                // for EVERY FUCKING TILE
+                // I will use both gridTileLookup and map lookup for every tile
+                // at lease the two lookups should have no overlap entities?
+                // so not too much time will be wasted. I hope.
+
+                _system.ExplodeTile(_gridLookup, _grid, _currentTileEnumerator.Current, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
+
+
+                var tilePosLocal = (Vector2) _currentTileEnumerator.Current + 0.5f * _grid.TileSize;
+                _system.ExplodeSpace(_mapLookup, _grid, tilePosLocal, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
+
                 processedTiles++;
             }
 
