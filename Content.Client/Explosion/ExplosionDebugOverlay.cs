@@ -65,7 +65,7 @@ namespace Content.Client.Explosion
             {
                 foreach (var tile in Tiles[i])
                 {
-                    var worldCenter = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
+                    var worldCenter = Grid!.GridTileToWorldPos(tile);
                     var screenCenter = _eyeManager.WorldToScreen(worldCenter);
                     
                     if (Intensity![i] > 9)

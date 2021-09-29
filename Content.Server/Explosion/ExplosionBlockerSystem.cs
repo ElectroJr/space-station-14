@@ -100,7 +100,7 @@ namespace Content.Server.Explosion
             if (component.Tolerance == 0)
                 return;
 
-            if (!ComponentManager.TryGetComponent(uid, out ITransformComponent? transform))
+            if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
 
             // get the grid & tile
@@ -159,7 +159,7 @@ namespace Content.Server.Explosion
             int strength = 0;
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
-                if (ComponentManager.TryGetComponent(uid, out ExplosionBlockerComponent? blocker))
+                if (EntityManager.TryGetComponent(uid, out ExplosionBlockerComponent? blocker))
                     strength = Math.Max(strength, blocker.Tolerance);
             }
 

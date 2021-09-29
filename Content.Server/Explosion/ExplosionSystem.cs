@@ -63,6 +63,7 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
+        [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
@@ -168,7 +169,7 @@ namespace Content.Server.Explosion
                 if (player.AttachedEntity == null)
                     continue;
 
-                if (!ComponentManager.TryGetComponent(player.AttachedEntity.Uid, out CameraRecoilComponent? recoil))
+                if (!EntityManager.TryGetComponent(player.AttachedEntity.Uid, out CameraRecoilComponent? recoil))
                     continue;
 
                 var playerPos = player.AttachedEntity.Transform.WorldPosition;
@@ -212,10 +213,8 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
         /// </summary>
-        private void DamageFloorTile(IMapGrid grid, Vector2i tileIndices, float intensity)
+        private void DamageFloorTile(IMapGrid grid, TileRef tileRef, float intensity)
         {
-            var tileRef = grid.GetTileRef(tileIndices);
-
             if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
                 return;
 
@@ -237,7 +236,7 @@ namespace Content.Server.Explosion
             }
 
             if (tileDef.TileId != tileRef.Tile.TypeId)
-                grid.SetTile(tileIndices, new Tile(tileDef.TileId));
+                grid.SetTile(tileRef.GridIndices, new Tile(tileDef.TileId));
         }
 
         private void ThrowEntity(IEntity entity, MapCoordinates epicenter, float intensity)
@@ -245,39 +244,39 @@ namespace Content.Server.Explosion
             if (!entity.HasComponent<ExplosionLaunchedComponent>())
                 return;
 
-            var targetLocation = entity.Transform.Coordinates.ToMap(EntityManager);
+            var location = entity.Transform.Coordinates.ToMap(EntityManager);
             var throwForce = 10 * MathF.Sqrt(intensity);
 
-            entity.TryThrow(targetLocation.Position - epicenter.Position, throwForce);
+            entity.TryThrow(location.Position - epicenter.Position, throwForce);
         }
 
-        public void ExplodeTile(Vector2i tile, IMapGrid grid, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
+        public void ExplodeTile(IMapGrid grid, TileRef tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
         {
             // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
-            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
+            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(tile.GridIndex, tile.GridIndices).ToArray())
             {
                 // Entities in containers will be damaged if the container decides to pass the damage along. We
                 // do not damage them directly. Similarly, we can just throw the container, not each individual entity.
-                if (entity.Transform.ParentUid != grid.GridEntityId)
+                //TODO GRIDTILELOOKUPSYSTEM ffs, just let me exclude entities in containers directly. they are intentioanly added in seperately, it would be trivial.
+                if (entity.Transform.GridID != tile.GridIndex)
                     continue;
 
-                // note, here we ONLY check if they are ignored. we add them in the second for loop, which MAY be removed eventually.
+                // This Check stops us from repeatedly throwing or damaging an entity as the explosion expands.
                 if (ignored.Contains(entity.Uid))
                     continue;
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
             }
 
-            // TODO EXPLOSIONS PERFORMANCE
-            // here, we get the intersecting entities AGAIN for throwing/
-            // This way, glass shards spawned from windows ill be flung outwards, and not stay where they spawned.
-            // BUT this is also somewhat unnecessary computational cost. Maybe change this later?
-            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
+            // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
+            // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
+            // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
+            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(tile.GridIndex, tile.GridIndices).ToArray())
             {
-                if (entity.Transform.ParentUid != grid.GridEntityId)
+                if (entity.Transform.GridID != tile.GridIndex)
                     continue;
 
-                // note here we actually add and check if they are ignored
+                // Note that tis is where we actually add the encountered entities to the ignored list.
                 if (!ignored.Add(entity.Uid))
                     continue;
 
@@ -286,6 +285,11 @@ namespace Content.Server.Explosion
 
             // damage tile
             DamageFloorTile(grid, tile, intensity);
+        }
+
+        internal void ExplodeSpace(Box2 box2, float intensity, DamageSpecifier damageSpecifier, MapCoordinates epicenter, HashSet<EntityUid> entities)
+        {
+            
         }
     }
 
@@ -346,10 +350,15 @@ namespace Content.Server.Explosion
 
                 if (_grid.TryGetTileRef(_currentTileEnumerator.Current, out var tile))
                 {
-
+                    _system.ExplodeTile(_grid, tile, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
+                }
+                else
+                {
+                    var tileBox = Box2.UnitCentered.Translated(_grid.GridTileToWorldPos(_currentTileEnumerator.Current));
+                    _system.ExplodeSpace(_grid.InvWorldMatrix.TransformBox(tileBox), _intensity, _intensity * _explosionDamage, _epicenter, _entities);
                 }
 
-                _system.ExplodeTile(_currentTileEnumerator.Current, _grid, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
+               
                 processedTiles++;
             }
 
