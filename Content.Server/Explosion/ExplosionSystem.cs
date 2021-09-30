@@ -100,12 +100,39 @@ namespace Content.Server.Explosion
             int tilesToProcess = MaxTilesPerTick;
             while (tilesToProcess > 0 && _explosions.TryPeek(out var explosion))
             {
-                var processed = explosion.Process(tilesToProcess);
+                var processed = ProcessExplosion(explosion, tilesToProcess);
                 tilesToProcess -= processed;
 
                 if (processed == 0)
                     _explosions.Dequeue();
             }
+        }
+
+        /// <summary>
+        ///     Deal damage, throw entities, and break tiles. Returns the number tiles that were processed.
+        /// </summary>
+        private int ProcessExplosion(Explosion explosion, int tilesToProcess)
+        {
+            var processedTiles = 0;
+
+            List<(Vector2i, Tile)> damagedTiles = new();
+
+            foreach (var (tileIndices, intensity, damage) in explosion)
+            {
+                var tilePosLocal = (Vector2) tileIndices + 0.5f * explosion.Grid.TileSize;
+
+                ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+                ExplodeSpace(explosion.MapLookup, explosion.Grid, tilePosLocal, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+                DamageFloorTile(explosion.Grid, tileIndices, intensity, damagedTiles);
+
+                processedTiles++;
+                if (processedTiles == tilesToProcess)
+                    break;
+            }
+
+            explosion.Grid.SetTiles(damagedTiles);
+
+            return processedTiles;
         }
 
         /// <summary>
@@ -158,7 +185,6 @@ namespace Content.Server.Explosion
                                     tileSetIntensity!,
                                     grid,
                                     grid.GridTileToWorld(epicenter),
-                                    this,
                                     BaseExplosionDamage * slope));
         }
 
@@ -392,82 +418,62 @@ namespace Content.Server.Explosion
 
     class Explosion
     {
-        private readonly HashSet<EntityUid> _entities = new();
+        /// <summary>
+        ///     Used to avoid applying explosion effects repeatedly to the same entity.
+        /// </summary>
+        public readonly HashSet<EntityUid> ProcessedEntities = new();
+
+        public readonly MapCoordinates Epicenter;
+        public readonly IMapGrid Grid;
+        public readonly EntityUid MapUid;
+        public readonly EntityLookupComponent MapLookup;
+        public readonly EntityLookupComponent GridLookup;
+
         private readonly List<HashSet<Vector2i>> _tileSetList;
         private readonly List<float> _tileSetIntensity;
-        private readonly MapCoordinates _epicenter;
-        private readonly ExplosionSystem _system;
-        private readonly IMapGrid _grid;
         private readonly DamageSpecifier _explosionDamage;
-        private IEnumerator<Vector2i> _currentTileEnumerator;
-        private float _intensity;
-        private EntityLookupComponent _mapLookup;
-        private EntityLookupComponent _gridLookup;
+        private IEnumerator<Vector2i> _tileEnumerator;
 
-        public Explosion(List<HashSet<Vector2i>> tileSetList, List<float> tileSetIntensity, IMapGrid grid, MapCoordinates epicenter, ExplosionSystem system, DamageSpecifier explosionDamage)
+        public Explosion(List<HashSet<Vector2i>> tileSetList, List<float> tileSetIntensity, IMapGrid grid, MapCoordinates epicenter, DamageSpecifier explosionDamage)
         {
             _tileSetList = tileSetList;
             _tileSetIntensity = tileSetIntensity;
-            _epicenter = epicenter;
-            _system = system;
-            _grid = grid;
+            Epicenter = epicenter;
+            Grid = grid;
             _explosionDamage = explosionDamage;
 
-            // We will delete tile sets as we process, starting from what was the first element. So reverse order for faster List.RemoveAt();
+            // We will remove tile sets from the list as we process them. We want to start the explosion from the center (currently the first entry).
+            // But this causes a slow List.RemoveAt(), reshuffling entries every time. So we reverse the list.
             _tileSetList.Reverse();
             _tileSetIntensity.Reverse();
 
             // Get the first tile enumerator set up
-            _currentTileEnumerator = _tileSetList.Last().GetEnumerator();
-            _intensity = _tileSetIntensity.Last();
-            _tileSetList.RemoveAt(_tileSetList.Count - 1);
-            _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
+            _tileEnumerator = _tileSetList.Last().GetEnumerator();
 
-
-            _mapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId).GetComponent<EntityLookupComponent>();
-            _gridLookup = IoCManager.Resolve<IEntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
+            // Is there really no way to directly get the map uid?
+            MapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId).GetComponent<EntityLookupComponent>();
+            GridLookup = IoCManager.Resolve<IEntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
         }
 
-        /// <summary>
-        ///     Deal damage, throw entities, and break tiles. Returns the number tiles that were processed.
-        /// </summary>
-        public int Process(int tilesToProcess)
+        public IEnumerator<(Vector2i, float, DamageSpecifier)> GetEnumerator()
         {
-            var processedTiles = 0;
-
-            List<(Vector2i GridIndices, Tile Tile)> damagedTiles = new();
-
-            while (processedTiles < tilesToProcess)
+            while (true)
             {
-                // do we need to get the next enumerator?
-                if (!_currentTileEnumerator.MoveNext())
+                // do we need to get the next tile index enumerator?
+                if (!_tileEnumerator.MoveNext())
                 {
-                    // are there any more left?
-                    if (_tileSetList.Count == 0)
+
+                    if (_tileSetList.Count == 1)
                         break;
 
-                    _currentTileEnumerator = _tileSetList.Last().GetEnumerator();
-                    _intensity = _tileSetIntensity.Last();
                     _tileSetList.RemoveAt(_tileSetList.Count - 1);
                     _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
+                    _tileEnumerator = _tileSetList[^1].GetEnumerator();
                     continue;
                 }
 
-                _system.ExplodeTile(_gridLookup, _grid, _currentTileEnumerator.Current, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
-
-
-                var tilePosLocal = (Vector2) _currentTileEnumerator.Current + 0.5f * _grid.TileSize;
-                _system.ExplodeSpace(_mapLookup, _grid, tilePosLocal, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
-
-                // damage tile
-                _system.DamageFloorTile(_grid, _currentTileEnumerator.Current, _intensity, damagedTiles);
-                
-                processedTiles++;
+                yield return (_tileEnumerator.Current, _tileSetIntensity[^1], _explosionDamage * _tileSetIntensity[^1]);
             }
-
-            _grid.SetTiles(damagedTiles);
-
-            return processedTiles;
         }
     }
 }
