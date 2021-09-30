@@ -8,6 +8,7 @@ using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.Maps;
 using Content.Shared.Sound;
+using Robust.Server.Containers;
 using Robust.Server.GameObjects;
 using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
@@ -63,10 +64,9 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
-        [Dependency] private readonly IEntityLookup _entityLookup = default!;
-        [Dependency] private readonly ExplosionBlockerSystem _explosionBlockerSystem = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
+        [Dependency] private readonly ContainerSystem _containerSystem = default!;
 
         public const int MaxTilesPerTick = 20;
 
@@ -75,7 +75,7 @@ namespace Content.Server.Explosion
         /// </summary>
         private Queue<Explosion> _explosions = new();
 
-        public DamageSpecifier BaseExplosionDamage = new();
+        public DamageSpecifier DefaultExplosionDamage = new();
 
         public override void Initialize()
         {
@@ -90,7 +90,7 @@ namespace Content.Server.Explosion
 
             // TODO YAML prototypes
             _explosionSound = new SoundCollectionSpecifier("explosion");
-            BaseExplosionDamage.DamageDict = new() { { "Heat", 5 }, { "Blunt", 5 }, { "Piercing", 5 } };
+            DefaultExplosionDamage.DamageDict = new() { { "Heat", 5 }, { "Blunt", 5 }, { "Piercing", 5 } };
         }
 
         public override void Update(float frameTime)
@@ -185,7 +185,7 @@ namespace Content.Server.Explosion
                                     tileSetIntensity!,
                                     grid,
                                     grid.GridTileToWorld(epicenter),
-                                    BaseExplosionDamage * slope));
+                                    DefaultExplosionDamage * slope));
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
@@ -285,7 +285,7 @@ namespace Content.Server.Explosion
         ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. Will also try to damage
         ///     the tile's themselves (damage the floor of a grid).
         /// </summary>
-        public void ExplodeTile(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
+        public void ExplodeTile(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
         {
             var gridBox =  Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
 
@@ -294,7 +294,7 @@ namespace Content.Server.Explosion
 
             lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
             {
-                if (!ent.Deleted && !ignored.Contains(ent.Uid) && ent.Transform.GridID == grid.Index)
+                if (!ent.Deleted && !processed.Contains(ent.Uid) && !_containerSystem.IsEntityInContainer(ent.Uid,ent.Transform))
                     list.Add(ent);
                 return true;
             }, gridBox);
@@ -315,23 +315,22 @@ namespace Content.Server.Explosion
             list.Clear();
             lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
             {
-                if (!ent.Deleted && !ignored.Contains(ent.Uid) && ent.Transform.GridID == grid.Index)
+                if (!ent.Deleted && !processed.Contains(ent.Uid) && !_containerSystem.IsEntityInContainer(ent.Uid, ent.Transform))
                     list.Add(ent);
                 return true;
             }, gridBox);
+
             foreach (var ent in list)
             {
-                // need to avoid moddifying the enumerator while iterating
                 ThrowEntity(ent, epicenter, intensity);
             }
         }
-
 
         /// <summary>
         ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. Will also try to damage
         ///     the tile's themselves (damage the floor of a grid).
         /// </summary>
-        public void ExplodeTileOLD(IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
+        public void ExplodeTileOLD(IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
         {
             // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
             foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
@@ -343,7 +342,7 @@ namespace Content.Server.Explosion
                     continue;
 
                 // This Check stops us from repeatedly throwing or damaging an entity as the explosion expands.
-                if (ignored.Contains(entity.Uid))
+                if (processed.Contains(entity.Uid))
                     continue;
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
@@ -358,7 +357,7 @@ namespace Content.Server.Explosion
                     continue;
 
                 // Note that tis is where we actually add the encountered entities to the ignored list.
-                if (!ignored.Add(entity.Uid))
+                if (!processed.Add(entity.Uid))
                     continue;
 
                 ThrowEntity(entity, epicenter, intensity);
@@ -368,7 +367,7 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Same as <see cref="ExplodeTile"/>, but using a slower entity lookup and without tiles to damage.
         /// </summary>
-        internal void ExplodeSpace(EntityLookupComponent lookup, IMapGrid grid, Vector2 tilePosLocal, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> ignored)
+        internal void ExplodeSpace(EntityLookupComponent lookup, IMapGrid grid, Vector2 tilePosLocal, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
         {
             var worldBox = grid.WorldMatrix.TransformBox(Box2.UnitCentered.Translated(tilePosLocal));
 
@@ -376,8 +375,8 @@ namespace Content.Server.Explosion
             lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
             {
                 if (!ent.Deleted &&
-                    Box2.UnitCentered.Contains(grid.WorldToLocal(ent.Transform.WorldPosition) - tilePosLocal) &&
-                    !ignored.Contains(ent.Uid))
+                    !processed.Contains(ent.Uid) &&
+                    !_containerSystem.IsEntityInContainer(ent.Uid, ent.Transform))
                 {
                     list.Add(ent);
                 }
@@ -393,13 +392,13 @@ namespace Content.Server.Explosion
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
             }
 
-
             list.Clear();
             lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
             {
                 if (!ent.Deleted &&
                     Box2.UnitCentered.Contains(grid.WorldToLocal(ent.Transform.WorldPosition) - tilePosLocal) &&
-                    ignored.Add(ent.Uid))
+                    processed.Add(ent.Uid) &&
+                     !_containerSystem.IsEntityInContainer(ent.Uid, ent.Transform))
                 {
                     list.Add(ent);
                 }

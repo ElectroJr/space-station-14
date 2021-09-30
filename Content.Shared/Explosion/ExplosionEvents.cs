@@ -36,13 +36,13 @@ namespace Content.Shared.Explosion
     [Serializable, NetSerializable]
     public sealed class ExplosionOverlayEvent : ExplosionEvent
     {
-        public int Damage;
-        public int TotalIntensity;
+        public float Slope;
+        public float TotalIntensity;
 
-        public ExplosionOverlayEvent(MapCoordinates Epicenter, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, int damage, int totalIntensity)
-            : base(Epicenter, tiles, intensity, grid)
+        public ExplosionOverlayEvent(MapCoordinates epicenter, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, float slope, float totalIntensity)
+            : base(epicenter, tiles, intensity, grid)
         {
-            Damage = damage;
+            Slope = slope;
             TotalIntensity = totalIntensity;
         }
 

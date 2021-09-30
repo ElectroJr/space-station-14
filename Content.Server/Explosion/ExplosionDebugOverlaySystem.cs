@@ -3,9 +3,11 @@ using Content.Shared.Input;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Input.Binding;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Players;
+using Robust.Shared.Timing;
 using System;
 
 namespace Content.Server.Explosion
@@ -16,20 +18,20 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
 
-        public int TotalIntensity
+        public float TotalIntensity
         {
             get => _totalIntensity;
-            set => _totalIntensity = Math.Max(value, 0);
+            set => _totalIntensity = MathF.Max(value, 0);
         }
 
-        public int Slope
+        public float Slope
         {
-            get => _damage;
-            set => _damage = Math.Max(value, 1);
+            get => _slope;
+            set => _slope = MathF.Max(value, 1);
         }
 
-        private int _totalIntensity = 1;
-        private int _damage = 1;
+        private float _totalIntensity = 100000;
+        private float _slope = 5;
 
         private GridId? _currentGrid;
         private Vector2i? _currentEpicenter;
@@ -98,7 +100,7 @@ namespace Content.Server.Explosion
                 return true;
             }
 
-            int maxTileIntensity = 10;
+            int maxTileIntensity = 999;
 
             if (detonate)
             {
@@ -107,7 +109,10 @@ namespace Content.Server.Explosion
             }
             else
             {
+                var st = new Stopwatch ();
+                st.Start();
                 var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentEpicenter, TotalIntensity, Slope, maxTileIntensity);
+                Logger.Info($"Time: {st.Elapsed.TotalMilliseconds}");
 
                 if (tiles == null || intensityList == null)
                     return true;

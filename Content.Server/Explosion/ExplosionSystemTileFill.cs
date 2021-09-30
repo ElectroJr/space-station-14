@@ -294,7 +294,7 @@ namespace Content.Server.Explosion
         private Dictionary<Vector2i, int> GetImpassableTiles(HashSet<Vector2i> tiles, GridId grid)
         {
             Dictionary<Vector2i, int> impassable = new();
-            if (!_explosionBlockerSystem.BlockerMap.TryGetValue(grid, out var tileSealIntegrity))
+            if (!BlockerMap.TryGetValue(grid, out var tileSealIntegrity))
                 return impassable;
 
             foreach (var tile in tiles)

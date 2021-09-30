@@ -200,21 +200,22 @@ namespace Content.Shared.Damage
         }
 
         /// <summary>
-        ///     Figure out how much you need to scale some baseDamage such that the final total damage after resistances
-        ///     are applied is at least equal to the requested amount. Basically "I have an object with X resistances.
-        ///     How much damage to I need to deal to it to ACTUALLY damage it by at-least a given amount"?
+        ///     Figure out how much you need to scale some baseDamage such that the final total damage of a given
+        ///     damageable component after resistances are applied is equal to the requested amount. Basically "I have
+        ///     an object some resistances, how much damage to I need to deal to it to actually change it's final damage
+        ///     total to a given amount"?
         /// </summary>
-        /// <returns></returns>
-        public float InverseResistanceSolve(DamageableComponent component, DamageSpecifier baseDamage, int damageTarget, float maxScale = 100, float precision = 1)
+        /// <returns>Returns a multiplier if it can find it, otherwise returns float.NaN</returns>
+        public float InverseResistanceSolve(EntityUid uid, DamageSpecifier baseDamage, int damageTarget, float maxScale = 100, float precision = 1, DamageableComponent? damageable = null)
         {
-            if (damageTarget == 0)
-                return 0;
+            if (!Resolve(uid, ref damageable))
+                return float.NaN;
 
             // First, we take out base input damage and remove any damage types that are not actually applicable to the target
             DamageSpecifier damage = new(baseDamage);
             foreach (var type in damage.DamageDict.Keys)
             {
-                if (!component.Damage.DamageDict.ContainsKey(type))
+                if (!damageable.Damage.DamageDict.ContainsKey(type))
                     damage.DamageDict.Remove(type);
             }
 
@@ -225,18 +226,23 @@ namespace Content.Shared.Damage
 
             // Resolve this component's damage modifier
             DamageModifierSetPrototype? modifier = null;
-            if (component.DamageModifierSetId != null)
+            if (damageable.DamageModifierSetId != null)
             {
-                IoCManager.Resolve<IPrototypeManager>().TryIndex(component.DamageModifierSetId, out modifier);
+                _prototypeManager.TryIndex(damageable.DamageModifierSetId, out modifier);
             }
 
             // using the modifier, define a function that maps a damage scaling factor to the distance from the desired damage
             Func<float, int> damageDelta;
             int sign = Math.Sign(damageTarget);
-            if (modifier == null)
-                damageDelta = scale => sign * ((scale * damage).Total - damageTarget);
-            else
-                damageDelta = scale => sign * (DamageSpecifier.ApplyModifierSet(scale * damage, modifier).Total - damageTarget);
+
+            damageDelta = scale =>
+            {
+                var finalDamage = (modifier == null)
+                ? damageable.Damage + scale * damage
+                : damageable.Damage + DamageSpecifier.ApplyModifierSet(scale * damage, modifier);
+                finalDamage.ClampMin(0);
+                return sign * (finalDamage.Total - damageTarget);
+            };
 
             // Note that resultingDamage is not a monotonic function. Consider a resistance set that has:
             // - maps burn damage 1:1
@@ -251,7 +257,6 @@ namespace Content.Shared.Damage
             // for the other search endpoint (x1) we use the maximum scale.
             // here the damage delta SHOULD always be positive
             float x1 = maxScale;
-            var y1 = damageDelta(x1);
 
             if (damageDelta(x1) < 0)
             {

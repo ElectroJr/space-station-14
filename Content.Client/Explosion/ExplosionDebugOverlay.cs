@@ -19,8 +19,8 @@ namespace Content.Client.Explosion
         public List<HashSet<Vector2i>>? Tiles;
         public List<float>? Intensity;
         public IMapGrid? Grid;
-        public int TotalIntensity;
-        public int Damage;
+        public float TotalIntensity;
+        public float Damage;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpace | OverlaySpace.ScreenSpace;
 

@@ -1,7 +1,6 @@
 using Content.Server.Atmos.EntitySystems;
 using Content.Shared.Atmos;
 using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Serialization.Manager.Attributes;
@@ -41,6 +40,19 @@ namespace Content.Server.Atmos.Components
         [ViewVariables]
         [DataField("noAirWhenFullyAirBlocked")]
         public bool NoAirWhenFullyAirBlocked { get; set; } = true;
+
+        /// <summary>
+        ///     The multiple of the base explosion group damage that this entity can receive before being destroyed.
+        /// </summary>
+        /// <remarks>
+        ///     This is used by the explosion system when figuring out what area is affected by an explosion. If not
+        ///     specified, this will be computed upon initialization based on the entities destruction threshold and
+        ///     resistance to explosion damage. In order to avoid unnecessary computation at start-up, common structures
+        ///     like walls should definitely specify this. This value will also be updated whenever the entity takes
+        ///     damage.
+        /// </remarks>
+        [DataField("explosionTolerance")]
+        public int ExplosionTolerance;
 
         public AtmosDirection AirBlockedDirection => (AtmosDirection)CurrentAirBlockedDirection;
     }

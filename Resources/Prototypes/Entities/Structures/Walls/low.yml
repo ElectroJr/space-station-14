@@ -4,8 +4,6 @@
   name: low wall
   description: Goes up to about your waist.
   components:
-  - type: ExplosionBlocker
-    tolerance: 1
   - type: RCDDeconstructWhitelist
   - type: CanBuildWindowOnTop
   - type: Sprite
