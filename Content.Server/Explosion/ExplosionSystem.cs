@@ -213,9 +213,9 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
         /// </summary>
-        private void DamageFloorTile(IMapGrid grid, Vector2i tile, float intensity)
+        public void DamageFloorTile(IMapGrid grid, Vector2i tileIndices, float intensity, List<(Vector2i GridIndices, Tile Tile)> damagedTiles)
         {
-            if (!grid.TryGetTileRef(tile, out var tileRef))
+            if (!grid.TryGetTileRef(tileIndices, out var tileRef))
                 return;
 
             if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
@@ -238,8 +238,10 @@ namespace Content.Server.Explosion
                 tileDef = _tileDefinitionManager[_robustRandom.Pick(contentTileDef.BaseTurfs)];
             }
 
-            if (tileDef.TileId != tileRef.Tile.TypeId)
-                grid.SetTile(tileRef.GridIndices, new Tile(tileDef.TileId));
+            if (tileDef.TileId == tileRef.Tile.TypeId)
+                return;
+
+            damagedTiles.Add((tileIndices, new Tile(tileDef.TileId)));
         }
 
         private void ThrowEntity(IEntity entity, MapCoordinates epicenter, float intensity)
@@ -296,9 +298,6 @@ namespace Content.Server.Explosion
                 // need to avoid moddifying the enumerator while iterating
                 ThrowEntity(ent, epicenter, intensity);
             }
-
-            // damage tile
-            DamageFloorTile(grid, tile, intensity);
         }
 
 
@@ -338,9 +337,6 @@ namespace Content.Server.Explosion
 
                 ThrowEntity(entity, epicenter, intensity);
             }
-
-            // damage tile
-            DamageFloorTile(grid, tile, intensity);
         }
 
         /// <summary>
@@ -427,8 +423,9 @@ namespace Content.Server.Explosion
             _tileSetList.RemoveAt(_tileSetList.Count - 1);
             _tileSetIntensity.RemoveAt(_tileSetIntensity.Count - 1);
 
+
             _mapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId).GetComponent<EntityLookupComponent>();
-            _gridLookup = IoCManager.Resolve<EntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
+            _gridLookup = IoCManager.Resolve<IEntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
         }
 
         /// <summary>
@@ -437,6 +434,8 @@ namespace Content.Server.Explosion
         public int Process(int tilesToProcess)
         {
             var processedTiles = 0;
+
+            List<(Vector2i GridIndices, Tile Tile)> damagedTiles = new();
 
             while (processedTiles < tilesToProcess)
             {
@@ -454,24 +453,19 @@ namespace Content.Server.Explosion
                     continue;
                 }
 
-
-                // First to find entities on the tile.
-                // Note that whether a grid indices exists according to GridTileLookupSystem and TryGetTileRef are not related.
-                // As far as I know, there is no way to know whether GridTileLookupSystem returned no entities because the tile is empty and we need to use another lookup, or whether it was actually empty
-                // so.
-                // for EVERY FUCKING TILE
-                // I will use both gridTileLookup and map lookup for every tile
-                // at lease the two lookups should have no overlap entities?
-                // so not too much time will be wasted. I hope.
-
                 _system.ExplodeTile(_gridLookup, _grid, _currentTileEnumerator.Current, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
 
 
                 var tilePosLocal = (Vector2) _currentTileEnumerator.Current + 0.5f * _grid.TileSize;
                 _system.ExplodeSpace(_mapLookup, _grid, tilePosLocal, _intensity, _intensity * _explosionDamage, _epicenter, _entities);
 
+                // damage tile
+                _system.DamageFloorTile(_grid, _currentTileEnumerator.Current, _intensity, damagedTiles);
+                
                 processedTiles++;
             }
+
+            _grid.SetTiles(damagedTiles);
 
             return processedTiles;
         }
