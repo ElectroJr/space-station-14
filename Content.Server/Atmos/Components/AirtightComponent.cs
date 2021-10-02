@@ -42,13 +42,13 @@ namespace Content.Server.Atmos.Components
         public bool NoAirWhenFullyAirBlocked { get; set; } = true;
 
         /// <summary>
-        ///     The multiple of the base explosion group damage that this entity can receive before being destroyed.
+        ///     How many multiples of the base explosion damage that this entity can receive before being destroyed.
         /// </summary>
         /// <remarks>
         ///     This is used by the explosion system when figuring out what area is affected by an explosion. If not
         ///     specified, this will be computed upon initialization based on the entities destruction threshold and
         ///     resistance to explosion damage. In order to avoid unnecessary computation at start-up, common structures
-        ///     like walls should definitely specify this. This value will also be updated whenever the entity takes
+        ///     like walls should probably specify this. This value will also be updated whenever the entity takes
         ///     damage.
         /// </remarks>
         [DataField("explosionTolerance")]

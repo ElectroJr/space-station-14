@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Content.Server.Atmos.Components;
+using Content.Shared.Atmos;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
@@ -9,23 +10,7 @@ namespace Content.Server.Explosion
 {
     public sealed partial class ExplosionSystem : EntitySystem
     {
-        /// <summary>
-        ///     This dictionary specifies the "strength" of the strongest anchored airtight entity on any given tile.
-        /// </summary>
-        public Dictionary<GridId, Dictionary<Vector2i, int>> BlockerMap = new();
-
-
-        // I'm going to cut a corners here.
-        // while it IS possible to have different entities blocking in different directions (i.e windoor to south, REINFOREED windoor to north
-        // I'm just gonna treat every airtright component to have the same intensity, capped at the larger one.
-        // so the reinfoced windoor will functionally make the un-reinforced windoor tougher
-
-
-        // How to deal with diagonals in cardinal blocking?
-        // well.... ANY time a diagonal tile is meant to be added.
-        // It's OWN cardinal neighbours need to already have been added.
-        // so imply check when adding a diagonal tile: is at least one of its neighbours already in the exploding set (and not blocked?)
-
+        public Dictionary<GridId, Dictionary<Vector2i, (int, AtmosDirection)>> BlockerMap = new();
 
         /// <summary>
         ///     The strength of an entity was updated. IF it is anchored, update the tolerance of the tile it is on.
@@ -39,26 +24,37 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
-        ///     Get a list of all explosion blocking entities and use the largest explosion tolerance to determine the blocking strength.
+        ///     Update the map of explosion blockers.
         /// </summary>
+        /// <remarks>
+        /// Gets a list of all airtight entities on a tile. Assembles a <see cref="AtmosDirection"/> that specifies what
+        /// directions are blocked, along with the largest explosion tolerance. Note that this means that the explosion
+        /// map will actually be inaccurate if you have something like a windoor & a reinforced windoor on the same
+        /// tile.
+        /// </remarks>
         public void UpdateTolerance(IMapGrid grid, Vector2i tile)
         {
             int tolerance = 0;
+            var blockedDirections = AtmosDirection.Invalid;
+
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
                 if (EntityManager.TryGetComponent(uid, out AirtightComponent? airtight) && airtight.AirBlocked)
+                {
                     tolerance = Math.Max(tolerance, airtight.ExplosionTolerance);
+                    blockedDirections |= airtight.AirBlockedDirection;
+                }
             }
 
-            Dictionary<Vector2i, int>? tileTolerances;
+            Dictionary<Vector2i, (int, AtmosDirection)>? tileTolerances;
             if (!BlockerMap.TryGetValue(grid.Index, out tileTolerances))
             {
                 tileTolerances = new();
                 BlockerMap.Add(grid.Index, tileTolerances);
             }
 
-            if (tolerance > 0)
-                tileTolerances[tile] = tolerance;
+            if (tolerance > 0 && blockedDirections != AtmosDirection.Invalid)
+                tileTolerances[tile] = (tolerance, blockedDirections);
             else if (tileTolerances.ContainsKey(tile))
                 tileTolerances.Remove(tile);
         }
