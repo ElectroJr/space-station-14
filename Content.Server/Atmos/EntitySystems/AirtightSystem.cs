@@ -1,8 +1,5 @@
 using Content.Server.Atmos.Components;
 using Content.Server.Destructible;
-using Content.Server.Destructible.Thresholds;
-using Content.Server.Destructible.Thresholds.Behaviors;
-using Content.Server.Destructible.Thresholds.Triggers;
 using Content.Server.Explosion;
 using Content.Shared.Atmos;
 using Content.Shared.Damage;
@@ -85,8 +82,6 @@ namespace Content.Server.Atmos.EntitySystems
         {
             SetAirblocked(airtight, false);
 
-            InvalidatePosition(airtight.LastPosition.Item1, airtight.LastPosition.Item2);
-
             if (airtight.FixVacuum)
             {
                 _atmosphereSystem.FixVacuum(airtight.LastPosition.Item1, airtight.LastPosition.Item2);
@@ -168,12 +163,8 @@ namespace Content.Server.Atmos.EntitySystems
         }
 
         /// <summary>
-        ///     How much explosion damage is needed to destroy a air-blocking entity?
+        ///     How much explosion damage is needed to destroy an air-blocking entity?
         /// </summary>
-        /// <remarks>
-        ///     Wow, this is stupidly hard to calculate. The damage needed to destroy an entity should REALLY be a
-        ///     property of the damageable component.
-        /// </remarks>
         private void UpdateExplosionTolerance(
             EntityUid uid,
             AirtightComponent? airtight = null,
@@ -188,17 +179,14 @@ namespace Content.Server.Atmos.EntitySystems
             // how much total damage is needed to destroy this entity?
             var damageNeeded = _destructibleSystem.DestroyedAt(uid);
 
-            DebugTools.Assert(!float.IsNaN(damageNeeded));
             if (!float.IsNaN(damageNeeded))
             {
                 // What multiple of the explosion damage set will achieve this?
                 var maxScale = 10 * damageNeeded / explosionDamage.Total;
                 var scale = _damageableSystem.InverseResistanceSolve(uid, explosionDamage, (int) Math.Ceiling(damageNeeded), maxScale);
 
-                DebugTools.Assert(!float.IsNaN(scale));
-
                 if (!float.IsNaN(scale))
-                    airtight.ExplosionTolerance = (int) Math.Ceiling(scale);
+                    airtight.ExplosionTolerance = (int) Math.Floor(scale);
             }
 
             _explosionSystem.UpdateTolerance(uid);

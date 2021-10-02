@@ -281,7 +281,7 @@ namespace Content.Shared.Damage
             do
             {
                 xGuess = (x0 + x1) / 2;
-                result = damageDelta(x1);
+                result = damageDelta(xGuess);
 
                 if (result == 0)
                     break;
@@ -293,7 +293,7 @@ namespace Content.Shared.Damage
 
             } while (Math.Abs(x1 - x0) > precision);
 
-            return xGuess;
+            return x1;
         }
     }
 

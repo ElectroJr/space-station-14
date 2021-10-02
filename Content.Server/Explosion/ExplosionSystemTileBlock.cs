@@ -46,7 +46,7 @@ namespace Content.Server.Explosion
             int tolerance = 0;
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
-                if (EntityManager.TryGetComponent(uid, out AirtightComponent? airtight))
+                if (EntityManager.TryGetComponent(uid, out AirtightComponent? airtight) && airtight.AirBlocked)
                     tolerance = Math.Max(tolerance, airtight.ExplosionTolerance);
             }
 

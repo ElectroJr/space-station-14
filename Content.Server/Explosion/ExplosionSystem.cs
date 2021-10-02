@@ -185,7 +185,7 @@ namespace Content.Server.Explosion
                                     tileSetIntensity!,
                                     grid,
                                     grid.GridTileToWorld(epicenter),
-                                    DefaultExplosionDamage * slope));
+                                    DefaultExplosionDamage));
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
