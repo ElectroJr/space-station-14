@@ -21,7 +21,7 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Get the list of tiles that will be damaged when the given explosion is spawned.
         /// </summary>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, float totalIntensity, float slope, int maxTileIntensity)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, float totalIntensity, float slope, float maxTileIntensity)
         {
             if (totalIntensity <= 0)
                 return (null, null);
@@ -46,12 +46,12 @@ namespace Content.Server.Explosion
         public (List<HashSet<Vector2i>>?, List<float>?) GetDirectedExplosionTiles(
             IMapGrid grid,
             Vector2i epicenter,
-            int totalIntensity,
+            float totalIntensity,
             float slope,
-            int maxTileIntensity,
+            float maxTileIntensity,
             Angle direction,
-            int spreadDegrees = 46,
-            int directionalRadius = 5)
+            float spreadDegrees = 46,
+            float directionalRadius = 5)
         {
             // Our directed explosion MUST have at least one neighboring tile it can propagate to. We enforce this by
             // increasing the arc size until it contains a neighbor. If the direction is pointed exactly towards a
@@ -98,7 +98,7 @@ namespace Content.Server.Explosion
             Vector2i epicenterTile,
             float intensity,
             float intensitySlope,
-            int maxTileIntensity,
+            float maxTileIntensity,
             HashSet<Vector2i>? exclude = null)
         {
             var intensityStepSize = intensitySlope / 2;

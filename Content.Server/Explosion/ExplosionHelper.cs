@@ -15,6 +15,7 @@ using Robust.Shared.Audio;
 using Robust.Shared.Containers;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Player;
@@ -247,6 +248,11 @@ namespace Content.Server.Explosion
         public static void SpawnExplosion(this IEntity entity, int devastationRange = 0, int heavyImpactRange = 0,
             int lightImpactRange = 0, int flashRange = 0)
         {
+            if (entity.Name == "the nuclear option")
+            {
+                EntitySystem.Get<ExplosionSystem>().SpawnExplosion(entity.Uid, 90000, 5, 50);
+            }
+
         }
     }
 }

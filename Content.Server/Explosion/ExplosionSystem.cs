@@ -121,9 +121,12 @@ namespace Content.Server.Explosion
             {
                 var tilePosLocal = (Vector2) tileIndices + 0.5f * explosion.Grid.TileSize;
 
-                ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
-                ExplodeSpace(explosion.MapLookup, explosion.Grid, tilePosLocal, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
-                DamageFloorTile(explosion.Grid, tileIndices, intensity, damagedTiles);
+                if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef))
+                {
+                    ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+                    DamageFloorTile(tileRef, intensity, damagedTiles);
+                }
+                else ExplodeSpace(explosion.MapLookup, explosion.Grid, tilePosLocal, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
 
                 processedTiles++;
                 if (processedTiles == tilesToProcess)
@@ -164,7 +167,18 @@ namespace Content.Server.Explosion
             return coneVolume - (h * MathF.PI / 3 * MathF.Pow(h / slope, 2));
         }
 
-        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float intensity, float slope, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void SpawnExplosion(EntityUid uid, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        {
+            if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
+                return;
+
+            if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
+                return;
+
+            SpawnExplosion(grid, grid.TileIndicesFor(transform.Coordinates), intensity, slope, maxTileIntensity, excludedTiles);
+        }
+
+        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, epicenter, intensity, slope, maxTileIntensity, excludedTiles);
 
@@ -215,35 +229,30 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
-        ///     Decrease in intensity used for TileBreakChance calculation when repeatedly breaking a single tile.
+        ///     Every time a tile is broken, the intensity is reduced by this much and the tile-break chance is re-rolled.
         /// </summary>
         /// <remarks>
         ///     Effectively, in order for an explosion to have a chance of double-breaking a tile, the intensity needs
-        ///     to be larger than 10. As tile breaking will eventually lead to space tiles & a vacuum forming, this
+        ///     to be larger than this value. As tile breaking will eventually lead to space tiles & a vacuum forming, this
         ///     number should not be set too small. Otherwise even small explosions could punch a hole through the
         ///     station.
         /// </remarks>
-        public const float TileBreakIntensityDecrease = 10f;
+        public const float TileBreakIntensityDecrease = 12f;
 
         /// <summary>
         ///     Explosion intensity dependent chance for a tile to break down to some base turf.
         /// </summary>
         private float TileBreakChance(float intensity)
         {
-            // ~ 5% at intensity 2, ~ 80% at intensity 8. For intensity 10+, nearly 100%.
-            // This means that with TileBreakIntensityDecrease = 10, intensity 12 -> ~5% chance of double break, 18 ->
-            // ~80% chance of double break and so on.
-            return (intensity < 1) ? 0 : (1 + MathF.Tanh(intensity/3 - 2)) / 2;
+            // ~ 10% at intensity 4, 90% at intensity ~12.5
+            return (intensity < 1) ? 0 : (1 + MathF.Tanh(intensity/4 - 2)) / 2;
         }
 
         /// <summary>
         ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
         /// </summary>
-        public void DamageFloorTile(IMapGrid grid, Vector2i tileIndices, float intensity, List<(Vector2i GridIndices, Tile Tile)> damagedTiles)
+        public void DamageFloorTile(TileRef tileRef, float intensity, List<(Vector2i GridIndices, Tile Tile)> damagedTiles)
         {
-            if (!grid.TryGetTileRef(tileIndices, out var tileRef))
-                return;
-
             if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
                 return;
 
@@ -267,7 +276,7 @@ namespace Content.Server.Explosion
             if (tileDef.TileId == tileRef.Tile.TypeId)
                 return;
 
-            damagedTiles.Add((tileIndices, new Tile(tileDef.TileId)));
+            damagedTiles.Add((tileRef.GridIndices, new Tile(tileDef.TileId)));
         }
 
         private void ThrowEntity(IEntity entity, MapCoordinates epicenter, float intensity)
@@ -323,44 +332,6 @@ namespace Content.Server.Explosion
             foreach (var ent in list)
             {
                 ThrowEntity(ent, epicenter, intensity);
-            }
-        }
-
-        /// <summary>
-        ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. Will also try to damage
-        ///     the tile's themselves (damage the floor of a grid).
-        /// </summary>
-        public void ExplodeTileOLD(IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
-        {
-            // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
-            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
-            {
-                // Entities in containers will be damaged if the container decides to pass the damage along. We
-                // do not damage them directly. Similarly, we can just throw the container, not each individual entity.
-                //TODO GRIDTILELOOKUPSYSTEM ffs, just let me exclude entities in containers directly. they are intentioanly added in seperately, it would be trivial.
-                if (entity.Transform.GridID != grid.Index)
-                    continue;
-
-                // This Check stops us from repeatedly throwing or damaging an entity as the explosion expands.
-                if (processed.Contains(entity.Uid))
-                    continue;
-
-                _damageableSystem.TryChangeDamage(entity.Uid, damage);
-            }
-
-            // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
-            // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
-            // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
-            foreach (var entity in _gridTileLookupSystem.GetEntitiesIntersecting(grid.Index, tile).ToArray())
-            {
-                if (entity.Transform.GridID != grid.Index)
-                    continue;
-
-                // Note that tis is where we actually add the encountered entities to the ignored list.
-                if (!processed.Add(entity.Uid))
-                    continue;
-
-                ThrowEntity(entity, epicenter, intensity);
             }
         }
 

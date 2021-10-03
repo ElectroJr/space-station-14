@@ -32,7 +32,7 @@ namespace Content.Server.Explosion
         }
 
         private float _totalIntensity = 10;
-        private float _slope = 0.5f;
+        private float _slope = 5;
 
         private GridId? _currentGrid;
         private Vector2i? _currentEpicenter;
@@ -101,7 +101,7 @@ namespace Content.Server.Explosion
                 return true;
             }
 
-            int maxTileIntensity = 5000;
+            int maxTileIntensity = 50;
 
             if (detonate)
             {
