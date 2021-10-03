@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Content.Shared.Atmos;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
@@ -10,6 +11,32 @@ namespace Content.Server.Explosion
     // This partial part of the explosion system has all of the functions used to create the actual explosion map.
     // I.e, to get the sets of tiles & damage values that describe an explosion.
 
+    // add a test:
+    // check that there are NO DUPLICATE TILES.
+
+
+    /// <summary>
+    ///
+    /// To test:
+    /// #######
+    /// #B  ###
+    /// #____ #
+    /// #A    #
+    /// #######
+    ///
+    /// _ = windor, # = wall
+    /// can explosion go from A-> B and vice versa?
+    ///
+    ///
+    /// Check:
+    /// diagonal blocking should force cardinal movement
+    /// but
+    /// when ENTERING a tile / when the blockers are ON the tile
+    /// then BOTH need to be blocked for it to be delayed
+    /// if only ONE is blocked, NO DELAY
+    ///
+    /// 
+    /// </summary>
     public sealed partial class ExplosionSystem : EntitySystem
     {
         /// <summary>
@@ -30,7 +57,7 @@ namespace Content.Server.Explosion
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
-            return GetExplosionTiles(grid, epicenterTile, totalIntensity, slope, maxTileIntensity);
+            return GetExplosionTiles(grid.Index, epicenterTile, totalIntensity, slope, maxTileIntensity);
         }
 
         /// <summary>
@@ -77,13 +104,13 @@ namespace Content.Server.Explosion
                     excluded.Add(tileRef.GridIndices);
             }
 
-            return GetExplosionTiles(grid, epicenter, totalIntensity, slope, maxTileIntensity, excluded);
+            return GetExplosionTiles(grid.Index, epicenter, totalIntensity, slope, maxTileIntensity, excluded);
         }
 
         /// <summary>
         ///     This is the main explosion generating function. 
         /// </summary>
-        /// <param name="grid">The grid where the epicenter tile is located</param>
+        /// <param name="gridId">The grid where the epicenter tile is located</param>
         /// <param name="epicenterTile">The center of the explosion, specified as a tile index</param>
         /// <param name="intensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
@@ -93,7 +120,7 @@ namespace Content.Server.Explosion
         /// <param name="exclude">A set of tiles to exclude from the explosion.</param>
         /// <returns>Returns a list of tile-sets and a list of intensity values which describe the explosion.</returns>
         public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
-            IMapGrid grid,
+            GridId gridId,
             Vector2i epicenterTile,
             float intensity,
             float intensitySlope,
@@ -121,95 +148,108 @@ namespace Content.Server.Explosion
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.
             // Therefore, can also used to exclude tiles
-            HashSet<Vector2i> allTiles = exclude ?? new();
-            allTiles.Add(epicenterTile);
-
-            List<float> tileSetIntensity = new () { 0, intensitySlope, 0 };
-
-            // Keep track of the number of tiles in each tileSet. Tiles with walls/obstacles are not directly added to
-            // `explodedTiles`, so we cannot just use the count function.
+            HashSet<Vector2i> processedTiles = exclude ?? new();
+            processedTiles.Add(epicenterTile);
             var tilesInIteration = new List<int> { 0, 1, 0 };
-
-            // Tiles with obstacles are added to this dictionary, instead of directly to tileSetList. The key
-            // corresponds to the explosion iteration at which a collection of tiles become un-blocked. The value is
-            // another dictionary, which maps the tiles to the tileSetList index that they would have originally been
-            // added to if they weren't blocked.
-            Dictionary<int, Dictionary<Vector2i, int>> delayedTiles = new();
-
-
-
-            HashSet<Vector2i> adjacentTiles, diagonalTiles;
-            Dictionary<Vector2i, int> impassableTiles;
-            Dictionary<Vector2i, int>? clearedTiles;
-            bool exit = false;
-            int maxIntensityIndex = 1;
+            List<float> tileSetIntensity = new () { 0, intensitySlope, 0 };
             float remainingIntensity = intensity - intensitySlope;
 
+
+            // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
+            // explosion cannot LEAVE a tile in a certain direction, while delayedSpreader is when an explosion cannot
+            // ENTER a tile and spread outwards from there.
+
+            // Tiles which neighbor an exploding tile, but have not yet had the explosion spread to them due to an
+            // airtight entity on the exploding tile that prevents the explosion from spreading in that direction. These
+            // will be added as a neighbor after some delay, once the explosion on that tile is sufficiently strong to
+            // destroy the airtight entity.
+            Dictionary<int, List<(Vector2i, AtmosDirection)>> delayedNeighbors = new();
+
+            // This is a tile which is currently exploding, but has not yet started to spread the explosion to
+            // surrounding tiles. This happens if the explosion attempted to enter this tile, and there was some
+            // airtight entity on this tile blocking explosions from entering from that direction. Once the explosion is
+            // strong enough to destroy this airtight entity, it will begin to spread the explosion to neighbors.
+            // This maps an iteration index to a list of delayed spreaders that begin spreading at that iteration.
+            Dictionary<int, List<Vector2i>> delayedSpreaders = new();
+
+            // What iteration each delayed spreader originally belong to
+            Dictionary<Vector2i, int> delayedSpreaderIteration = new();
+
+            bool exit = false;
+            int maxIntensityIndex = 1;
+            var airtightMap = AirtightMap[gridId];
+
             // Main flood-fill loop
+            HashSet<Vector2i> newTiles;
             while (remainingIntensity > 0)
             {
                 var previousIntensity = remainingIntensity;
 
-                // First, we want to fill in the tiles that are adjacent to those that were added two iterations ago.
-                adjacentTiles = new(GetAdjacentTiles(tileSetList[iteration - 2]));
+                // First we will add a new iteration of tiles
+                newTiles = new();
+                tileSetList.Add(newTiles);
+                tilesInIteration.Add(0);
 
-                // We also want to add any neighbors of tiles that were previously blocked, but were cleared/destroyed
-                // two generations ago.
-                if (delayedTiles.TryGetValue(iteration - 2, out clearedTiles))
-                    adjacentTiles.UnionWith(GetAdjacentTiles(clearedTiles.Keys));
+                // We use the local GetNewTiles function to enumerate over neighbors of tiles that were recently added to tileSetList.
+                foreach (var (newTile, direction) in GetNewTiles())
+                {
+                    // does this new tile have any airtight entities?
+                    // note that blockedDirections defaults to 0 (no blocked directions)
+                    var (sealIntegrity, blockedDirections) = airtightMap.GetValueOrDefault(newTile);
 
-                // Then we remove any previously encountered tiles. This avoids the explosion looping back on itself
-                adjacentTiles.ExceptWith(allTiles);
+                    // If the explosion is entering this new tile from an unblocked direction, we add it directly
+                    if (!blockedDirections.IsFlagSet(direction))
+                    {
+                        processedTiles.Add(newTile);
+                        newTiles.Add(newTile);
+
+                        if (!delayedSpreaderIteration.ContainsKey(newTile))
+                            tilesInIteration[^1]++;
+
+                        continue;
+                    }
+
+                    if (delayedSpreaderIteration.ContainsKey(newTile))
+                        continue;
+
+                    // if this tile is blocked from all directions. then there is no way to snake around and spread
+                    // out from it without first breaking it. so we can already mark it as processed for future iterations.
+                    if (blockedDirections == AtmosDirection.All)
+                        processedTiles.Add(newTile);
+
+                    // compare to, a windoor blocking in one direction.
+                    // if we just added it to processedTiles then in a situation like this:
+                    // X = explosion # = wall, _ = south-facing windoor
+                    // #########
+                    // # _     #
+                    // # X###### 
+                    // #########
+                    // if we prematurely added the windoor-tile to processedTiles, then the explosion would not snake around the un-blocked side.
+
+                    // At what explosion iteration would this blocker be destroyed?
+                    var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / intensityStepSize);
+                    if (!delayedSpreaders.TryGetValue(clearIteration, out var list))
+                    {
+                        list = new();
+                        delayedSpreaders[clearIteration] = list;
+                    }
+
+                    list.Add(newTile);
+                    delayedSpreaderIteration[newTile] = iteration;
+                    tilesInIteration[^1]++;
+                }
 
                 // Does adding these tiles bring us above the total target intensity?
-                if (adjacentTiles.Count * intensityStepSize >= remainingIntensity)
+                if (tilesInIteration[^1] * intensityStepSize >= remainingIntensity)
                 {
-                    tileSetIntensity.Add((float) remainingIntensity / adjacentTiles.Count());
-                    tileSetList.Add(adjacentTiles);
+                    tileSetIntensity.Add((float) remainingIntensity / tilesInIteration[^1]);
                     break;
                 }
- 
-                tilesInIteration.Add(adjacentTiles.Count);
-                tileSetIntensity.Add(intensityStepSize); 
-                remainingIntensity -= adjacentTiles.Count * intensityStepSize;
-                allTiles.UnionWith(adjacentTiles);
+                tileSetIntensity.Add(intensityStepSize);
+                remainingIntensity -= tilesInIteration[^1] * intensityStepSize;
 
-                // check if any of the new tiles are impassable.
-                impassableTiles = GetImpassableTiles(adjacentTiles, grid.Index);
-                AddDelayedTiles(impassableTiles, delayedTiles, iteration, intensityStepSize, maxTileIntensity);
-
-                // add the free tiles to the main tile-set list
-                adjacentTiles.ExceptWith(impassableTiles.Keys);
-                tileSetList.Add(adjacentTiles);
-
-                // Next, we do the same as above but for diagonal tiles that were added 3 iterations ago.
-                // This represents the fact that diagonal tiles are 1.5* as far away as directly adjacent tiles.
-                // Everyone knows sqrt(2) == 1.5 exactly.
-                diagonalTiles = new(GetDiagonalTiles(tileSetList[iteration - 3]));
-                if (delayedTiles.TryGetValue(iteration - 3, out clearedTiles))
-                    diagonalTiles.UnionWith(GetAdjacentTiles(clearedTiles.Keys));
-
-                diagonalTiles.ExceptWith(allTiles);
-                if (diagonalTiles.Count * intensityStepSize >= remainingIntensity)
-                {
-                    // add as a NEW iteration with fractional damage, in order to keep separate from adjacent tiles,
-                    // which have integer damage.
-                    tileSetIntensity.Add((float) remainingIntensity / diagonalTiles.Count());
-                    tileSetList.Add(diagonalTiles);
-                    break;
-                }
-
-                // add diagonal tiles to the set of adjacent tiles.
-                tilesInIteration[iteration] += diagonalTiles.Count;
-                remainingIntensity -= diagonalTiles.Count * intensityStepSize;
-                allTiles.UnionWith(diagonalTiles);
-                impassableTiles = GetImpassableTiles(diagonalTiles, grid.Index);
-                AddDelayedTiles(impassableTiles, delayedTiles, iteration, intensityStepSize, maxTileIntensity);
-                diagonalTiles.ExceptWith(impassableTiles.Keys);
-                tileSetList.Last().UnionWith(diagonalTiles);
-
-                // Now that we added a complete new iteration of tiles, we try to  increase the intensity of previous
-                // iterations by 1.
+                // Now that we added a complete new iteration of tiles, we try to increase the intensity of previous
+                // iterations.
                 for (var i = maxIntensityIndex; i < iteration; i++)
                 {
                     if (tilesInIteration[i] * intensityStepSize >= remainingIntensity &&
@@ -231,106 +271,194 @@ namespace Content.Server.Explosion
                         maxIntensityIndex = i + 1;
                         tileSetIntensity[i] = maxTileIntensity;
                     }
-                        
-
                 }
                 if (exit) break;
 
-                if (allTiles.Count >= MaxArea)
+                if (processedTiles.Count >= MaxArea)
                     //Whooo! MAXCAP!
                     break;
 
                 if (remainingIntensity == previousIntensity)
-                    // this can only happen if all tiles are at maxTileIntensity & there are no neighbors to expand to.
+                    // this can only happen if all tiles are at maxTileIntensity and there were no neighbors to expand
+                    // to. Given that all tiles are at their maximum damage, no walls will be broken in future
+                    // iterations and we can just exit early.
                     break;
 
                 iteration += 1;
             }
 
-            // The main flood-fill has completed. To finish up, we add the delayed tiles back into the main tile-set list
-            foreach (var value in delayedTiles.Values)
+            // final cleanup.
+            // Here we add delayedSpreaders to tileSetList.
+            foreach (var (tile, index) in delayedSpreaderIteration)
             {
-                foreach (var (tile, originalIteration) in value)
-                {
-                    tileSetList[originalIteration].Add(tile);
-                }
+                tileSetList[index].Add(tile);
+            }
+
+            // Next, we remove duplicate tiles. Currently this can happen when a delayed spreader was circumvented.
+            // E.g., a windoor blocked the explosion, but the explosion snaked around and added the tile before the
+            // windoor broke.
+            processedTiles.Clear();
+            foreach (var tileSet in tileSetList)
+            {
+                tileSet.ExceptWith(processedTiles);
+                processedTiles.UnionWith(tileSet);
             }
 
             return (tileSetList, tileSetIntensity);
-        }
 
-        /// <summary>
-        ///     Given a list of blocked tiles, determine at what explosion intensity (and thus tile iteration) they
-        ///     become unblocked. These are then added to the delayed-tile dictionary.
-        /// </summary>
-        private void AddDelayedTiles(
-            Dictionary<Vector2i, int> impassableTiles,
-            Dictionary<int, Dictionary<Vector2i, int>> delayedTiles,
-            int iteration,
-            float tileIntensityChangePerIteration,
-            int maxTileIntensity)
-        {
-            foreach (var (tile, sealIntegrity) in impassableTiles)
+            #region Local functions
+            // Get all of the new tiles that the explosion will cover in this new iteration.
+            IEnumerable<(Vector2i, AtmosDirection)> GetNewTiles()
             {
-                // What intensity of explosion is needed to destroy this entity?
-                var intensityNeeded = (int) Math.Ceiling((float) sealIntegrity);
+                // firstly, if any delayed spreaders were cleared, add then to processed tiles to avoid unnecessary
+                // calculations
+                if (delayedSpreaders.TryGetValue(iteration, out var clearedSpreaders))
+                    processedTiles.UnionWith(clearedSpreaders);
 
-                // at what iteration is this tile cleared?
-                int clearIteration = (intensityNeeded > maxTileIntensity)
-                    ? -1 //never
-                    : iteration + (int) MathF.Ceiling(sealIntegrity / tileIntensityChangePerIteration);
+                // consturct our enumerable from several other iterators
+                var enumerable = GetNewAdjacentTiles(tileSetList[iteration - 2]);
+                enumerable = enumerable.Concat(GetNewDiagonalTiles(tileSetList[iteration - 3]));
+                enumerable = enumerable.Concat(GetDelayedTiles());
 
-                // Add these tiles to some delayed future iteration
-                if (delayedTiles.ContainsKey(clearIteration))
-                    delayedTiles[clearIteration].Add(tile, iteration);
-                else
-                    delayedTiles.Add(clearIteration, new() { { tile, iteration } });
-            }
-        }
+                // were there any delayed spreaders that we need to get the neighbors of?
+                if (delayedSpreaders.TryGetValue(iteration - 2, out var delayedAdjacent))
+                    enumerable = enumerable.Concat(GetNewAdjacentTiles(delayedAdjacent, true));
+                if (delayedSpreaders.TryGetValue(iteration - 3, out var delayedDiagonal))
+                    enumerable = enumerable.Concat(GetNewDiagonalTiles(delayedDiagonal, true));
 
-        /// <summary>
-        ///     Given a set of tiles, get a list of the ones that are impassable to explosions.
-        /// </summary>
-        private Dictionary<Vector2i, int> GetImpassableTiles(HashSet<Vector2i> tiles, GridId grid)
-        {
-            Dictionary<Vector2i, int> impassable = new();
-            if (!BlockerMap.TryGetValue(grid, out var tileSealIntegrity))
-                return impassable;
-
-            foreach (var tile in tiles)
-            {
-                if (!tileSealIntegrity.TryGetValue(tile, out var sealIntegrity))
-                    continue;
-
-                if (sealIntegrity == 0)
-                    continue;
-
-                impassable.Add(tile, sealIntegrity);
+                return enumerable;
             }
 
-            return impassable;
-        }
-
-        private IEnumerable<Vector2i> GetAdjacentTiles(IEnumerable<Vector2i> tiles)
-        {
-            foreach (var tile in tiles)
+            IEnumerable<(Vector2i, AtmosDirection)> GetDelayedTiles()
             {
-                yield return tile + (0, 1);
-                yield return tile + (1, 0);
-                yield return tile + (0, -1);
-                yield return tile + (-1, 0);
-            }
-        }
+                if (!delayedNeighbors.TryGetValue(iteration, out var delayed))
+                    yield break;
 
-        private IEnumerable<Vector2i> GetDiagonalTiles(IEnumerable<Vector2i> tiles)
-        {
-            foreach (var tile in tiles)
-            {
-                yield return tile + (1, 1);
-                yield return tile + (1, -1);
-                yield return tile + (-1, 1);
-                yield return tile + (-1, -1);
+                foreach (var tile in delayed)
+                {
+                    if (!processedTiles.Contains(tile.Item1))
+                        yield return tile;
+                }
             }
+
+            // Gets the tiles that are directly adjacent to tiles that were added two iterations ago. If a tile has an
+            // airtight entity that blocks the explosion, those tiles are added to a list of delayed tiles that will be
+            // added to the explosion in some future iteration.
+            IEnumerable<(Vector2i, AtmosDirection)> GetNewAdjacentTiles(IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
+            {
+                Vector2i newTile;
+                foreach (var tile in tiles)
+                {
+                    // Note that if (grid, tile) is not a valid key, then airtight.BlockedDirections will default to 0 (no blocked directions)
+                    var (sealIntegrity, blockedDirections) = airtightMap.GetValueOrDefault(tile);
+
+                    // First, yield any neighboring tiles that are not blocked by airtight entities on this tile
+                    for (var i = 0; i < Atmospherics.Directions; i++)
+                    {
+                        var direction = (AtmosDirection) (1 << i);
+                        if (ignoreTileBlockers || !blockedDirections.IsFlagSet(direction))
+                        {
+                            newTile = tile.Offset(direction);
+                            if (!processedTiles.Contains(newTile))
+                                yield return (tile.Offset(direction), direction.GetOpposite());
+                        }
+                    }
+
+                    // If there are no blocked directions, we are done with this tile.
+                    if (ignoreTileBlockers || blockedDirections == AtmosDirection.Invalid)
+                        continue;
+
+                    // This tile has one or more airtight entities anchored to it blocking the explosion from traveling in
+                    // some directions. First, check whether this blocker can even be destroyed by this explosion?
+                    if (sealIntegrity > maxTileIntensity || float.IsNaN(sealIntegrity))
+                        continue;
+
+                    // At what explosion iteration would this blocker be destroyed?
+                    var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / intensityStepSize);
+
+                    // We will add this neighbor to delayedTiles instead of yielding it directly during this iteration
+                    if (!delayedNeighbors.TryGetValue(clearIteration, out var list))
+                    {
+                        list = new();
+                        delayedNeighbors[clearIteration] = list;
+                    }
+
+                    // Check which directions are blocked and add them to the delayed tiles list
+                    for (var i = 0; i < Atmospherics.Directions; i++)
+                    {
+                        var direction = (AtmosDirection) (1 << i);
+                        if (blockedDirections.IsFlagSet(direction))
+                        {
+                            newTile = tile.Offset(direction);
+                            if (!processedTiles.Contains(newTile))
+                                list.Add((tile.Offset(direction), direction.GetOpposite()));
+                        }
+                    }
+                }
+            }
+
+            // Get the tiles that are diagonally adjacent to the tiles from three iterations ago. Note that if there are
+            // ANY air blockers in some direction, that diagonal tiles is not added. The explosion will have to
+            // propagate along cardinal directions.
+            IEnumerable<(Vector2i, AtmosDirection)> GetNewDiagonalTiles(IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
+            {
+                Vector2i newTile;
+                foreach (var tile in tiles)
+                {
+                    // Note that if a (grid,tile) is not a valid key, airtight.BlockedDirections defaults to 0 (no blocked directions).
+                    var airtight = airtightMap.GetValueOrDefault(tile);
+                    var freeDirections = ignoreTileBlockers
+                        ? AtmosDirection.All
+                        : ~airtight.BlockedDirections;
+
+                    // Get the free directions of the directly adjacent tiles
+                    var freeDirectionsN = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.North)).BlockedDirections;
+                    var freeDirectionsE = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.East)).BlockedDirections;
+                    var freeDirectionsS = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.South)).BlockedDirections;
+                    var freeDirectionsW = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).BlockedDirections;
+
+                    // North East
+                    if (freeDirections.IsFlagSet(AtmosDirection.NorthEast) &&
+                        freeDirectionsN.IsFlagSet(AtmosDirection.SouthEast) &&
+                        freeDirectionsE.IsFlagSet(AtmosDirection.NorthWest))
+                    {
+                        newTile = tile + (1, 1);
+                        if (!processedTiles.Contains(newTile))
+                            yield return (newTile, AtmosDirection.SouthWest);
+                    }
+
+                    // North West
+                    if ((~airtight.BlockedDirections).IsFlagSet(AtmosDirection.NorthWest) &&
+                        freeDirectionsN.IsFlagSet(AtmosDirection.SouthWest) &&
+                        freeDirectionsW.IsFlagSet(AtmosDirection.NorthEast))
+                    {
+                        newTile = tile + (-1, 1);
+                        if (!processedTiles.Contains(newTile))
+                            yield return (newTile, AtmosDirection.SouthEast);
+                    }
+
+                    // South East
+                    if (freeDirections.IsFlagSet(AtmosDirection.SouthEast) &&
+                        freeDirectionsS.IsFlagSet(AtmosDirection.NorthEast) &&
+                        freeDirectionsE.IsFlagSet(AtmosDirection.SouthWest))
+                    {
+                        newTile = tile + (1, -1);
+                        if (!processedTiles.Contains(newTile))
+                            yield return (newTile, AtmosDirection.NorthWest);
+                    }
+
+                    // South West
+                    if (freeDirections.IsFlagSet(AtmosDirection.SouthWest) &&
+                        freeDirectionsS.IsFlagSet(AtmosDirection.NorthWest) &&
+                        freeDirectionsW.IsFlagSet(AtmosDirection.SouthEast))
+                    {
+                        newTile = tile + (-1, -1);
+                        if (!processedTiles.Contains(newTile))
+                            yield return (newTile, AtmosDirection.NorthEast);
+                    }
+                }
+            }
+            #endregion
         }
     }
 }

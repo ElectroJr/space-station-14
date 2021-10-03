@@ -52,7 +52,7 @@ namespace Content.Server.Atmos.Components
         ///     damage.
         /// </remarks>
         [DataField("explosionTolerance")]
-        public int ExplosionTolerance;
+        public float ExplosionTolerance;
 
         public AtmosDirection AirBlockedDirection => (AtmosDirection)CurrentAirBlockedDirection;
     }

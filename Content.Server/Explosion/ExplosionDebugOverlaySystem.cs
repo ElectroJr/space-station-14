@@ -8,6 +8,7 @@ using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Players;
 using Robust.Shared.Timing;
+using Robust.Shared.Utility;
 using System;
 
 namespace Content.Server.Explosion
@@ -100,7 +101,7 @@ namespace Content.Server.Explosion
                 return true;
             }
 
-            int maxTileIntensity = 999;
+            int maxTileIntensity = 5000;
 
             if (detonate)
             {
@@ -111,8 +112,18 @@ namespace Content.Server.Explosion
             {
                 var st = new Stopwatch ();
                 st.Start();
-                var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2, (Vector2i) _currentEpicenter, TotalIntensity, Slope, maxTileIntensity);
+                var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid2.Index, (Vector2i) _currentEpicenter, TotalIntensity, Slope, maxTileIntensity);
                 Logger.Info($"Time: {st.Elapsed.TotalMilliseconds}");
+
+                // get total intensity
+                float sum = 0;
+                for (var i = 0; i < intensityList.Count; i++)
+                {
+                    sum += intensityList[i] * tiles[i].Count;
+                    DebugTools.Assert(intensityList[i] <= maxTileIntensity);
+                }
+                Logger.Info($"Total/Target : {sum.ToString("F1")}/{TotalIntensity.ToString("F1")}");
+
 
                 if (tiles == null || intensityList == null)
                     return true;

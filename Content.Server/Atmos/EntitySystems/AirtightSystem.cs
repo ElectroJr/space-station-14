@@ -67,7 +67,7 @@ namespace Content.Server.Atmos.EntitySystems
             // requires airtight entities to be anchored for performance.
             airtight.Owner.Transform.Anchored = true;
 
-            if (airtight.ExplosionTolerance == 0)
+            if (airtight.ExplosionTolerance <= 0)
             {
                 // No tolerance was specified, we have to compute our own.
                 _outdatedEntities.Enqueue(uid);
@@ -172,7 +172,7 @@ namespace Content.Server.Atmos.EntitySystems
             if (!Resolve(uid, ref airtight))
                 return;
 
-            airtight.ExplosionTolerance = int.MaxValue;
+            airtight.ExplosionTolerance = float.NaN;
             explosionDamage ??= _explosionSystem.DefaultExplosionDamage;
 
             // how much total damage is needed to destroy this entity?
@@ -182,10 +182,7 @@ namespace Content.Server.Atmos.EntitySystems
             {
                 // What multiple of the explosion damage set will achieve this?
                 var maxScale = 10 * damageNeeded / explosionDamage.Total;
-                var scale = _damageableSystem.InverseResistanceSolve(uid, explosionDamage, (int) Math.Ceiling(damageNeeded), maxScale);
-
-                if (!float.IsNaN(scale))
-                    airtight.ExplosionTolerance = (int) Math.Floor(scale);
+                airtight.ExplosionTolerance = _damageableSystem.InverseResistanceSolve(uid, explosionDamage, (int) Math.Ceiling(damageNeeded), maxScale);
             }
 
             _explosionSystem.UpdateTolerance(uid);

@@ -10,18 +10,7 @@ namespace Content.Server.Explosion
 {
     public sealed partial class ExplosionSystem : EntitySystem
     {
-        public Dictionary<GridId, Dictionary<Vector2i, (int, AtmosDirection)>> BlockerMap = new();
-
-        /// <summary>
-        ///     The strength of an entity was updated. IF it is anchored, update the tolerance of the tile it is on.
-        /// </summary>
-        public void UpdateTolerance(EntityUid uid, ITransformComponent? transform = null)
-        {
-            if (!Resolve(uid, ref transform))
-                return;
-
-            UpdateTolerance(transform.GridID, transform.Coordinates);
-        }
+        public Dictionary<GridId, Dictionary<Vector2i, (float Integrity, AtmosDirection BlockedDirections)>> AirtightMap = new();
 
         /// <summary>
         ///     Update the map of explosion blockers.
@@ -34,8 +23,11 @@ namespace Content.Server.Explosion
         /// </remarks>
         public void UpdateTolerance(IMapGrid grid, Vector2i tile)
         {
-            int tolerance = 0;
+            float tolerance = 0;
             var blockedDirections = AtmosDirection.Invalid;
+
+            if (!AirtightMap.ContainsKey(grid.Index))
+                AirtightMap[grid.Index] = new();
 
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
@@ -46,17 +38,23 @@ namespace Content.Server.Explosion
                 }
             }
 
-            Dictionary<Vector2i, (int, AtmosDirection)>? tileTolerances;
-            if (!BlockerMap.TryGetValue(grid.Index, out tileTolerances))
-            {
-                tileTolerances = new();
-                BlockerMap.Add(grid.Index, tileTolerances);
-            }
-
             if (tolerance > 0 && blockedDirections != AtmosDirection.Invalid)
-                tileTolerances[tile] = (tolerance, blockedDirections);
-            else if (tileTolerances.ContainsKey(tile))
-                tileTolerances.Remove(tile);
+                AirtightMap[grid.Index][tile] = (tolerance, blockedDirections);
+            else
+                AirtightMap[grid.Index].Remove(tile);
+        }
+
+
+        /// <summary>
+        ///     The strength of an entity was updated. IF it is anchored, update the tolerance of the tile it is on.
+        /// </summary>
+        public void UpdateTolerance(EntityUid uid, ITransformComponent? transform = null)
+        {
+            if (!Resolve(uid, ref transform))
+                return;
+
+            if (_mapManager.TryGetGrid(transform.GridID, out var grid))
+                UpdateTolerance(grid, grid.CoordinatesToTile(transform.Coordinates));
         }
 
         /// <summary>
@@ -66,15 +64,6 @@ namespace Content.Server.Explosion
         {
             if (_mapManager.TryGetGrid(gridId, out var grid))
                  UpdateTolerance(grid, tile);
-        }
-
-        /// <summary>
-        ///     Get a list of all explosion blocking entities and use the largest explosion tolerance to determine the blocking strength.
-        /// </summary>
-        public void UpdateTolerance(GridId gridId, EntityCoordinates pos)
-        {
-            if (_mapManager.TryGetGrid(gridId, out var grid))
-                UpdateTolerance(grid, grid.CoordinatesToTile(pos));
         }
     }
 }

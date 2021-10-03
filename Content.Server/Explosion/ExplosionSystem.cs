@@ -166,7 +166,7 @@ namespace Content.Server.Explosion
 
         public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float intensity, float slope, int maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid, epicenter, intensity, slope, maxTileIntensity, excludedTiles);
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, epicenter, intensity, slope, maxTileIntensity, excludedTiles);
 
             if (tileSetList == null)
                 return;
