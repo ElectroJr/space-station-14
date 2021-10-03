@@ -31,8 +31,8 @@ namespace Content.Server.Explosion
             set => _slope = MathF.Max(value, 1);
         }
 
-        private float _totalIntensity = 100000;
-        private float _slope = 5;
+        private float _totalIntensity = 10;
+        private float _slope = 0.5f;
 
         private GridId? _currentGrid;
         private Vector2i? _currentEpicenter;
@@ -122,8 +122,7 @@ namespace Content.Server.Explosion
                     sum += intensityList[i] * tiles[i].Count;
                     DebugTools.Assert(intensityList[i] <= maxTileIntensity);
                 }
-                Logger.Info($"Total/Target : {sum.ToString("F1")}/{TotalIntensity.ToString("F1")}");
-
+                DebugTools.Assert(MathHelper.CloseTo(sum, TotalIntensity));
 
                 if (tiles == null || intensityList == null)
                     return true;

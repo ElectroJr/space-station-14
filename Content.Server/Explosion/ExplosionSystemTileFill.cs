@@ -198,7 +198,7 @@ namespace Content.Server.Explosion
                     var (sealIntegrity, blockedDirections) = airtightMap.GetValueOrDefault(newTile);
 
                     // If the explosion is entering this new tile from an unblocked direction, we add it directly
-                    if (!blockedDirections.IsFlagSet(direction))
+                    if (!blockedDirections.IsFlagSet(direction.GetOpposite()))
                     {
                         processedTiles.Add(newTile);
                         newTiles.Add(newTile);
@@ -228,13 +228,11 @@ namespace Content.Server.Explosion
 
                     // At what explosion iteration would this blocker be destroyed?
                     var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / intensityStepSize);
-                    if (!delayedSpreaders.TryGetValue(clearIteration, out var list))
-                    {
-                        list = new();
-                        delayedSpreaders[clearIteration] = list;
-                    }
+                    if (delayedSpreaders.TryGetValue(clearIteration, out var list))
+                        list.Add(newTile);
+                    else
+                        delayedSpreaders[clearIteration] = new() { newTile };
 
-                    list.Add(newTile);
                     delayedSpreaderIteration[newTile] = iteration;
                     tilesInIteration[^1]++;
                 }
@@ -315,7 +313,7 @@ namespace Content.Server.Explosion
                 if (delayedSpreaders.TryGetValue(iteration, out var clearedSpreaders))
                     processedTiles.UnionWith(clearedSpreaders);
 
-                // consturct our enumerable from several other iterators
+                // construct our enumerable from several other iterators
                 var enumerable = GetNewAdjacentTiles(tileSetList[iteration - 2]);
                 enumerable = enumerable.Concat(GetNewDiagonalTiles(tileSetList[iteration - 3]));
                 enumerable = enumerable.Concat(GetDelayedTiles());
@@ -339,6 +337,8 @@ namespace Content.Server.Explosion
                     if (!processedTiles.Contains(tile.Item1))
                         yield return tile;
                 }
+
+                delayedNeighbors.Remove(iteration);
             }
 
             // Gets the tiles that are directly adjacent to tiles that were added two iterations ago. If a tile has an
@@ -360,7 +360,7 @@ namespace Content.Server.Explosion
                         {
                             newTile = tile.Offset(direction);
                             if (!processedTiles.Contains(newTile))
-                                yield return (tile.Offset(direction), direction.GetOpposite());
+                                yield return (tile.Offset(direction), direction);
                         }
                     }
 
@@ -391,7 +391,7 @@ namespace Content.Server.Explosion
                         {
                             newTile = tile.Offset(direction);
                             if (!processedTiles.Contains(newTile))
-                                list.Add((tile.Offset(direction), direction.GetOpposite()));
+                                list.Add((tile.Offset(direction), direction));
                         }
                     }
                 }
@@ -403,6 +403,7 @@ namespace Content.Server.Explosion
             IEnumerable<(Vector2i, AtmosDirection)> GetNewDiagonalTiles(IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
             {
                 Vector2i newTile;
+                AtmosDirection direction;
                 foreach (var tile in tiles)
                 {
                     // Note that if a (grid,tile) is not a valid key, airtight.BlockedDirections defaults to 0 (no blocked directions).
@@ -418,43 +419,59 @@ namespace Content.Server.Explosion
                     var freeDirectionsW = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).BlockedDirections;
 
                     // North East
-                    if (freeDirections.IsFlagSet(AtmosDirection.NorthEast) &&
-                        freeDirectionsN.IsFlagSet(AtmosDirection.SouthEast) &&
-                        freeDirectionsE.IsFlagSet(AtmosDirection.NorthWest))
+                    if (freeDirections.IsFlagSet(AtmosDirection.NorthEast))
                     {
+                        direction = AtmosDirection.Invalid;
+                        if (freeDirectionsN.IsFlagSet(AtmosDirection.SouthEast))
+                            direction |= AtmosDirection.East;
+                        if (freeDirectionsE.IsFlagSet(AtmosDirection.NorthWest))
+                            direction |= AtmosDirection.North;
+
                         newTile = tile + (1, 1);
-                        if (!processedTiles.Contains(newTile))
-                            yield return (newTile, AtmosDirection.SouthWest);
+                        if (direction != AtmosDirection.Invalid && !processedTiles.Contains(newTile))
+                            yield return (newTile, direction);
                     }
 
                     // North West
-                    if ((~airtight.BlockedDirections).IsFlagSet(AtmosDirection.NorthWest) &&
-                        freeDirectionsN.IsFlagSet(AtmosDirection.SouthWest) &&
-                        freeDirectionsW.IsFlagSet(AtmosDirection.NorthEast))
+                    if (freeDirections.IsFlagSet(AtmosDirection.NorthWest))
                     {
+                        direction = AtmosDirection.Invalid;
+                        if (freeDirectionsN.IsFlagSet(AtmosDirection.SouthWest))
+                            direction |= AtmosDirection.West;
+                        if (freeDirectionsW.IsFlagSet(AtmosDirection.NorthEast))
+                            direction |= AtmosDirection.North;
+
                         newTile = tile + (-1, 1);
-                        if (!processedTiles.Contains(newTile))
-                            yield return (newTile, AtmosDirection.SouthEast);
+                        if (direction != AtmosDirection.Invalid && !processedTiles.Contains(newTile))
+                            yield return (newTile, direction);
                     }
 
                     // South East
-                    if (freeDirections.IsFlagSet(AtmosDirection.SouthEast) &&
-                        freeDirectionsS.IsFlagSet(AtmosDirection.NorthEast) &&
-                        freeDirectionsE.IsFlagSet(AtmosDirection.SouthWest))
+                    if (freeDirections.IsFlagSet(AtmosDirection.SouthEast))
                     {
+                        direction = AtmosDirection.Invalid;
+                        if (freeDirectionsS.IsFlagSet(AtmosDirection.NorthEast))
+                            direction |= AtmosDirection.East;
+                        if (freeDirectionsE.IsFlagSet(AtmosDirection.SouthWest))
+                            direction |= AtmosDirection.South;
+
                         newTile = tile + (1, -1);
-                        if (!processedTiles.Contains(newTile))
-                            yield return (newTile, AtmosDirection.NorthWest);
+                        if (direction != AtmosDirection.Invalid && !processedTiles.Contains(newTile))
+                            yield return (newTile, direction);
                     }
 
                     // South West
-                    if (freeDirections.IsFlagSet(AtmosDirection.SouthWest) &&
-                        freeDirectionsS.IsFlagSet(AtmosDirection.NorthWest) &&
-                        freeDirectionsW.IsFlagSet(AtmosDirection.SouthEast))
+                    if (freeDirections.IsFlagSet(AtmosDirection.SouthWest))
                     {
+                        direction = AtmosDirection.Invalid;
+                        if (freeDirectionsS.IsFlagSet(AtmosDirection.NorthWest))
+                            direction |= AtmosDirection.West;
+                        if (freeDirectionsW.IsFlagSet(AtmosDirection.SouthEast))
+                            direction |= AtmosDirection.South;
+
                         newTile = tile + (-1, -1);
-                        if (!processedTiles.Contains(newTile))
-                            yield return (newTile, AtmosDirection.NorthEast);
+                        if (direction != AtmosDirection.Invalid && !processedTiles.Contains(newTile))
+                            yield return (newTile, direction);
                     }
                 }
             }
