@@ -12,7 +12,7 @@ namespace Content.Client.Explosion
         private ExplosionOverlay _overlay = default!;
 
         /// <summary>
-        ///     Determines how quickly the visual explosion effect expands, in seconds per tile.
+        ///     Determines how quickly the visual explosion effect expands, in seconds per tile iteration.
         /// </summary>
         public const float TimePerTile = 0.03f;
 
@@ -51,21 +51,21 @@ namespace Content.Client.Explosion
 
             _accumulatedFrameTime += frameTime;
 
-            if (_accumulatedFrameTime < TimePerTile)
-                return;
-
-            _accumulatedFrameTime -= TimePerTile;
-
-            for (var i = 0; i < _overlay.Explosions.Count; i++)
+            while (_accumulatedFrameTime >= TimePerTile)
             {
-                _overlay.ExplosionIndices[i]++;
+                _accumulatedFrameTime -= TimePerTile;
 
-                if (_overlay.ExplosionIndices[i] > _overlay.Explosions[i].Tiles.Count + Persistence)
+                for (var i = 0; i < _overlay.Explosions.Count; i++)
                 {
-                    _overlay.Explosions.RemoveAt(i);
-                    _overlay.ExplosionIndices.RemoveAt(i);
-                    EntityManager.QueueDeleteEntity(_explosionLightSources[i]);
-                    _explosionLightSources.RemoveAt(i);
+                    _overlay.ExplosionIndices[i]++;
+
+                    if (_overlay.ExplosionIndices[i] > _overlay.Explosions[i].Tiles.Count + Persistence)
+                    {
+                        _overlay.Explosions.RemoveAt(i);
+                        _overlay.ExplosionIndices.RemoveAt(i);
+                        EntityManager.QueueDeleteEntity(_explosionLightSources[i]);
+                        _explosionLightSources.RemoveAt(i);
+                    }
                 }
             }
         }

@@ -11,32 +11,6 @@ namespace Content.Server.Explosion
     // This partial part of the explosion system has all of the functions used to create the actual explosion map.
     // I.e, to get the sets of tiles & damage values that describe an explosion.
 
-    // add a test:
-    // check that there are NO DUPLICATE TILES.
-
-
-    /// <summary>
-    ///
-    /// To test:
-    /// #######
-    /// #B  ###
-    /// #____ #
-    /// #A    #
-    /// #######
-    ///
-    /// _ = windor, # = wall
-    /// can explosion go from A-> B and vice versa?
-    ///
-    ///
-    /// Check:
-    /// diagonal blocking should force cardinal movement
-    /// but
-    /// when ENTERING a tile / when the blockers are ON the tile
-    /// then BOTH need to be blocked for it to be delayed
-    /// if only ONE is blocked, NO DELAY
-    ///
-    /// 
-    /// </summary>
     public sealed partial class ExplosionSystem : EntitySystem
     {
         /// <summary>
@@ -216,15 +190,6 @@ namespace Content.Server.Explosion
                     // out from it without first breaking it. so we can already mark it as processed for future iterations.
                     if (blockedDirections == AtmosDirection.All)
                         processedTiles.Add(newTile);
-
-                    // compare to, a windoor blocking in one direction.
-                    // if we just added it to processedTiles then in a situation like this:
-                    // X = explosion # = wall, _ = south-facing windoor
-                    // #########
-                    // # _     #
-                    // # X###### 
-                    // #########
-                    // if we prematurely added the windoor-tile to processedTiles, then the explosion would not snake around the un-blocked side.
 
                     // At what explosion iteration would this blocker be destroyed?
                     var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / intensityStepSize);
