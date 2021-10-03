@@ -24,17 +24,17 @@ namespace Content.Server.Explosion
     // First note: IF an explosion is CONSTRAINED then it will deal more damage on average to the tiles it does have (AKA: it will have MORE ITERATIONS and a HIGHER MAX INTENSITTY).
     // Conversely, if an explosion is free, it will always deal less damage, have fewer iterations, and a lower max intensity.
     //
-    // Given that during the initial explosion iteration, if the explosion spreads over anohter grid, it propagats FREELY, this means that it NECESSARILY will have fewer overall iterations than it would otherwise.
+    // Given that during the initial explosion iteration, if the explosion spreads over another grid, it propagates FREELY, this means that it NECESSARILY will have fewer overall iterations than it would otherwise.
     // or put another way: IF we were to properly do a dynamic grid hop, unless that grid was COMPLETELY free of obstacles, it would result in fewer iterations.
     //
     // So: making a grid hop happen after the explosion has finishes propagating, and then just seeding a SECONDARY explosion, limited by the # of iterations rather than total strength, will ALWAYS deal less damaage over all.
     //
-    // Is this a bad thing? I would argue no. A bit of sparation between the grids --> explosion leaks into spce--> less constrained --> less damage
+    // Is this a bad thing? I would argue no. A bit of separation between the grids --> explosion leaks into space--> less constrained --> less damage
     // it's realistic, so fuck it just do it like that
 
     // todo:
     // grid-jump
-    // beter admin gui
+    // better admin gui
 
     // Todo create explosion prototypes.
     // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
@@ -166,9 +166,9 @@ namespace Content.Server.Explosion
             SpawnExplosion(grid, grid.TileIndicesFor(transform.Coordinates), intensity, slope, maxTileIntensity, excludedTiles);
         }
 
-        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, epicenter, intensity, slope, maxTileIntensity, excludedTiles);
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, epicenter, totalIntensity, slope, maxTileIntensity, excludedTiles);
 
             if (tileSetList == null)
                 return;
@@ -180,7 +180,7 @@ namespace Content.Server.Explosion
             var range = 3*(tileSetList.Count-2);
             var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
             SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
-            CameraShakeInRange(filter, grid.GridTileToWorld(epicenter));
+            CameraShakeInRange(filter, grid.GridTileToWorld(epicenter), totalIntensity);
 
             _explosions.Enqueue(new Explosion(
                                     tileSetList,
@@ -190,7 +190,7 @@ namespace Content.Server.Explosion
                                     DefaultExplosionDamage));
         }
 
-        private void CameraShakeInRange(Filter filter, MapCoordinates epicenter)
+        private void CameraShakeInRange(Filter filter, MapCoordinates epicenter, float totalIntensity)
         {
             foreach (var player in filter.Recipients)
             {
@@ -207,7 +207,7 @@ namespace Content.Server.Explosion
                     delta = new(0.01f, 0);
 
                 var distance = delta.Length;
-                var effect = 10 * (1 / (1 + distance));
+                var effect = (int) (5*Math.Pow(totalIntensity,0.5) * (1 / (1 + distance)));
                 if (effect > 0.01f)
                 {
                     var kick = - delta.Normalized * effect;
