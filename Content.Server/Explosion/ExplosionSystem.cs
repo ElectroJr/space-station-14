@@ -20,12 +20,6 @@ using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
-    // add comments:
-    // capping intensity pancackes explosions
-    // squashes the sandpile/cone down
-    // --> more area
-
-
     // Explosion grid hop.
     // First note: IF an explosion is CONSTRAINED then it will deal more damage on average to the tiles it does have (AKA: it will have MORE ITERATIONS and a HIGHER MAX INTENSITTY).
     // Conversely, if an explosion is free, it will always deal less damage, have fewer iterations, and a lower max intensity.
@@ -38,19 +32,9 @@ namespace Content.Server.Explosion
     // Is this a bad thing? I would argue no. A bit of sparation between the grids --> explosion leaks into spce--> less constrained --> less damage
     // it's realistic, so fuck it just do it like that
 
-    // test that explosions are properly de-queued
-
-    // todo if not fix at least figure out whyL some of the entities spawned by killing things DONT get thrown by secondary explosions
-    // --> UNTILL I pick them up and drop them. are they considered children of the map or the entity that died?
-
-
-    // todo make diagonal walls block explosions
-
     // todo:
-    // atmos airtight instead of my thing
     // grid-jump
     // beter admin gui
-
 
     // Todo create explosion prototypes.
     // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
@@ -65,10 +49,9 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
-        [Dependency] private readonly GridTileLookupSystem _gridTileLookupSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
 
-        public const int MaxTilesPerTick = 20;
+        public const int MaxTilesPerTick = 30;
 
         /// <summary>
         ///     Queue for delayed processing of explosions.
@@ -106,6 +89,9 @@ namespace Content.Server.Explosion
                 if (processed == 0)
                     _explosions.Dequeue();
             }
+
+            if (_explosions.Count == 0)
+                RaiseNetworkEvent(new ExplosionUpdateEvent(int.MaxValue));
         }
 
         /// <summary>
@@ -132,6 +118,8 @@ namespace Content.Server.Explosion
                 if (processedTiles == tilesToProcess)
                     break;
             }
+
+            RaiseNetworkEvent(new ExplosionUpdateEvent(explosion.TileIteration));
 
             explosion.Grid.SetTiles(damagedTiles);
 
@@ -298,7 +286,7 @@ namespace Content.Server.Explosion
         {
             var gridBox =  Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
 
-            // todo remove list use other func
+            // TODO EXPLOSION remove list use other func (fast intersecting or whatever)
             List<IEntity> list = new();
 
             lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
@@ -392,6 +380,7 @@ namespace Content.Server.Explosion
         ///     Used to avoid applying explosion effects repeatedly to the same entity.
         /// </summary>
         public readonly HashSet<EntityUid> ProcessedEntities = new();
+        public int TileIteration = 1;
 
         public readonly MapCoordinates Epicenter;
         public readonly IMapGrid Grid;
@@ -432,6 +421,7 @@ namespace Content.Server.Explosion
                 // do we need to get the next tile index enumerator?
                 if (!_tileEnumerator.MoveNext())
                 {
+                    TileIteration++;
 
                     if (_tileSetList.Count == 1)
                         break;

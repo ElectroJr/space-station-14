@@ -12,17 +12,10 @@ namespace Content.Client.Explosion
         private ExplosionOverlay _overlay = default!;
 
         /// <summary>
-        ///     Determines how quickly the visual explosion effect expands, in seconds per tile iteration.
-        /// </summary>
-        public const float TimePerTile = 0.08f;
-
-        /// <summary>
         ///     This delays the disappearance of the explosion after it has been fully drawn/expanded, so that it stays on the screen a little bit longer.
         ///     This is basically "padding" the radius, so that it stays on screen for Persistence*TimePerTile extra seconds
         /// </summary>
-        public const float Persistence = 15;
-
-        private float _accumulatedFrameTime;
+        public const float Persistence = 5;
 
         private readonly List<IEntity> _explosionLightSources = new();
 
@@ -31,6 +24,7 @@ namespace Content.Client.Explosion
             base.Initialize();
 
             SubscribeNetworkEvent<ExplosionEvent>(HandleExplosionOverlay);
+            SubscribeNetworkEvent<ExplosionUpdateEvent>(HandleExplosionUpdate);
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
             _overlay = new ExplosionOverlay();
@@ -38,35 +32,20 @@ namespace Content.Client.Explosion
                 overlayManager.AddOverlay(_overlay);
         }
 
-        /// <summary>
-        ///     Process explosion animations;
-        /// </summary>
-        /// <param name="frameTime"></param>
-        public override void Update(float frameTime)
+        private void HandleExplosionUpdate(ExplosionUpdateEvent args)
         {
-            base.Update(frameTime);
-
-            if (_overlay.Explosions.Count == 0)
-                return;
-
-            _accumulatedFrameTime += frameTime;
-
-            while (_accumulatedFrameTime >= TimePerTile)
+            var total = _overlay.ExplosionIndices.Count;
+            for (int i = 1; i <= total; i++)
             {
-                _accumulatedFrameTime -= TimePerTile;
-
-                for (var i = 0; i < _overlay.Explosions.Count; i++)
+                if (args.TileIndex > _overlay.Explosions[^i].Tiles.Count + Persistence)
                 {
-                    _overlay.ExplosionIndices[i]++;
-
-                    if (_overlay.ExplosionIndices[i] > _overlay.Explosions[i].Tiles.Count + Persistence)
-                    {
-                        _overlay.Explosions.RemoveAt(i);
-                        _overlay.ExplosionIndices.RemoveAt(i);
-                        EntityManager.QueueDeleteEntity(_explosionLightSources[i]);
-                        _explosionLightSources.RemoveAt(i);
-                    }
+                    _overlay.ExplosionIndices.RemoveAt(total - i);
+                    _overlay.Explosions.RemoveAt(total - i);
+                    EntityManager.QueueDeleteEntity(_explosionLightSources[total-i]);
+                    _explosionLightSources.RemoveAt(total-i);
+                    continue;
                 }
+                _overlay.ExplosionIndices[^i] = args.TileIndex;
             }
         }
 

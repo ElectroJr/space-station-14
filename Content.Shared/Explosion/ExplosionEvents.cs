@@ -31,6 +31,22 @@ namespace Content.Shared.Explosion
     }
 
     /// <summary>
+    ///     Update visual rendering of the explosion to correspond to the servers processing of it.
+    /// </summary>
+    [Serializable, NetSerializable]
+    public class ExplosionUpdateEvent : EntityEventArgs
+    {
+        // EXPLOSION TODO map this onto a single explosion. It breaks if used on more than one explosion
+
+        public int TileIndex;
+
+        public ExplosionUpdateEvent(int tileIndex)
+        {
+            TileIndex = tileIndex;
+        }
+    }
+
+    /// <summary>
     ///     Used  to preview Admin explosion spawning.
     /// </summary>
     [Serializable, NetSerializable]
