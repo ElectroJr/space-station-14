@@ -5,4 +5,6 @@
   components:
   - type: PointLight
     color: orange
-  - type: HideContextMenu
+  - type: Tag
+    tags:
+    - HideContextMenu
