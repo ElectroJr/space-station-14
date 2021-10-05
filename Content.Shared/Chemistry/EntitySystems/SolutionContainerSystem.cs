@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Content.Shared.Chemistry.Components;
@@ -50,11 +50,9 @@ namespace Content.Shared.Chemistry.EntitySystems
             foreach (var keyValue in component.Solutions)
             {
                 var solutionHolder = keyValue.Value;
-                // solutionHolder.OwnerUid = component.Owner.Uid;
-                if (solutionHolder.MaxVolume == ReagentUnit.Zero && solutionHolder.TotalVolume > solutionHolder.MaxVolume)
-                {
-                    solutionHolder.MaxVolume = solutionHolder.TotalVolume;
-                }
+                solutionHolder.MaxVolume = solutionHolder.TotalVolume > solutionHolder.InitialMaxVolume
+                    ? solutionHolder.TotalVolume
+                    : solutionHolder.InitialMaxVolume;
 
                 UpdateAppearance(uid, solutionHolder);
             }
