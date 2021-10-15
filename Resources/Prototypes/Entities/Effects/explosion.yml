@@ -1,0 +1,10 @@
+- type: entity
+  abstract: true
+  id: Explosion
+  name: explosion
+  components:
+  - type: PointLight
+    color: orange
+  - type: Tag
+    tags:
+    - HideContextMenu

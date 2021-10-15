@@ -39,6 +39,7 @@ namespace Content.Client.Sandbox
         public readonly Button ShowMarkersButton; //Shows spawn points
         public readonly Button ShowBbButton; //Shows bounding boxes
         public readonly Button MachineLinkingButton; // Enables/disables machine linking mode.
+        public readonly Button SpawnExplosionButton;
         private readonly IGameHud _gameHud;
 
         public SandboxWindow()
@@ -93,6 +94,9 @@ namespace Content.Client.Sandbox
 
             MachineLinkingButton = new Button { Text = Loc.GetString("sandbox-window-link-machines-button"), ToggleMode = true };
             vBox.AddChild(MachineLinkingButton);
+
+            SpawnExplosionButton = new Button { Text = Loc.GetString("sandbox-window-explosion-button") };
+            vBox.AddChild(SpawnExplosionButton);
         }
 
 
@@ -128,6 +132,7 @@ namespace Content.Client.Sandbox
         private SandboxWindow? _window;
         private EntitySpawnWindow? _spawnWindow;
         private TileSpawnWindow? _tilesSpawnWindow;
+        private ExplosionSpawnWindow? _explosionSpawnWindow;
         private bool _sandboxWindowToggled;
 
         public void Initialize()
@@ -215,6 +220,7 @@ namespace Content.Client.Sandbox
             _window.ShowMarkersButton.OnPressed += OnShowMarkersButtonClicked;
             _window.ShowBbButton.OnPressed += OnShowBbButtonClicked;
             _window.MachineLinkingButton.OnPressed += OnMachineLinkingButtonClicked;
+            _window.SpawnExplosionButton.OnPressed += OnSpawnExplosionButtonClicked;
 
             _window.OpenCentered();
         }
@@ -274,6 +280,11 @@ namespace Content.Client.Sandbox
             LinkMachines();
         }
 
+        private void OnSpawnExplosionButtonClicked(BaseButton.ButtonEventArgs obj)
+        {
+            ToggleExplosionSpawnWindow();
+        }
+
         private void OnGiveAdminAccessButtonClicked(BaseButton.ButtonEventArgs args)
         {
             _netManager.ClientSendMessage(_netManager.CreateNetMessage<MsgSandboxGiveAccess>());
@@ -326,6 +337,26 @@ namespace Content.Client.Sandbox
                 _tilesSpawnWindow.Open();
             }
         }
+
+        private void ToggleExplosionSpawnWindow()
+        {
+            if (_explosionSpawnWindow == null)
+            {
+                _explosionSpawnWindow = new ExplosionSpawnWindow();
+                _explosionSpawnWindow.OpenToLeft();
+                return;
+            }
+
+            if (_explosionSpawnWindow.IsOpen)
+            {
+                _explosionSpawnWindow.Close();
+            }
+            else
+            {
+                _explosionSpawnWindow.Open();
+            }
+        }
+
 
         private void ToggleLight()
         {

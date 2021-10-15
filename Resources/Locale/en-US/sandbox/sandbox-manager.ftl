@@ -12,3 +12,4 @@ sandbox-window-toggle-suicide-button = Suicide
 sandbox-window-show-spawns-button = Shows Spawns
 sandbox-window-show-bb-button = Show BB
 sandbox-window-link-machines-button = Link machines
+sandbox-window-explosion-button = Spawn Explosions

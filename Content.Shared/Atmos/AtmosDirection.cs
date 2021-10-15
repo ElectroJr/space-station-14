@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 using Robust.Shared.Maths;
 using Robust.Shared.Serialization;

@@ -1,0 +1,55 @@
+<SS14Window
+    xmlns="https://spacestation14.io" Title="Spawn Explosions">
+    <BoxContainer Orientation="Vertical">
+        
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Grid" MinSize="120 0" />
+            <OptionButton Name="GridOptions" MinSize="70 0" HorizontalExpand="True" />
+        </BoxContainer>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="X" MinSize="120 0" />
+            <SpinBox Name="TileXSpin" MinSize="70 0" HorizontalExpand="True" />
+        </BoxContainer>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Y" MinSize="120 0" />
+            <SpinBox Name="TileYSpin" MinSize="70 0" HorizontalExpand="True" />
+        </BoxContainer>
+        <Button Name="Relocate" Text="Current Position" />
+
+        <Control MinSize="0 20"/>
+        
+        <CheckBox Text="Preview Explosion"/>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Total Intensity" MinSize="120 0"/>
+            <FloatSpinBox Name="IntensitySpin" MinSize="130 0" HorizontalExpand="True" Value="50"/>
+        </BoxContainer>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Intensity Slope" MinSize="120 0" />
+            <FloatSpinBox Name="SlopeSpin" MinSize="130 0" HorizontalExpand="True" Value="1"/>
+        </BoxContainer>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Max Intensity" MinSize="120 0" />
+            <FloatSpinBox Name="MaxSpin" MinSize="130 0" HorizontalExpand="True" Value="50"/>
+        </BoxContainer>
+
+        <Control MinSize="0 20"/>
+
+        <CheckBox Text="Directed Explosion"/>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Angle" MinSize="120 0"/>
+            <FloatSpinBox Name="Angle" MinSize="130 0" HorizontalExpand="True" Value="90"/>
+        </BoxContainer>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Arc Size" MinSize="120 0"/>
+            <FloatSpinBox Name="ArcSize" MinSize="130 0" HorizontalExpand="True" Value="60"/>
+        </BoxContainer>
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Arc Radius" MinSize="120 0" />
+            <FloatSpinBox Name="ArcRadius" MinSize="130  0" HorizontalExpand="True" Value="5"/>
+        </BoxContainer>
+
+        <Control MinSize="0 20"/>
+
+        <Button Name="Spawn" Text="Kabloom!" />
+    </BoxContainer>
+</SS14Window>
