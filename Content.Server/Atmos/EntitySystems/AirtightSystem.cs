@@ -3,11 +3,14 @@ using Content.Server.Destructible;
 using Content.Server.Explosion;
 using Content.Shared.Atmos;
 using Content.Shared.Damage;
+using Content.Shared.Explosion;
 using JetBrains.Annotations;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Prototypes;
 using System;
 using System.Collections.Generic;
 
@@ -17,6 +20,7 @@ namespace Content.Server.Atmos.EntitySystems
     public class AirtightSystem : EntitySystem
     {
         [Dependency] private readonly IMapManager _mapManager = default!;
+        [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly AtmosphereSystem _atmosphereSystem = default!;
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
@@ -43,6 +47,8 @@ namespace Content.Server.Atmos.EntitySystems
             SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnDamageChanged);
         }
 
+        public bool Updating;
+
         public override void Update(float frameTime)
         {
             base.Update(frameTime);
@@ -52,6 +58,13 @@ namespace Content.Server.Atmos.EntitySystems
             {
                 UpdateExplosionTolerance(entity);
                 toUpdate--;
+                Updating = true;
+            }
+
+            if (Updating && _outdatedEntities.Count == 0)
+            {
+                Updating = false;
+                Logger.Info("Finished computing airtight integrity.");
             }
         }
 
@@ -67,7 +80,7 @@ namespace Content.Server.Atmos.EntitySystems
             // requires airtight entities to be anchored for performance.
             airtight.Owner.Transform.Anchored = true;
 
-            if (airtight.ExplosionTolerance <= 0)
+            if (airtight.ExplosionTolerance == null)
             {
                 // No tolerance was specified, we have to compute our own.
                 _outdatedEntities.Enqueue(uid);
@@ -164,28 +177,28 @@ namespace Content.Server.Atmos.EntitySystems
         /// <summary>
         ///     How much explosion damage is needed to destroy an air-blocking entity?
         /// </summary>
-        private void UpdateExplosionTolerance(
-            EntityUid uid,
-            AirtightComponent? airtight = null,
-            DamageSpecifier? explosionDamage = null)
+        private void UpdateExplosionTolerance(EntityUid uid, AirtightComponent? airtight = null)
         {
             if (!Resolve(uid, ref airtight, logMissing: false))
                 return;
 
-            airtight.ExplosionTolerance = float.NaN;
-            explosionDamage ??= _explosionSystem.DefaultExplosionDamage;
-
-            // how much total damage is needed to destroy this entity?
-            var damageNeeded = _destructibleSystem.DestroyedAt(uid);
-
-            if (!float.IsNaN(damageNeeded))
+            airtight.ExplosionTolerance = new();
+            foreach (var type in _prototypeManager.EnumeratePrototypes<ExplosionPrototype>())
             {
-                // What multiple of the explosion damage set will achieve this?
-                var maxScale = 10 * damageNeeded / explosionDamage.Total;
-                airtight.ExplosionTolerance = _damageableSystem.InverseResistanceSolve(uid, explosionDamage, (int) Math.Ceiling(damageNeeded), maxScale);
+                // how much total damage is needed to destroy this entity?
+                var damageNeeded = _destructibleSystem.DestroyedAt(uid);
+
+                if (!float.IsNaN(damageNeeded))
+                {
+                    // What multiple of the explosion set will achieve this?
+                    var maxScale = 10 * damageNeeded / type.DamagePerIntensity.Total;
+                    airtight.ExplosionTolerance[type.ID] = _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, (int) Math.Ceiling(damageNeeded), maxScale);
+                }
+
+                _explosionSystem.UpdateTolerance(uid);
             }
 
-            _explosionSystem.UpdateTolerance(uid);
+            
         }
     }
 }

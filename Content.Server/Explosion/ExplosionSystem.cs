@@ -8,9 +8,7 @@ using Content.Server.Throwing;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.Maps;
-using Content.Shared.Sound;
 using Robust.Server.Containers;
-using Robust.Server.GameObjects;
 using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
@@ -33,19 +31,8 @@ namespace Content.Server.Explosion
     // Is this a bad thing? I would argue no. A bit of separation between the grids --> explosion leaks into space--> less constrained --> less damage
     // it's realistic, so fuck it just do it like that
 
-    // todo:
-    // grid-jump
-    // better admin gui
-
-    // Todo create explosion prototypes.
-    // E.g. Fireball (heat), AP (heat+piercing), HE (heat+blunt), dirty (heat+radiation)
-    // Each explosion type will need it's own threshold map
-
     public sealed partial class ExplosionSystem : EntitySystem
     {
-        private SoundSpecifier _explosionSound = default!;
-        private AudioParams _explosionSoundParams = default!;
-
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
@@ -58,45 +45,38 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Queue for delayed processing of explosions.
         /// </summary>
-        private Queue<Explosion> _explosions = new();
+        private Queue<Func<Explosion?>> _explosionQueue = new();
 
-        public DamageSpecifier DefaultExplosionDamage = new();
-
-        public override void Initialize()
-        {
-            base.Initialize();
-
-            _explosionSoundParams  = AudioParams.Default.WithAttenuation(Attenuation.InverseDistanceClamped);
-            _explosionSoundParams.RolloffFactor = 5f; // Why does attenuation not work??
-            _explosionSoundParams.Volume = 0;
-
-            // TODO EXPLOSIONS change volume based on intensity? Given that explosions deal damage iteratively, maybe
-            // also match sound duration or modulate the sound as the explosion progresses?
-
-            // TODO YAML prototypes
-            _explosionSound = new SoundCollectionSpecifier("explosion");
-            DefaultExplosionDamage.DamageDict = new() { { "Heat", 5 }, { "Blunt", 5 }, { "Piercing", 5 } };
-        }
+        private Explosion? _activeExplosion;
 
         public override void Update(float frameTime)
         {
             base.Update(frameTime);
 
             int tilesToProcess = MaxTilesPerTick;
-            while (tilesToProcess > 0 && _explosions.TryPeek(out var explosion))
+            while (tilesToProcess > 0)
             {
-                var processed = ProcessExplosion(explosion, tilesToProcess);
-                tilesToProcess -= processed;
+                if (_activeExplosion == null)
+                {
+                    if (!_explosionQueue.TryDequeue(out var nextExplosion))
+                        break;
+                    _activeExplosion = nextExplosion();
+                    continue;
+                }
 
+                var processed = ProcessExplosion(_activeExplosion, tilesToProcess);
+                tilesToProcess -= processed;
                 if (processed == 0)
-                    _explosions.Dequeue();
+                    _activeExplosion = null;
             }
 
-            if (_explosions.Count == 0)
+            if (_activeExplosion == null && _explosionQueue.Count == 0)
             {
+                RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(int.MaxValue));
+
                 //wakey wakey
                 _nodeGroupSystem.Snoozing = false;
-                RaiseNetworkEvent(new ExplosionUpdateEvent(int.MaxValue));
+
             }
         }
 
@@ -126,7 +106,7 @@ namespace Content.Server.Explosion
                     break;
             }
 
-            RaiseNetworkEvent(new ExplosionUpdateEvent(explosion.TileIteration));
+            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(explosion.TileIteration));
 
             explosion.Grid.SetTiles(damagedTiles);
 
@@ -162,7 +142,7 @@ namespace Content.Server.Explosion
             return coneVolume - (h * MathF.PI / 3 * MathF.Pow(h / slope, 2));
         }
 
-        public void SpawnExplosion(EntityUid uid, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(EntityUid uid, ExplosionPrototype type, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
@@ -170,63 +150,42 @@ namespace Content.Server.Explosion
             if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
                 return;
 
-            SpawnExplosion(grid, grid.TileIndicesFor(transform.Coordinates), intensity, slope, maxTileIntensity, excludedTiles);
+            QueueExplosion(transform.GridID, grid.TileIndicesFor(transform.Coordinates), type, intensity, slope, maxTileIntensity, excludedTiles);
         }
 
-        public void SpawnExplosion(GridId gridId, Vector2i epicenter, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, epicenter, totalIntensity, slope, maxTileIntensity, excludedTiles);
+            _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, type, totalIntensity, slope, maxTileIntensity, excludedTiles));
+        }
+
+        private Explosion? SpawnExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        {
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, epicenter, type.ID, totalIntensity, slope, maxTileIntensity, excludedTiles);
 
             if (tileSetList == null)
-                return;
+                return null;
 
             var grid = _mapManager.GetGrid(gridId);
 
-            // Wow dem graphics
-            RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), tileSetList, tileSetIntensity, gridId));
+            RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), type.ID, tileSetList, tileSetIntensity, gridId));
 
             // sound & screen shake
+            var explosionSoundParams = AudioParams.Default.WithAttenuation(Attenuation.InverseDistanceClamped);
+            explosionSoundParams.RolloffFactor = 5f;
+            explosionSoundParams.Volume = 0;
             var range = 3 * (tileSetList.Count - 2);
             var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
-            SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
+            SoundSystem.Play(filter, type.Sound.GetSound(), explosionSoundParams.WithMaxDistance(range));
             CameraShakeInRange(filter, grid.GridTileToWorld(epicenter), totalIntensity);
-
-            _explosions.Enqueue(new Explosion(
-                                    tileSetList,
-                                    tileSetIntensity!,
-                                    grid,
-                                    grid.GridTileToWorld(epicenter),
-                                    DefaultExplosionDamage));
-
-            // just a lil nap
-            //_nodeGroupSystem.Snoozing = true;
-        }
-
-        public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
-        {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, epicenter, totalIntensity, slope, maxTileIntensity, excludedTiles);
-
-            if (tileSetList == null)
-                return;
-
-            // Wow dem graphics
-            RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), tileSetList, tileSetIntensity, grid.Index));
-
-            // sound & screen shake
-            var range = 3*(tileSetList.Count-2);
-            var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
-            SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
-            CameraShakeInRange(filter, grid.GridTileToWorld(epicenter), totalIntensity);
-
-            _explosions.Enqueue(new Explosion(
-                                    tileSetList,
-                                    tileSetIntensity!,
-                                    grid,
-                                    grid.GridTileToWorld(epicenter),
-                                    DefaultExplosionDamage));
 
             // just a lil nap
             _nodeGroupSystem.Snoozing = true;
+
+            return new (type,
+                        tileSetList,
+                        tileSetIntensity!,
+                        grid,
+                        grid.GridTileToWorld(epicenter));
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter, float totalIntensity)
@@ -246,7 +205,7 @@ namespace Content.Server.Explosion
                     delta = new(0.01f, 0);
 
                 var distance = delta.Length;
-                var effect = (int) (5*Math.Pow(totalIntensity,0.5) * (1 / (1 + distance)));
+                var effect = (int) (5 * Math.Pow(totalIntensity,0.5) * (1 / (1 + distance)));
                 if (effect > 0.01f)
                 {
                     var kick = - delta.Normalized * effect;
@@ -421,6 +380,7 @@ namespace Content.Server.Explosion
         public readonly HashSet<EntityUid> ProcessedEntities = new();
         public int TileIteration = 1;
 
+        public readonly ExplosionPrototype ExplosionType;
         public readonly MapCoordinates Epicenter;
         public readonly IMapGrid Grid;
         public readonly EntityUid MapUid;
@@ -429,16 +389,19 @@ namespace Content.Server.Explosion
 
         private readonly List<HashSet<Vector2i>> _tileSetList;
         private readonly List<float> _tileSetIntensity;
-        private readonly DamageSpecifier _explosionDamage;
         private IEnumerator<Vector2i> _tileEnumerator;
 
-        public Explosion(List<HashSet<Vector2i>> tileSetList, List<float> tileSetIntensity, IMapGrid grid, MapCoordinates epicenter, DamageSpecifier explosionDamage)
+        public Explosion(ExplosionPrototype explosionType,
+            List<HashSet<Vector2i>> tileSetList,
+            List<float> tileSetIntensity,
+            IMapGrid grid,
+            MapCoordinates epicenter)
         {
+            ExplosionType = explosionType;
             _tileSetList = tileSetList;
             _tileSetIntensity = tileSetIntensity;
             Epicenter = epicenter;
             Grid = grid;
-            _explosionDamage = explosionDamage;
 
             // We will remove tile sets from the list as we process them. We want to start the explosion from the center (currently the first entry).
             // But this causes a slow List.RemoveAt(), reshuffling entries every time. So we reverse the list.
@@ -471,7 +434,7 @@ namespace Content.Server.Explosion
                     continue;
                 }
 
-                yield return (_tileEnumerator.Current, _tileSetIntensity[^1], _explosionDamage * _tileSetIntensity[^1]);
+                yield return (_tileEnumerator.Current, _tileSetIntensity[^1], ExplosionType.DamagePerIntensity * _tileSetIntensity[^1]);
             }
         }
     }

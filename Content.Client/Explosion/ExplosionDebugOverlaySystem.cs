@@ -36,7 +36,7 @@ namespace Content.Client.Explosion
             Overlay.Intensity = args.Intensity;
             Overlay.Slope = args.Slope;
             Overlay.TotalIntensity = args.TotalIntensity;
-            _mapManager.TryGetGrid(args.Grid, out Overlay.Grid);
+            _mapManager.TryGetGrid(args.GridId, out Overlay.Grid);
 
             if (!_overlayManager.HasOverlay<ExplosionDebugOverlay>())
                 _overlayManager.AddOverlay(Overlay);

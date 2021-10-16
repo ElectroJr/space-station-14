@@ -10,20 +10,21 @@ namespace Content.Server.Explosion
 {
     public sealed partial class ExplosionSystem : EntitySystem
     {
-        public Dictionary<GridId, Dictionary<Vector2i, (float Integrity, AtmosDirection BlockedDirections)>> AirtightMap = new();
+        // TODO EXPLOSION uuhh... do this better cause this is some garbage
+        public Dictionary<GridId, Dictionary<Vector2i, (Dictionary<string, float>, AtmosDirection)>> AirtightMap = new();
 
         /// <summary>
         ///     Update the map of explosion blockers.
         /// </summary>
         /// <remarks>
-        /// Gets a list of all airtight entities on a tile. Assembles a <see cref="AtmosDirection"/> that specifies what
-        /// directions are blocked, along with the largest explosion tolerance. Note that this means that the explosion
-        /// map will actually be inaccurate if you have something like a windoor & a reinforced windoor on the same
-        /// tile.
+        ///     Gets a list of all airtight entities on a tile. Assembles a <see cref="AtmosDirection"/> that specifies
+        ///     what directions are blocked, along with the largest explosion tolerance. Note that this means that the
+        ///     explosion map will actually be inaccurate if you have something like a windoor & a reinforced windoor on
+        ///     the same tile.
         /// </remarks>
         public void UpdateTolerance(IMapGrid grid, Vector2i tile)
         {
-            float tolerance = 0;
+            Dictionary<string, float>  tolerance = new();
             var blockedDirections = AtmosDirection.Invalid;
 
             if (!AirtightMap.ContainsKey(grid.Index))
@@ -31,14 +32,21 @@ namespace Content.Server.Explosion
 
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
-                if (EntityManager.TryGetComponent(uid, out AirtightComponent? airtight) && airtight.AirBlocked)
+                if (EntityManager.TryGetComponent(uid, out AirtightComponent? airtight) &&
+                    airtight.AirBlocked &&
+                    airtight.ExplosionTolerance != null)
                 {
-                    tolerance = Math.Max(tolerance, airtight.ExplosionTolerance);
+                    foreach (var (type, value) in airtight.ExplosionTolerance)
+                    {
+                        if (!tolerance.TryAdd(type, value))
+                            tolerance[type] = Math.Max(tolerance[type], value);
+                    }
+
                     blockedDirections |= airtight.AirBlockedDirection;
                 }
             }
 
-            if (tolerance > 0 && blockedDirections != AtmosDirection.Invalid)
+            if (tolerance.Count > 0 && blockedDirections != AtmosDirection.Invalid)
                 AirtightMap[grid.Index][tile] = (tolerance, blockedDirections);
             else
                 AirtightMap[grid.Index].Remove(tile);

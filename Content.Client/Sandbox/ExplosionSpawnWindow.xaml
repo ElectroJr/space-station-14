@@ -1,6 +1,13 @@
 <SS14Window
-    xmlns="https://spacestation14.io" Title="Spawn Explosions">
+    xmlns="https://spacestation14.io"
+    Title="Spawn Explosions"
+    MinHeight="420">
     <BoxContainer Name="MainContainer" Orientation="Vertical">
+
+        <BoxContainer Orientation="Horizontal">
+            <Label Text="Explosion Type" MinSize="120 0" />
+            <OptionButton Name="ExplosionOption" MinSize="70 0" HorizontalExpand="True" />
+        </BoxContainer>
         
         <BoxContainer Orientation="Horizontal">
             <Label Text="Grid" MinSize="120 0" />
@@ -41,11 +48,11 @@
             </BoxContainer>
             <BoxContainer Orientation="Horizontal">
                 <Label Text="Spread" MinSize="120 0"/>
-                <FloatSpinBox Name="Spread" MinSize="130 0" HorizontalExpand="True" Value="60"/>
+                <FloatSpinBox Name="Spread" MinSize="130 0" HorizontalExpand="True" Value="180"/>
             </BoxContainer>
             <BoxContainer Orientation="Horizontal">
                 <Label Text="Distance" MinSize="120 0" />
-                <FloatSpinBox Name="Distance" MinSize="130  0" HorizontalExpand="True" Value="5"/>
+                <FloatSpinBox Name="Distance" MinSize="130  0" HorizontalExpand="True" Value="10"/>
             </BoxContainer>
         </BoxContainer>
         

@@ -1,8 +1,12 @@
 using Content.Shared.Explosion;
 using Robust.Client.GameObjects;
 using Robust.Client.Graphics;
+using Robust.Client.ResourceManagement;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using Robust.Shared.Map;
+using Robust.Shared.Maths;
+using Robust.Shared.Prototypes;
 using System.Collections.Generic;
 
 namespace Content.Client.Explosion
@@ -12,19 +16,16 @@ namespace Content.Client.Explosion
         private ExplosionOverlay _overlay = default!;
 
         /// <summary>
-        ///     This delays the disappearance of the explosion after it has been fully drawn/expanded, so that it stays on the screen a little bit longer.
-        ///     This is basically "padding" the radius, so that it stays on screen for Persistence*TimePerTile extra seconds
+        ///     For how many seconds should an explosion stay on-screen once it has finished expanding?
         /// </summary>
-        public const float Persistence = 5;
-
-        private readonly List<IEntity> _explosionLightSources = new();
+        public const float ExplosionPersistence = 0.2f;
 
         public override void Initialize()
         {
             base.Initialize();
 
-            SubscribeNetworkEvent<ExplosionEvent>(HandleExplosionOverlay);
-            SubscribeNetworkEvent<ExplosionUpdateEvent>(HandleExplosionUpdate);
+            SubscribeNetworkEvent<ExplosionEvent>(OnExplosion);
+            SubscribeNetworkEvent<ExplosionOverlayUpdateEvent>(HandleExplosionUpdate);
 
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
             _overlay = new ExplosionOverlay();
@@ -32,37 +33,44 @@ namespace Content.Client.Explosion
                 overlayManager.AddOverlay(_overlay);
         }
 
-        private void HandleExplosionUpdate(ExplosionUpdateEvent args)
+        public override void Update(float frameTime)
         {
-            var total = _overlay.ExplosionIndices.Count;
-            for (int i = 1; i <= total; i++)
+            base.Update(frameTime);
+
+            foreach (var explosion in _overlay.CompletedExplosions.ToArray())
             {
-                if (args.TileIndex > _overlay.Explosions[^i].Tiles.Count + Persistence)
+                explosion.Lifetime += frameTime;
+
+                if (explosion.Lifetime >= ExplosionPersistence)
                 {
-                    _overlay.ExplosionIndices.RemoveAt(total - i);
-                    _overlay.Explosions.RemoveAt(total - i);
-                    EntityManager.QueueDeleteEntity(_explosionLightSources[total-i]);
-                    _explosionLightSources.RemoveAt(total-i);
-                    continue;
+                    EntityManager.QueueDeleteEntity(explosion.LightEntity);
+                    _overlay.CompletedExplosions.Remove(explosion);
                 }
-                _overlay.ExplosionIndices[^i] = args.TileIndex;
             }
         }
 
-        private void HandleExplosionOverlay(ExplosionEvent args)
+        private void HandleExplosionUpdate(ExplosionOverlayUpdateEvent args)
         {
-            _overlay.Explosions.Add(args);
-            _overlay.ExplosionIndices.Add(4);
+            if (_overlay.ActiveExplosion == null)
+                return;
 
-            // Note that this is a SINGLE point source at the epicentre. for MOST purposes, this is good enough. but if
-            // the explosion snakes around a corner, it will not light it up properly.
+            _overlay.Index = args.Index;
+            if (_overlay.Index <= _overlay.ActiveExplosion.Tiles.Count)
+                return;
 
-            // TODO EXPLOSION make the light source prototype defined by the explosion prototype
-            var explosionLight = EntityManager.SpawnEntity("Explosion", args.Epicenter);
-            var light = explosionLight.GetComponent<PointLightComponent>();
-            light.Radius = args.Tiles.Count;
-            light.Energy = light.Radius; // careful, don't look directly at the nuke.
-            _explosionLightSources.Add(explosionLight);
+            // the explosion has finished expanding
+            _overlay.Index = 0;
+            _overlay.CompletedExplosions.Add(_overlay.ActiveExplosion);
+            _overlay.ActiveExplosion = null;
+        }
+
+        private void OnExplosion(ExplosionEvent args)
+        {
+            var light = EntityManager.SpawnEntity("ExplosionLight", args.Epicenter);
+            if (_overlay.ActiveExplosion != null)
+                _overlay.CompletedExplosions.Add(_overlay.ActiveExplosion);
+
+            _overlay.ActiveExplosion = new(args, light);
         }
 
         public override void Shutdown()
@@ -72,6 +80,42 @@ namespace Content.Client.Explosion
             var overlayManager = IoCManager.Resolve<IOverlayManager>();
             if (overlayManager.HasOverlay<ExplosionOverlay>())
                 overlayManager.RemoveOverlay<ExplosionOverlay>();
+        }
+    }
+
+    internal class Explosion
+    {
+        public List<Texture[]> Frames = new();
+        public IMapGrid Grid;
+        public List<HashSet<Vector2i>> Tiles;
+        public List<float> Intensity;
+        public EntityUid LightEntity;
+
+        /// <summary>
+        ///     How long we have been drawing this explosion, starting from the time it was completed/full drawn.
+        /// </summary>
+        public float Lifetime;
+
+        internal Explosion(ExplosionEvent args, IEntity light)
+        {
+            Tiles = args.Tiles;
+            Intensity = args.Intensity;
+            Grid = IoCManager.Resolve<IMapManager>().GetGrid(args.GridId);
+
+            if (!IoCManager.Resolve<IPrototypeManager>().TryIndex(args.TypeID, out ExplosionPrototype? type))
+                return;
+
+            LightEntity = light.Uid;
+            var lightComp = light.GetComponent<PointLightComponent>();
+            lightComp.Radius = args.Tiles.Count;
+            lightComp.Energy = lightComp.Radius;
+            lightComp.Color = type.LightColor;
+
+            var resource = IoCManager.Resolve<IResourceCache>().GetResource<RSIResource>(type.TexturePath).RSI;
+            foreach (var state in resource)
+            {
+                Frames.Add(state.GetFrames(RSI.State.Direction.South));
+            }
         }
     }
 }

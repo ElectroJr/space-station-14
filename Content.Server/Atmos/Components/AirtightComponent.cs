@@ -1,11 +1,14 @@
 using Content.Server.Atmos.EntitySystems;
 using Content.Shared.Atmos;
+using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Serialization.Manager.Attributes;
 using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom;
+using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype.Dictionary;
 using Robust.Shared.ViewVariables;
+using System.Collections.Generic;
 
 namespace Content.Server.Atmos.Components
 {
@@ -51,8 +54,8 @@ namespace Content.Server.Atmos.Components
         ///     like walls should probably specify this. This value will also be updated whenever the entity takes
         ///     damage.
         /// </remarks>
-        [DataField("explosionTolerance")]
-        public float ExplosionTolerance;
+        [DataField("explosionTolerance", customTypeSerializer: typeof(PrototypeIdDictionarySerializer<float, ExplosionPrototype>))]
+        public Dictionary<string, float>? ExplosionTolerance;
 
         public AtmosDirection AirBlockedDirection => (AtmosDirection)CurrentAirBlockedDirection;
     }

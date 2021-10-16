@@ -19,14 +19,17 @@ namespace Content.Shared.Explosion
 
         public List<float> Intensity;
 
-        public GridId Grid;
+        public GridId GridId;
 
-        public ExplosionEvent(MapCoordinates epicenter, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid)
+        public string TypeID;
+
+        public ExplosionEvent(MapCoordinates epicenter, string typeID, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId gridId)
         {
             Epicenter = epicenter;
             Tiles = tiles;
-            Grid = grid;
+            GridId = gridId;
             Intensity = intensity;
+            TypeID = typeID;
         }
     }
 
@@ -34,15 +37,13 @@ namespace Content.Shared.Explosion
     ///     Update visual rendering of the explosion to correspond to the servers processing of it.
     /// </summary>
     [Serializable, NetSerializable]
-    public class ExplosionUpdateEvent : EntityEventArgs
+    public class ExplosionOverlayUpdateEvent : EntityEventArgs
     {
-        // EXPLOSION TODO map this onto a single explosion. It breaks if used on more than one explosion
+        public int Index;
 
-        public int TileIndex;
-
-        public ExplosionUpdateEvent(int tileIndex)
+        public ExplosionOverlayUpdateEvent(int index)
         {
-            TileIndex = tileIndex;
+            Index = index;
         }
     }
 
@@ -55,8 +56,8 @@ namespace Content.Shared.Explosion
         public float Slope;
         public float TotalIntensity;
 
-        public ExplosionOverlayEvent(MapCoordinates epicenter, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, float slope, float totalIntensity)
-            : base(epicenter, tiles, intensity, grid)
+        public ExplosionOverlayEvent(MapCoordinates epicenter, string typeID, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, float slope, float totalIntensity)
+            : base(epicenter, typeID, tiles, intensity, grid)
         {
             Slope = slope;
             TotalIntensity = totalIntensity;
@@ -65,6 +66,6 @@ namespace Content.Shared.Explosion
         /// <summary>
         ///     Used to clear the currently shown overlay.
         /// </summary>
-        public static ExplosionOverlayEvent Empty = new(MapCoordinates.Nullspace, new List<HashSet<Vector2i>>(), new List<float> (), GridId.Invalid, 0, 0);
+        public static ExplosionOverlayEvent Empty = new(MapCoordinates.Nullspace, "", new List<HashSet<Vector2i>>(), new List<float> (), GridId.Invalid, 0, 0);
     }
 }

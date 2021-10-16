@@ -248,10 +248,6 @@ namespace Content.Server.Explosion
         public static void SpawnExplosion(this IEntity entity, int devastationRange = 0, int heavyImpactRange = 0,
             int lightImpactRange = 0, int flashRange = 0)
         {
-            if (entity.Name == "Not-A-Toy Nuke" || entity.Name == "the nuclear option")
-            {
-                EntitySystem.Get<ExplosionSystem>().SpawnExplosion(entity.Uid, 200000, 5, 100);
-            }
 
         }
     }

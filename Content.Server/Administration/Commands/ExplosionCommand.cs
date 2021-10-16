@@ -1,11 +1,15 @@
 using Content.Server.Explosion;
 using Content.Shared.Administration;
+using Content.Shared.Explosion;
 using Robust.Server.Player;
 using Robust.Shared.Console;
 using Robust.Shared.GameObjects;
+using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Prototypes;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Content.Server.Administration.Commands
 {
@@ -14,7 +18,7 @@ namespace Content.Server.Administration.Commands
     {
         public string Command => "explosion";
         public string Description => "Train go boom";
-        public string Help => "Usage: explosion (spawn|preview|clear) <x> <y> <gridId> <intensity> [slope] [maxIntensity] [angle] [spread] [distance]\n" +
+        public string Help => "Usage: explosion (spawn|preview|clear) <x> <y> <gridId> <intensity> [slope] [maxIntensity] [prototypeId] [angle] [spread] [distance]\n" +
                               "If the first argument is 'Spawn', this will create an explosion. Prev will generate a preview overlay and clear will remove the overlay.\n" +
                               "The last three arguments are only required for directional explosions.";
 
@@ -60,17 +64,32 @@ namespace Content.Server.Administration.Commands
             if (args.Length > 6 && !float.TryParse(args[6], out maxIntensity))
                 return;
 
-            bool directedExplosion = args.Length > 7;
+
+            ExplosionPrototype? type;
+            var protoMan = IoCManager.Resolve<IPrototypeManager>();
+            if (args.Length > 7)
+            {
+                if (!protoMan.TryIndex(args[7], out type))
+                    return;
+            }
+            else
+            {
+                // no prototype was specified, so lets default to whichever one was defined first
+                type = protoMan.EnumeratePrototypes<ExplosionPrototype>().First();
+            }
+
+
+            bool directedExplosion = args.Length > 8;
             float angle = 0;
-            if (args.Length > 7 && !float.TryParse(args[7], out angle))
+            if (args.Length > 8 && !float.TryParse(args[8], out angle))
                 return;
 
             float spread = 60;
-            if (args.Length > 8 && !float.TryParse(args[8], out spread))
+            if (args.Length > 9 && !float.TryParse(args[9], out spread))
                 return;
 
             float distance = 5;
-            if (args.Length > 9 && !float.TryParse(args[9], out distance))
+            if (args.Length > 10 && !float.TryParse(args[10], out distance))
                 return;
 
             var explosionSystem = EntitySystem.Get<ExplosionSystem>();
@@ -81,7 +100,7 @@ namespace Content.Server.Administration.Commands
 
             if (args[0] == "spawn")
             {
-                EntitySystem.Get<ExplosionSystem>().SpawnExplosion(gridId, tile, intensity, slope, maxIntensity, excluded);
+                EntitySystem.Get<ExplosionSystem>().QueueExplosion(gridId, tile, type, intensity, slope, maxIntensity, excluded);
                 return;
             }
 
@@ -91,7 +110,7 @@ namespace Content.Server.Administration.Commands
                 return;
             }
 
-            EntitySystem.Get<ExplosionDebugOverlaySystem>().Preview(player, gridId, tile, intensity, slope, maxIntensity, excluded);
+            EntitySystem.Get<ExplosionDebugOverlaySystem>().Preview(player, gridId, tile, type, intensity, slope, maxIntensity, excluded);
         }
     }
 }

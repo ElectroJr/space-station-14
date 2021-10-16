@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Atmos;
 using Robust.Shared.GameObjects;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
@@ -22,7 +21,7 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Get the list of tiles that will be damaged when the given explosion is spawned.
         /// </summary>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, float totalIntensity, float slope, float maxIntensity)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, string typeID, float totalIntensity, float slope, float maxIntensity)
         {
             if (totalIntensity <= 0)
                 return (null, null);
@@ -32,7 +31,7 @@ namespace Content.Server.Explosion
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
-            return GetExplosionTiles(grid.Index, epicenterTile, totalIntensity, slope, maxIntensity);
+            return GetExplosionTiles(grid.Index, epicenterTile, typeID, totalIntensity, slope, maxIntensity);
         }
 
         /// <summary>
@@ -52,8 +51,8 @@ namespace Content.Server.Explosion
             // increasing the arc size until it contains a neighbor. If the direction is pointed exactly towards a
             // neighboring tile, then the spread can be arbitrarily small
             var deltaAngle = angle - angle.GetCardinalDir().ToAngle();
-            var minSpread = (float) (1 + 2 *Math.Abs(deltaAngle.Degrees));
-            spread = Math.Max(spread, minSpread);
+            var minSpread = (float) (1 + 2 * Math.Abs(deltaAngle.Degrees));
+            spread = Math.Max(spread, minSpread) +0.01f;
 
             // Get a circle centered on the epicenter, which is used to exclude tiles. The radius of this circle
             // effectively determines "how far" the explosive is directed, before it spreads out normally. If the
@@ -66,10 +65,13 @@ namespace Content.Server.Explosion
             {
                 // As we only care about angles, it doesn't matter whether we use vector2i grid indices or Vector2
                 // tile-centers to calculate angles.
-                var relativeAngle = angle - new Angle(tileRef.GridIndices - epicenter);
+                var relativeAngle = Math.Abs((angle - new Angle(tileRef.GridIndices - epicenter)).Reduced().Degrees);
+
+                if (relativeAngle > 180)
+                    relativeAngle  = 360 - relativeAngle;
 
                 // check whether the tile is outside of the included arc. If so, exclude it.
-                if (Math.Abs(relativeAngle.Degrees) * 2 > spread)
+                if (Math.Abs(relativeAngle) * 2 > spread)
                     excluded.Add(tileRef.GridIndices);
             }
 
@@ -91,6 +93,7 @@ namespace Content.Server.Explosion
         public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
             GridId gridId,
             Vector2i epicenterTile,
+            string typeID,
             float intensity,
             float slope,
             float maxIntensity,
@@ -122,7 +125,6 @@ namespace Content.Server.Explosion
             var tilesInIteration = new List<int> { 0, 1, 0 };
             List<float> tileSetIntensity = new () { 0, slope, 0 };
             float remainingIntensity = intensity - slope;
-
 
             // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
             // explosion cannot LEAVE a tile in a certain direction, while delayedSpreader is when an explosion cannot
@@ -165,9 +167,16 @@ namespace Content.Server.Explosion
                 // We use the local GetNewTiles function to enumerate over neighbors of tiles that were recently added to tileSetList.
                 foreach (var (newTile, direction) in GetNewTiles())
                 {
-                    // does this new tile have any airtight entities?
-                    // note that blockedDirections defaults to 0 (no blocked directions)
-                    var (sealIntegrity, blockedDirections) = airtightMap.GetValueOrDefault(newTile);
+                    var blockedDirections = AtmosDirection.Invalid;
+                    float sealIntegrity = 0;
+
+                    // Note that if (grid, tile) is not a valid key, then airtight.BlockedDirections will default to 0 (no blocked directions)
+                    if (airtightMap.TryGetValue(newTile, out var tuple))
+                    {
+                        blockedDirections = tuple.Item2;
+                        if (!tuple.Item1.TryGetValue(typeID, out sealIntegrity))
+                            sealIntegrity = float.MaxValue;
+                    }
 
                     // If the explosion is entering this new tile from an unblocked direction, we add it directly
                     if (!blockedDirections.IsFlagSet(direction.GetOpposite()))
@@ -312,8 +321,16 @@ namespace Content.Server.Explosion
                 Vector2i newTile;
                 foreach (var tile in tiles)
                 {
+                    var blockedDirections = AtmosDirection.Invalid;
+                    float sealIntegrity = 0;
+
                     // Note that if (grid, tile) is not a valid key, then airtight.BlockedDirections will default to 0 (no blocked directions)
-                    var (sealIntegrity, blockedDirections) = airtightMap.GetValueOrDefault(tile);
+                    if (airtightMap.TryGetValue(tile, out var tuple))
+                    {
+                        blockedDirections = tuple.Item2;
+                        if (!tuple.Item1.TryGetValue(typeID, out sealIntegrity))
+                            sealIntegrity = float.MaxValue;
+                    }
 
                     // First, yield any neighboring tiles that are not blocked by airtight entities on this tile
                     for (var i = 0; i < Atmospherics.Directions; i++)
@@ -373,13 +390,13 @@ namespace Content.Server.Explosion
                     var airtight = airtightMap.GetValueOrDefault(tile);
                     var freeDirections = ignoreTileBlockers
                         ? AtmosDirection.All
-                        : ~airtight.BlockedDirections;
+                        : ~airtight.Item2;
 
                     // Get the free directions of the directly adjacent tiles
-                    var freeDirectionsN = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.North)).BlockedDirections;
-                    var freeDirectionsE = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.East)).BlockedDirections;
-                    var freeDirectionsS = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.South)).BlockedDirections;
-                    var freeDirectionsW = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).BlockedDirections;
+                    var freeDirectionsN = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.North)).Item2;
+                    var freeDirectionsE = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.East)).Item2;
+                    var freeDirectionsS = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.South)).Item2;
+                    var freeDirectionsW = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).Item2;
 
                     // North East
                     if (freeDirections.IsFlagSet(AtmosDirection.NorthEast))
