@@ -20,20 +20,18 @@ namespace Content.Client.Explosion
         public List<float>? Intensity;
         public IMapGrid? Grid;
         public float TotalIntensity;
-        public float Damage;
+        public float Slope;
 
         public override OverlaySpace Space => OverlaySpace.WorldSpace | OverlaySpace.ScreenSpace;
 
         private readonly Font _font;
-        private readonly Font _smallFont;
 
         public ExplosionDebugOverlay()
         {
             IoCManager.InjectDependencies(this);
 
             var cache = IoCManager.Resolve<IResourceCache>();
-            _font = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 16);
-            _smallFont = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 12);
+            _font = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 14);
         }
 
         protected override void Draw(in OverlayDrawArgs args)
@@ -61,7 +59,7 @@ namespace Content.Client.Explosion
             var handle = args.ScreenHandle;
             var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
 
-            for (int i = 0; i < Tiles!.Count; i++)
+            for (int i = 2; i < Tiles!.Count; i++)
             {
                 foreach (var tile in Tiles[i])
                 {
@@ -69,9 +67,9 @@ namespace Content.Client.Explosion
                     var screenCenter = _eyeManager.WorldToScreen(worldCenter);
                     
                     if (Intensity![i] > 9)
-                        screenCenter += (-26, -16);
+                        screenCenter += (-21, -14);
                     else
-                        screenCenter += (-18, -16);
+                        screenCenter += (-14, -14);
 
                     handle.DrawString(_font, screenCenter, Intensity![i].ToString("F2"));
                 }
@@ -79,16 +77,12 @@ namespace Content.Client.Explosion
 
             foreach (var epicenter in Tiles[1])
             {
-                var gridBox = Box2.UnitCentered.Translated((Vector2) epicenter + 0.5f);
+                var worldCenter = gridXform.WorldMatrix.Transform((Vector2) epicenter + 0.5f);
+                var screenCenter = _eyeManager.WorldToScreen(worldCenter) + (-21, -28); ;
 
-                var worldTopLeft = gridXform.WorldMatrix.Transform(gridBox.TopLeft);
-                var worldBottomLeft = gridXform.WorldMatrix.Transform(gridBox.BottomLeft);
+                string text = $"{Intensity![1]:F2}\n{TotalIntensity}/{Slope}";
 
-                var screenTopLeft = _eyeManager.WorldToScreen(worldTopLeft);
-                var screenBottomLeft = _eyeManager.WorldToScreen(worldBottomLeft) + (0, -24);
-
-                handle.DrawString(_smallFont, screenTopLeft, TotalIntensity.ToString(), Color.Black);
-                handle.DrawString(_smallFont, screenBottomLeft, Damage.ToString(), Color.Black);
+                handle.DrawString(_font, screenCenter, text);
             }
         }
 

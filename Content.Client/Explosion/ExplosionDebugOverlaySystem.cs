@@ -31,7 +31,7 @@ namespace Content.Client.Explosion
 
             Overlay.Tiles = args.Tiles;
             Overlay.Intensity = args.Intensity;
-            Overlay.Damage = args.Slope;
+            Overlay.Slope = args.Slope;
             Overlay.TotalIntensity = args.TotalIntensity;
             _mapManager.TryGetGrid((GridId) args.Grid, out Overlay.Grid);
         }
