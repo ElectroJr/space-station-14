@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Atmos;
 using Robust.Shared.GameObjects;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
@@ -21,7 +22,7 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Get the list of tiles that will be damaged when the given explosion is spawned.
         /// </summary>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, float totalIntensity, float slope, float maxTileIntensity)
+        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, float totalIntensity, float slope, float maxIntensity)
         {
             if (totalIntensity <= 0)
                 return (null, null);
@@ -31,54 +32,48 @@ namespace Content.Server.Explosion
 
             var epicenterTile = grid.TileIndicesFor(epicenter);
 
-            return GetExplosionTiles(grid.Index, epicenterTile, totalIntensity, slope, maxTileIntensity);
+            return GetExplosionTiles(grid.Index, epicenterTile, totalIntensity, slope, maxIntensity);
         }
 
         /// <summary>
-        ///     Variant of GetExplosionTiles that excludes certain tiles, effectively restricting the direction that the
-        ///     explosion can travel in.
+        ///     This function returns a set of tiles to exclude from an explosion, for use with directional explosions.
+        ///     The angle is relative to the grid the explosion is being spawned on.
         /// </summary>
-        /// <remarks>
-        ///     This literally just excludes tiles in a circle around the epicenter, except for some tiles in a given
-        ///     arc. Note that directed explosion can be MUCH more destructive than free explosions with the same
-        ///     strength. They will have a much easier time getting through reinforced walls.
-        /// </remarks>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetDirectedExplosionTiles(
-            IMapGrid grid,
+        public HashSet<Vector2i> GetDirectionalRestriction(
+            GridId gridId,
             Vector2i epicenter,
-            float totalIntensity,
-            float slope,
-            float maxTileIntensity,
-            Angle direction,
-            float spreadDegrees = 46,
-            float directionalRadius = 5)
+            Angle angle,
+            float spread,
+            float distance)
         {
-            // Our directed explosion MUST have at least one neighboring tile it can propagate to. We enforce this by
+            var grid = _mapManager.GetGrid(gridId);
+
+            // Our directed explosion MUST have at least one directly adjacent tile it can propagate to. We enforce this by
             // increasing the arc size until it contains a neighbor. If the direction is pointed exactly towards a
             // neighboring tile, then the spread can be arbitrarily small
-            direction = direction.FlipPositive();
-            var degreesToNearestNeighbour = Math.Abs(direction.Degrees % 45 - 22.5f);
-            spreadDegrees = Math.Max(spreadDegrees, (int) (1 + degreesToNearestNeighbour) * 2);
+            var deltaAngle = angle - angle.GetCardinalDir().ToAngle();
+            var minSpread = (float) (1 + 2 *Math.Abs(deltaAngle.Degrees));
+            spread = Math.Max(spread, minSpread);
 
             // Get a circle centered on the epicenter, which is used to exclude tiles. The radius of this circle
             // effectively determines "how far" the explosive is directed, before it spreads out normally. If the
             // explosion wraps around this circle, it will look very odd, so it should probably be scaled with the
             // explosion size.
-            var circle = new Circle(grid.GridTileToWorldPos(epicenter), directionalRadius);
+            var circle = new Circle(grid.GridTileToWorldPos(epicenter), distance);
 
             HashSet<Vector2i> excluded = new();
             foreach (var tileRef in grid.GetTilesIntersecting(circle, ignoreEmpty: false))
             {
                 // As we only care about angles, it doesn't matter whether we use vector2i grid indices or Vector2
                 // tile-centers to calculate angles.
-                var relativeAngle = direction - new Angle(tileRef.GridIndices - epicenter);
+                var relativeAngle = angle - new Angle(tileRef.GridIndices - epicenter);
 
                 // check whether the tile is outside of the included arc. If so, exclude it.
-                if (Math.Abs(relativeAngle.Degrees) * 2 > spreadDegrees)
+                if (Math.Abs(relativeAngle.Degrees) * 2 > spread)
                     excluded.Add(tileRef.GridIndices);
             }
 
-            return GetExplosionTiles(grid.Index, epicenter, totalIntensity, slope, maxTileIntensity, excluded);
+            return excluded;
         }
 
         /// <summary>
@@ -88,8 +83,8 @@ namespace Content.Server.Explosion
         /// <param name="epicenterTile">The center of the explosion, specified as a tile index</param>
         /// <param name="intensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
-        /// <param name="intensitySlope">How quickly does the intensity decrease when moving away from the epicenter.</param>
-        /// <param name="maxTileIntensity">The maximum intensity that the explosion can have at any given tile. This
+        /// <param name="slope">How quickly does the intensity decrease when moving away from the epicenter.</param>
+        /// <param name="maxIntensity">The maximum intensity that the explosion can have at any given tile. This
         /// effectively caps the damage that this explosion can do.</param>
         /// <param name="exclude">A set of tiles to exclude from the explosion.</param>
         /// <returns>Returns a list of tile-sets and a list of intensity values which describe the explosion.</returns>
@@ -97,11 +92,11 @@ namespace Content.Server.Explosion
             GridId gridId,
             Vector2i epicenterTile,
             float intensity,
-            float intensitySlope,
-            float maxTileIntensity,
+            float slope,
+            float maxIntensity,
             HashSet<Vector2i>? exclude = null)
         {
-            var intensityStepSize = intensitySlope / 2;
+            var intensityStepSize = slope / 2;
 
             if (intensity < 0  || intensityStepSize <= 0)
                 return (new(), new());
@@ -116,7 +111,7 @@ namespace Content.Server.Explosion
             var iteration = 3;
 
             // is this even a multi-tile explosion?
-            if (intensity < intensitySlope)
+            if (intensity < slope)
                 return (tileSetList, new() { 0, intensity, 0 });
 
             // List of all tiles in the explosion.
@@ -125,8 +120,8 @@ namespace Content.Server.Explosion
             HashSet<Vector2i> processedTiles = exclude ?? new();
             processedTiles.Add(epicenterTile);
             var tilesInIteration = new List<int> { 0, 1, 0 };
-            List<float> tileSetIntensity = new () { 0, intensitySlope, 0 };
-            float remainingIntensity = intensity - intensitySlope;
+            List<float> tileSetIntensity = new () { 0, slope, 0 };
+            float remainingIntensity = intensity - slope;
 
 
             // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
@@ -151,7 +146,10 @@ namespace Content.Server.Explosion
 
             bool exit = false;
             int maxIntensityIndex = 1;
-            var airtightMap = AirtightMap[gridId];
+            if (!AirtightMap.TryGetValue(gridId, out var airtightMap))
+            {
+                airtightMap = new();
+            }
 
             // Main flood-fill loop
             HashSet<Vector2i> newTiles;
@@ -216,7 +214,7 @@ namespace Content.Server.Explosion
                 for (var i = maxIntensityIndex; i < iteration; i++)
                 {
                     if (tilesInIteration[i] * intensityStepSize >= remainingIntensity &&
-                        tilesInIteration[i] * (maxTileIntensity - tileSetIntensity[i]) >= remainingIntensity)
+                        tilesInIteration[i] * (maxIntensity - tileSetIntensity[i]) >= remainingIntensity)
                     {
                         // there is not enough left to distribute. add a fractional amount and break.
                         tileSetIntensity[i] += (float) remainingIntensity / tilesInIteration[i];
@@ -227,12 +225,12 @@ namespace Content.Server.Explosion
                     tileSetIntensity[i] += intensityStepSize;
                     remainingIntensity -= tilesInIteration[i] * intensityStepSize;
 
-                    if (tileSetIntensity[i] >= maxTileIntensity)
+                    if (tileSetIntensity[i] >= maxIntensity)
                     {
                         // reached max intensity, stop increasing intensity of this tile set and refund some intensity
-                        remainingIntensity += tilesInIteration[i] * (tileSetIntensity[i] - maxTileIntensity);
+                        remainingIntensity += tilesInIteration[i] * (tileSetIntensity[i] - maxIntensity);
                         maxIntensityIndex = i + 1;
-                        tileSetIntensity[i] = maxTileIntensity;
+                        tileSetIntensity[i] = maxIntensity;
                     }
                 }
                 if (exit) break;
@@ -335,7 +333,7 @@ namespace Content.Server.Explosion
 
                     // This tile has one or more airtight entities anchored to it blocking the explosion from traveling in
                     // some directions. First, check whether this blocker can even be destroyed by this explosion?
-                    if (sealIntegrity > maxTileIntensity || float.IsNaN(sealIntegrity))
+                    if (sealIntegrity > maxIntensity || float.IsNaN(sealIntegrity))
                         continue;
 
                     // At what explosion iteration would this blocker be destroyed?

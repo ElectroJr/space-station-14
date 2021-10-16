@@ -340,23 +340,13 @@ namespace Content.Client.Sandbox
 
         private void ToggleExplosionSpawnWindow()
         {
-            if (_explosionSpawnWindow == null)
-            {
-                _explosionSpawnWindow = new ExplosionSpawnWindow();
-                _explosionSpawnWindow.OpenToLeft();
-                return;
-            }
+            _explosionSpawnWindow ??= new ExplosionSpawnWindow();
 
             if (_explosionSpawnWindow.IsOpen)
-            {
                 _explosionSpawnWindow.Close();
-            }
             else
-            {
-                _explosionSpawnWindow.Open();
-            }
+                _explosionSpawnWindow.OpenToLeft();
         }
-
 
         private void ToggleLight()
         {

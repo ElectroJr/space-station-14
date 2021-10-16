@@ -10,6 +10,7 @@ using Robust.Shared.Players;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
 using System;
+using System.Collections.Generic;
 
 namespace Content.Server.Explosion
 {
@@ -61,6 +62,22 @@ namespace Content.Server.Explosion
             .Register<ExplosionDebugOverlaySystem>();
         }
 
+        public void ClearPreview(ICommonSession session)
+        {
+            RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
+        }
+
+        public void Preview(ICommonSession session, GridId gridId, Vector2i tile, float intensity, float slope, float maxIntensity, HashSet<Vector2i> excluded)
+        {
+            if (!_mapManager.TryGetGrid(gridId, out var grid))
+                return;
+
+            var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(gridId, tile, intensity, slope, maxIntensity, excluded);
+
+            ExplosionOverlayEvent args = new(grid.GridTileToWorld(tile), tiles, intensityList, gridId, slope, intensity);
+            RaiseNetworkEvent(args, session.ConnectedClient);
+        }
+
         private bool Preview(ICommonSession? session, EntityCoordinates coords, EntityUid uid) => UpdateExplosion(session, coords, uid);
 
         private bool Explode(ICommonSession? session, EntityCoordinates coords, EntityUid uid) => UpdateExplosion(session, coords, uid, detonate: true);
@@ -101,7 +118,7 @@ namespace Content.Server.Explosion
                 return true;
             }
 
-            int maxTileIntensity = 50;
+            int maxTileIntensity = 100;
 
             if (detonate)
             {

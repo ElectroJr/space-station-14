@@ -8,32 +8,38 @@ namespace Content.Client.Explosion
 {
     public sealed class ExplosionDebugOverlaySystem : EntitySystem
     {
-        public ExplosionDebugOverlay? Overlay;
+        public ExplosionDebugOverlay Overlay = new ();
 
         [Dependency] private readonly IMapManager _mapManager = default!;
+        [Dependency] private readonly IOverlayManager _overlayManager = default!;
 
         public override void Initialize()
         {
             base.Initialize();
 
             SubscribeNetworkEvent<ExplosionOverlayEvent>(HandleExplosionOverlay);
-
-            var overlayManager = IoCManager.Resolve<IOverlayManager>();
-            Overlay = new ExplosionDebugOverlay();
-            if (!overlayManager.HasOverlay<ExplosionDebugOverlay>())
-                overlayManager.AddOverlay(Overlay);
         }
 
         private void HandleExplosionOverlay(ExplosionOverlayEvent args)
         {
-            if (Overlay == null)
+            if (args.Epicenter == MapCoordinates.Nullspace)
+            {
+                // remove the explosion overlay
+                if (_overlayManager.HasOverlay<ExplosionDebugOverlay>())
+                    _overlayManager.RemoveOverlay(Overlay);
+
+                Overlay.Tiles.Clear();
                 return;
+            }
 
             Overlay.Tiles = args.Tiles;
             Overlay.Intensity = args.Intensity;
             Overlay.Slope = args.Slope;
             Overlay.TotalIntensity = args.TotalIntensity;
-            _mapManager.TryGetGrid((GridId) args.Grid, out Overlay.Grid);
+            _mapManager.TryGetGrid(args.Grid, out Overlay.Grid);
+
+            if (!_overlayManager.HasOverlay<ExplosionDebugOverlay>())
+                _overlayManager.AddOverlay(Overlay);
         }
 
         public override void Shutdown()

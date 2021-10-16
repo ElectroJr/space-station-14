@@ -118,7 +118,8 @@ namespace Content.Server.Explosion
                     ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
                     DamageFloorTile(tileRef, intensity, damagedTiles);
                 }
-                else ExplodeSpace(explosion.MapLookup, explosion.Grid, tilePosLocal, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+
+                ExplodeSpace(explosion.MapLookup, explosion.Grid, tilePosLocal, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
 
                 processedTiles++;
                 if (processedTiles == tilesToProcess)
@@ -148,7 +149,7 @@ namespace Content.Server.Explosion
             // So total intensity is like the volume of a cone with height = slope * radius. Of course, as the
             // explosions are not perfectly circular, this formula isn't perfect, but the formula works reasonably well.
 
-            var coneVolume = (slope * MathF.PI / 3 * MathF.Pow(radius, 3));
+            var coneVolume = slope * MathF.PI / 3 * MathF.Pow(radius, 3);
 
             if (maxIntensity <= 0 || slope * radius < maxIntensity)
                 return coneVolume;
@@ -170,6 +171,35 @@ namespace Content.Server.Explosion
                 return;
 
             SpawnExplosion(grid, grid.TileIndicesFor(transform.Coordinates), intensity, slope, maxTileIntensity, excludedTiles);
+        }
+
+        public void SpawnExplosion(GridId gridId, Vector2i epicenter, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        {
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, epicenter, totalIntensity, slope, maxTileIntensity, excludedTiles);
+
+            if (tileSetList == null)
+                return;
+
+            var grid = _mapManager.GetGrid(gridId);
+
+            // Wow dem graphics
+            RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), tileSetList, tileSetIntensity, gridId));
+
+            // sound & screen shake
+            var range = 3 * (tileSetList.Count - 2);
+            var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
+            SoundSystem.Play(filter, _explosionSound.GetSound(), _explosionSoundParams.WithMaxDistance(range));
+            CameraShakeInRange(filter, grid.GridTileToWorld(epicenter), totalIntensity);
+
+            _explosions.Enqueue(new Explosion(
+                                    tileSetList,
+                                    tileSetIntensity!,
+                                    grid,
+                                    grid.GridTileToWorld(epicenter),
+                                    DefaultExplosionDamage));
+
+            // just a lil nap
+            //_nodeGroupSystem.Snoozing = true;
         }
 
         public void SpawnExplosion(IMapGrid grid, Vector2i epicenter, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
@@ -196,7 +226,7 @@ namespace Content.Server.Explosion
                                     DefaultExplosionDamage));
 
             // just a lil nap
-            //_nodeGroupSystem.Snoozing = true;
+            _nodeGroupSystem.Snoozing = true;
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter, float totalIntensity)

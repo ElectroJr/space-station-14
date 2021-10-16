@@ -16,8 +16,8 @@ namespace Content.Client.Explosion
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
 
-        public List<HashSet<Vector2i>>? Tiles;
-        public List<float>? Intensity;
+        public List<HashSet<Vector2i>> Tiles = new();
+        public List<float> Intensity = new();
         public IMapGrid? Grid;
         public float TotalIntensity;
         public float Slope;
@@ -31,13 +31,13 @@ namespace Content.Client.Explosion
             IoCManager.InjectDependencies(this);
 
             var cache = IoCManager.Resolve<IResourceCache>();
-            _font = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 14);
+            _font = new VectorFont(cache.GetResource<FontResource>("/Fonts/NotoSans/NotoSans-Regular.ttf"), 8);
         }
 
         protected override void Draw(in OverlayDrawArgs args)
         {
 
-            if (Tiles == null || Grid == null)
+            if (Grid == null)
                 return;
 
             if (Tiles.Count < 2 || Tiles[1].Count != 1)
@@ -59,7 +59,7 @@ namespace Content.Client.Explosion
             var handle = args.ScreenHandle;
             var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
 
-            for (int i = 2; i < Tiles!.Count; i++)
+            for (int i = 2; i < Tiles.Count; i++)
             {
                 foreach (var tile in Tiles[i])
                 {
@@ -67,9 +67,9 @@ namespace Content.Client.Explosion
                     var screenCenter = _eyeManager.WorldToScreen(worldCenter);
                     
                     if (Intensity![i] > 9)
-                        screenCenter += (-21, -14);
+                        screenCenter += (-12, -8);
                     else
-                        screenCenter += (-14, -14);
+                        screenCenter += (-8, -8);
 
                     handle.DrawString(_font, screenCenter, Intensity![i].ToString("F2"));
                 }
@@ -78,9 +78,8 @@ namespace Content.Client.Explosion
             foreach (var epicenter in Tiles[1])
             {
                 var worldCenter = gridXform.WorldMatrix.Transform((Vector2) epicenter + 0.5f);
-                var screenCenter = _eyeManager.WorldToScreen(worldCenter) + (-21, -28); ;
-
-                string text = $"{Intensity![1]:F2}\n{TotalIntensity}/{Slope}";
+                var screenCenter = _eyeManager.WorldToScreen(worldCenter) + (-24, -24);
+                string text = $"{Intensity![1]:F2}\nΣ={TotalIntensity:F1}\nΔ={Slope:F1}";
 
                 handle.DrawString(_font, screenCenter, text);
             }
@@ -91,7 +90,7 @@ namespace Content.Client.Explosion
             var handle = args.WorldHandle;
             var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
 
-            for (int i = 0; i < Tiles!.Count; i++)
+            for (int i = 0; i < Tiles.Count; i++)
             {
                 var color = ColorMap(Intensity![i]);
                 var colorTransparent = color;
@@ -109,18 +108,14 @@ namespace Content.Client.Explosion
             }
         }
 
-        private Color ColorMap(float strength)
+        private Color ColorMap(float intensity)
         {
-            var interp = 1- strength / Intensity![1];
+            var frac = 1 - intensity / Intensity![1];
             Color result;
-            if (interp < 0.5f)
-            {
-                result = Color.InterpolateBetween(Color.Red, Color.Orange, interp * 2);
-            }
+            if (frac < 0.5f)
+                result = Color.InterpolateBetween(Color.Red, Color.Orange, frac * 2);
             else
-            {
-                result = Color.InterpolateBetween(Color.Orange, Color.Yellow, (interp - 0.5f) * 2);
-            }
+                result = Color.InterpolateBetween(Color.Orange, Color.Yellow, (frac - 0.5f) * 2);
             return result;
         }
     }
