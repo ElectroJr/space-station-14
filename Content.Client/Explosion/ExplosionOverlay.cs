@@ -14,6 +14,11 @@ namespace Content.Client.Explosion
     public sealed class ExplosionOverlay : Overlay
     {
         /// <summary>
+        /// Fire.rsi has 3 fire states, and two other states that we dont want.
+        /// </summary>
+        private const int TotalFireStates = 3;
+
+        /// <summary>
         ///     The explosion that needs to be drawn. This explosion is currently being processed by the server and
         ///     expanding outwards.
         /// </summary>
@@ -70,12 +75,12 @@ namespace Content.Client.Explosion
 
             for (var j = 0; j < index; j++)
             {
-                var frames = exp.Frames[(int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.Frames.Count - 1)];
-                DrawExplodingTiles(drawHandle, exp.Grid, exp.Tiles[j], exp.Intensity[j], gridBounds, frames);
+                var frames = exp.Frames[(int) Math.Min(exp.Intensity[j] / IntensityPerState, TotalFireStates - 1)];
+                DrawExplodingTiles(drawHandle, exp.Grid, exp.Tiles[j], gridBounds, frames);
             }
         }
 
-        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, float intensity, Box2 bounds, Texture[] frames)
+        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, Box2 bounds, Texture[] frames)
         {
             foreach (var tile in tiles)
             {

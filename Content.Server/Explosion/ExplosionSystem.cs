@@ -103,7 +103,7 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <remarks>
         ///     This assumes the explosion is in a vacuum / unobstructed. Given that explosions are not perfectly
-        ///     circular, here radius actually means the sqrt(Area/(2*pi)), where the area is the total number of tiles
+        ///     circular, here radius actually means the sqrt(Area/pi), where the area is the total number of tiles
         ///     covered by the explosion. Until you get to radius 30+, this is functionally equivalent to the
         ///     actual radius.
         /// </remarks>
