@@ -19,18 +19,6 @@ using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
-    // Explosion grid hop.
-    // First note: IF an explosion is CONSTRAINED then it will deal more damage on average to the tiles it does have (AKA: it will have MORE ITERATIONS and a HIGHER MAX INTENSITTY).
-    // Conversely, if an explosion is free, it will always deal less damage, have fewer iterations, and a lower max intensity.
-    //
-    // Given that during the initial explosion iteration, if the explosion spreads over another grid, it propagates FREELY, this means that it NECESSARILY will have fewer overall iterations than it would otherwise.
-    // or put another way: IF we were to properly do a dynamic grid hop, unless that grid was COMPLETELY free of obstacles, it would result in fewer iterations.
-    //
-    // So: making a grid hop happen after the explosion has finishes propagating, and then just seeding a SECONDARY explosion, limited by the # of iterations rather than total strength, will ALWAYS deal less damaage over all.
-    //
-    // Is this a bad thing? I would argue no. A bit of separation between the grids --> explosion leaks into space--> less constrained --> less damage
-    // it's realistic, so fuck it just do it like that
-
     public sealed partial class ExplosionSystem : EntitySystem
     {
         [Dependency] private readonly IMapManager _mapManager = default!;
@@ -39,6 +27,8 @@ namespace Content.Server.Explosion
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
+
+        public const bool EnableThrowing = true;
 
         public const int MaxTilesPerTick = 50;
 
@@ -67,16 +57,13 @@ namespace Content.Server.Explosion
                 var processed = ProcessExplosion(_activeExplosion, tilesToProcess);
                 tilesToProcess -= processed;
                 if (processed == 0)
+                {
                     _activeExplosion = null;
-            }
+                    RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(int.MaxValue));
 
-            if (_activeExplosion == null && _explosionQueue.Count == 0)
-            {
-                RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(int.MaxValue));
-
-                //wakey wakey
-                _nodeGroupSystem.Snoozing = false;
-
+                    //wakey wakey
+                    _nodeGroupSystem.Snoozing = false;
+                }
             }
         }
 
@@ -91,15 +78,13 @@ namespace Content.Server.Explosion
 
             foreach (var (tileIndices, intensity, damage) in explosion)
             {
-                var tilePosLocal = (Vector2) tileIndices + 0.5f * explosion.Grid.TileSize;
-
                 if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef))
                 {
                     ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
                     DamageFloorTile(tileRef, intensity, damagedTiles);
                 }
 
-                ExplodeSpace(explosion.MapLookup, explosion.Grid, tilePosLocal, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+                ExplodeSpace(explosion.MapLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
 
                 processedTiles++;
                 if (processedTiles == tilesToProcess)
@@ -265,110 +250,114 @@ namespace Content.Server.Explosion
             damagedTiles.Add((tileRef.GridIndices, new Tile(tileDef.TileId)));
         }
 
-        private void ThrowEntity(IEntity entity, MapCoordinates epicenter, float intensity)
-        {
-            if (!entity.HasComponent<ExplosionLaunchedComponent>())
-                return;
-
-            var location = entity.Transform.Coordinates.ToMap(EntityManager);
-            var throwForce = 10 * MathF.Sqrt(intensity);
-
-            entity.TryThrow(location.Position - epicenter.Position, throwForce);
-        }
-
         /// <summary>
-        ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. Will also try to damage
-        ///     the tile's themselves (damage the floor of a grid).
+        ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. 
         /// </summary>
         public void ExplodeTile(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
         {
-            var gridBox =  Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
+            var gridBox = Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
 
-            // TODO EXPLOSION remove list use other func (fast intersecting or whatever)
-            List<IEntity> list = new();
+            var throwForce = 10 * MathF.Sqrt(intensity);
 
-            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
+            void ProcessEntity(IEntity entity)
             {
-                if (!ent.Deleted && !processed.Contains(ent.Uid) && !_containerSystem.IsEntityInContainer(ent.Uid,ent.Transform))
-                    list.Add(ent);
-                return true;
-            }, gridBox);
+                if (entity.Deleted || processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                    return;
 
-            foreach (var uid in grid.GetAnchoredEntities(tile))
-            {
-                if (EntityManager.TryGetEntity(uid, out var ent))
-                    list.Add(ent);
+                _damageableSystem.TryChangeDamage(entity.Uid, damage);
+
+                if (!EnableThrowing || !entity.HasComponent<ExplosionLaunchedComponent>())
+                    return;
+
+                var location = entity.Transform.Coordinates.ToMap(EntityManager);
+
+                entity.TryThrow(location.Position - epicenter.Position, throwForce);
             }
-            foreach (var ent in list)
+
+            List<IEntity> list = new();
+            HashSet<EntityUid> set = new();
+            lookup.Tree._b2Tree.FastQuery(ref gridBox, (ref IEntity entity) => list.Add(entity));
+            
+            foreach (var e in list)
             {
-                _damageableSystem.TryChangeDamage(ent.Uid, damage);
+                set.Add(e.Uid);
+                ProcessEntity(e);
+            }
+
+            foreach (var uid in grid.GetAnchoredEntities(tile).ToList())
+            {
+                _damageableSystem.TryChangeDamage(uid, damage);
             }
 
             // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
             // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
             // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
-            list.Clear();
-            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
-            {
-                if (!ent.Deleted && !processed.Contains(ent.Uid) && !_containerSystem.IsEntityInContainer(ent.Uid, ent.Transform))
-                    list.Add(ent);
-                return true;
-            }, gridBox);
+            if (!EnableThrowing)
+                return;
 
-            foreach (var ent in list)
+            list.Clear();
+            lookup.Tree._b2Tree.FastQuery(ref gridBox, (ref IEntity entity) =>
             {
-                ThrowEntity(ent, epicenter, intensity);
-            }
+                if (!set.Contains(entity.Uid))
+                    list.Add(entity);
+            });
+
+            foreach (var e in list)
+                ProcessEntity(e);
         }
 
         /// <summary>
         ///     Same as <see cref="ExplodeTile"/>, but using a slower entity lookup and without tiles to damage.
         /// </summary>
-        internal void ExplodeSpace(EntityLookupComponent lookup, IMapGrid grid, Vector2 tilePosLocal, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
+        internal void ExplodeSpace(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
         {
-            var worldBox = grid.WorldMatrix.TransformBox(Box2.UnitCentered.Translated(tilePosLocal));
+            var gridBox = Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
+            var worldBox = grid.WorldMatrix.TransformBox(gridBox);
+            var throwForce = 10 * MathF.Sqrt(intensity);
 
-            List<IEntity> list = new();
-            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
-            {
-                if (!ent.Deleted &&
-                    !processed.Contains(ent.Uid) &&
-                    !_containerSystem.IsEntityInContainer(ent.Uid, ent.Transform))
-                {
-                    list.Add(ent);
-                }
-                return true;
-            }, worldBox);
+            var matrix = grid.InvWorldMatrix;
+            Func<IEntity, bool> contains = (IEntity entity) => gridBox.Contains(matrix.Transform(entity.Transform.WorldPosition));
 
-            // get entities on tile and store in array. Cannot use enumerator or we get fun errors.
-            foreach (var entity in list)
+            void ProcessEntity(IEntity entity)
             {
-                if (entity.Transform.GridID != GridId.Invalid)
-                    continue;
+                if (entity.Deleted || !contains(entity) || processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                    return;
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
+
+                if (!EnableThrowing || !entity.HasComponent<ExplosionLaunchedComponent>())
+                    return;
+
+                var location = entity.Transform.Coordinates.ToMap(EntityManager);
+
+                entity.TryThrow(location.Position - epicenter.Position, throwForce);
             }
+
+            List<IEntity> list = new();
+            HashSet<EntityUid> set = new();
+            lookup.Tree._b2Tree.FastQuery(ref worldBox, (ref IEntity entity) => list.Add(entity));
+
+            foreach (var e in list)
+            {
+                set.Add(e.Uid);
+                ProcessEntity(e);
+            }
+
+            // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
+            // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
+            // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
+            if (!EnableThrowing)
+                return;
 
             list.Clear();
-            lookup.Tree.QueryAabb(ref list, (ref List<IEntity> list, in IEntity ent) =>
+            lookup.Tree._b2Tree.FastQuery(ref worldBox, (ref IEntity entity) =>
             {
-                if (!ent.Deleted &&
-                    Box2.UnitCentered.Contains(grid.WorldToLocal(ent.Transform.WorldPosition) - tilePosLocal) &&
-                    processed.Add(ent.Uid) &&
-                     !_containerSystem.IsEntityInContainer(ent.Uid, ent.Transform))
-                {
-                    list.Add(ent);
-                }
-                return true;
-            }, worldBox);
+                if (!set.Contains(entity.Uid))
+                    list.Add(entity);
+            });
 
-            foreach (var entity in list)
-            {
-                if (entity.Transform.GridID != GridId.Invalid)
-                    continue;
-
-                ThrowEntity(entity, epicenter, intensity);
-            }
+            foreach (var e in list)
+                ProcessEntity(e);
         }
     }
 
