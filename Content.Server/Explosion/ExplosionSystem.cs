@@ -261,7 +261,7 @@ namespace Content.Server.Explosion
 
             void ProcessEntity(IEntity entity)
             {
-                if (entity.Deleted || processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                if (entity.Deleted || !processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
                     return;
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
@@ -320,7 +320,7 @@ namespace Content.Server.Explosion
 
             void ProcessEntity(IEntity entity)
             {
-                if (entity.Deleted || !contains(entity) || processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                if (entity.Deleted || !contains(entity) || !processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
                     return;
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
