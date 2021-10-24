@@ -277,6 +277,37 @@ namespace Content.Shared.CCVar
             CVarDef.Create("admin.announce_logout", true, CVar.SERVERONLY);
 
         /*
+         * Explosions
+         */
+
+        /// <summary>
+        ///     How many tiles the explosion system will process per tick
+        /// </summary>
+        /// <remarks>
+        ///     Setting this too high will put a large load on a single tick. Setting this  too low will lead to
+        ///     unnaturally "slow" explosions.
+        /// </remarks>
+        public static readonly CVarDef<int> ExplosionTilesPerTick =
+            CVarDef.Create("explosion.speed", 50, CVar.SERVERONLY);
+
+        /// <summary>
+        ///     Whether or not explosions actually physics-throw entities. Disabling this will improve performance
+        /// </summary>
+        public static readonly CVarDef<bool> ExplosionPhysicsThrow =
+            CVarDef.Create("explosion.throw", true, CVar.SERVERONLY);
+
+        /// <summary>
+        ///     If this is true, explosion processing will pause the NodeGroupSystem to pause updating.
+        /// </summary>
+        /// <remarks>
+        ///     This only takes effect if an explosion needs more than one tick to process (i.e., covers more than <see
+        ///     cref="ExplosionTilesPerTick"/> tiles). If this is not enabled, the node-system will rebuild its graph
+        ///     every tick as the explosion shreds the station, causing significant slowdown.
+        /// </remarks>
+        public static readonly CVarDef<bool> ExplosionSleepNodeSys =
+            CVarDef.Create("explosion.nodesleep", true, CVar.SERVERONLY);
+
+        /*
          * Atmos
          */
 

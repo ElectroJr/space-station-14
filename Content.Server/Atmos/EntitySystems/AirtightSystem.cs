@@ -197,8 +197,6 @@ namespace Content.Server.Atmos.EntitySystems
 
                 _explosionSystem.UpdateTolerance(uid);
             }
-
-            
         }
     }
 }

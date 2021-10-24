@@ -5,11 +5,13 @@ using Content.Server.Camera;
 using Content.Server.Explosion.Components;
 using Content.Server.NodeContainer.EntitySystems;
 using Content.Server.Throwing;
+using Content.Shared.CCVar;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.Maps;
 using Robust.Server.Containers;
 using Robust.Shared.Audio;
+using Robust.Shared.Configuration;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
@@ -19,52 +21,95 @@ using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
+    // TODO:
+    // - move functions from airtight to explosion
+    // - Make tile break chance use the explosion prototype
+    // - Improved directional blocking (if not become unblocked, only damage blocking entity)
+    // Add a vaporization threshold
+
+    // TODO after opening draft:
+    // - Make explosion window EUI & remove preview commands
+    // - Grid jump
+
     public sealed partial class ExplosionSystem : EntitySystem
     {
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
+        [Dependency] private readonly IConfigurationManager _cfg = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
 
-        public const bool EnableThrowing = true;
+        public int TilesPerTick { get; private set; }
+        public bool PhysicsThrow { get; private set; }
+        public bool SleepNodeSys { get; private set; }
 
-        public const int MaxTilesPerTick = 50;
+        private int _previousTileIteration;
 
         /// <summary>
         ///     Queue for delayed processing of explosions.
         /// </summary>
-        private Queue<Func<Explosion?>> _explosionQueue = new();
+        private Queue<Func<Explosion>> _explosionQueue = new();
 
         private Explosion? _activeExplosion;
 
+        public override void Initialize()
+        {
+            base.Initialize();
+
+            _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, value => TilesPerTick = value, true);
+            _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => PhysicsThrow = value, true);
+            _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, value => SleepNodeSys = value, true);
+        }
+
         public override void Update(float frameTime)
         {
-            base.Update(frameTime);
+            if (_activeExplosion == null && _explosionQueue.Count == 0)
+                // nothing to do
+                return;
 
-            int tilesToProcess = MaxTilesPerTick;
+            var tilesToProcess = TilesPerTick;
             while (tilesToProcess > 0)
             {
+                // if we don't have one, get a new explosion to process
                 if (_activeExplosion == null)
                 {
                     if (!_explosionQueue.TryDequeue(out var nextExplosion))
                         break;
+
                     _activeExplosion = nextExplosion();
-                    continue;
+                    _previousTileIteration = 0;
+
+                    // just a lil nap
+                    if (SleepNodeSys)
+                        _nodeGroupSystem.Snoozing = true;
                 }
 
                 var processed = ProcessExplosion(_activeExplosion, tilesToProcess);
                 tilesToProcess -= processed;
                 if (processed == 0)
-                {
                     _activeExplosion = null;
-                    RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(int.MaxValue));
-
-                    //wakey wakey
-                    _nodeGroupSystem.Snoozing = false;
-                }
             }
+
+            if (_activeExplosion != null)
+            {
+                // update the client explosion overlays. This ensures that the fire-effects sync up with the entities currently being damaged.
+                if (_previousTileIteration == _activeExplosion.TileIteration)
+                    return;
+
+                _previousTileIteration = _activeExplosion.TileIteration;
+                RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_previousTileIteration));
+                return;
+            }
+
+            // If we get here, we must have finished processing all explosions.
+
+            // Clear client explosion overlays
+            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(int.MaxValue));
+
+            //wakey wakey
+            _nodeGroupSystem.Snoozing = false;
         }
 
         /// <summary>
@@ -73,7 +118,6 @@ namespace Content.Server.Explosion
         private int ProcessExplosion(Explosion explosion, int tilesToProcess)
         {
             var processedTiles = 0;
-
             List<(Vector2i, Tile)> damagedTiles = new();
 
             foreach (var (tileIndices, intensity, damage) in explosion)
@@ -91,7 +135,6 @@ namespace Content.Server.Explosion
                     break;
             }
 
-            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(explosion.TileIteration));
 
             explosion.Grid.SetTiles(damagedTiles);
 
@@ -109,10 +152,10 @@ namespace Content.Server.Explosion
         /// </remarks>
         public static float RadiusToIntensity(float radius, float slope, float maxIntensity = 0)
         {
-            // This formula came from fitting data, but if you want an intuitive explanation, then consider the
-            // intensity of each tile in an explosion to be a height. Then a circular explosion is shaped like a cone.
-            // So total intensity is like the volume of a cone with height = slope * radius. Of course, as the
-            // explosions are not perfectly circular, this formula isn't perfect, but the formula works reasonably well.
+            // If you consider the intensity at each tile in an explosion to be a height. Then a circular explosion is
+            // shaped like a cone. So total intensity is like the volume of a cone with height = slope * radius. Of
+            // course, as the explosions are not perfectly circular, this formula isn't perfect, but the formula works
+            // reasonably well.
 
             var coneVolume = slope * MathF.PI / 3 * MathF.Pow(radius, 3);
 
@@ -140,16 +183,15 @@ namespace Content.Server.Explosion
 
         public void QueueExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
+            if (totalIntensity <= 0 || slope <= 0)
+                return;
+
             _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, type, totalIntensity, slope, maxTileIntensity, excludedTiles));
         }
 
-        private Explosion? SpawnExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        private Explosion SpawnExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, epicenter, type.ID, totalIntensity, slope, maxTileIntensity, excludedTiles);
-
-            if (tileSetList == null)
-                return null;
-
             var grid = _mapManager.GetGrid(gridId);
 
             RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), type.ID, tileSetList, tileSetIntensity, gridId));
@@ -162,9 +204,6 @@ namespace Content.Server.Explosion
             var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
             SoundSystem.Play(filter, type.Sound.GetSound(), explosionSoundParams.WithMaxDistance(range));
             CameraShakeInRange(filter, grid.GridTileToWorld(epicenter), totalIntensity);
-
-            // just a lil nap
-            _nodeGroupSystem.Snoozing = true;
 
             return new (type,
                         tileSetList,
@@ -266,7 +305,7 @@ namespace Content.Server.Explosion
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
 
-                if (!EnableThrowing || !entity.HasComponent<ExplosionLaunchedComponent>())
+                if (!PhysicsThrow || !entity.HasComponent<ExplosionLaunchedComponent>())
                     return;
 
                 var location = entity.Transform.Coordinates.ToMap(EntityManager);
@@ -291,8 +330,8 @@ namespace Content.Server.Explosion
 
             // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
             // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
-            // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
-            if (!EnableThrowing)
+            // somewhat unnecessary computational cost.
+            if (!PhysicsThrow)
                 return;
 
             list.Clear();
@@ -325,7 +364,7 @@ namespace Content.Server.Explosion
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
 
-                if (!EnableThrowing || !entity.HasComponent<ExplosionLaunchedComponent>())
+                if (!PhysicsThrow || !entity.HasComponent<ExplosionLaunchedComponent>())
                     return;
 
                 var location = entity.Transform.Coordinates.ToMap(EntityManager);
@@ -346,7 +385,7 @@ namespace Content.Server.Explosion
             // TODO EXPLOSIONS PERFORMANCE Here, we get the intersecting entities AGAIN for throwing. This way, glass
             // shards spawned from windows will be flung outwards, and not stay where they spawned. BUT this is also
             // somewhat unnecessary computational cost. Maybe change this later if explosions are too expensive?
-            if (!EnableThrowing)
+            if (!PhysicsThrow)
                 return;
 
             list.Clear();
@@ -364,9 +403,14 @@ namespace Content.Server.Explosion
     class Explosion
     {
         /// <summary>
-        ///     Used to avoid applying explosion effects repeatedly to the same entity.
+        ///     Used to avoid applying explosion effects repeatedly to the same entity. Particularly important if the
+        ///     explosion throws this entity, as then it will be moving while the explosion is happening.
         /// </summary>
         public readonly HashSet<EntityUid> ProcessedEntities = new();
+
+        /// <summary>
+        ///     Tracks how close this explosion is to having been fully processed. Used to update client side explosion overlays.
+        /// </summary>
         public int TileIteration = 1;
 
         public readonly ExplosionPrototype ExplosionType;

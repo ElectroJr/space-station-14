@@ -101,9 +101,6 @@ namespace Content.Server.Explosion
         {
             var intensityStepSize = slope / 2;
 
-            if (intensity < 0  || intensityStepSize <= 0)
-                return (new(), new());
-
             // This is the list of sets of tiles that will be targeted by our explosions.
             // Here we initialize tileSetList. The first three entries are trivial, but make the following for loop
             // logic neater. ALl things considered, this is a trivial waste of memory.
