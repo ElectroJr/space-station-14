@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Content.Server.Atmos.Components;
 using Content.Server.Camera;
 using Content.Server.Explosion.Components;
 using Content.Server.NodeContainer.EntitySystems;
@@ -17,15 +18,17 @@ using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Player;
+using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
     // TODO:
+    // - rejig the AirtightMap
     // - move functions from airtight to explosion
     // - Make tile break chance use the explosion prototype
     // - Improved directional blocking (if not become unblocked, only damage blocking entity)
-    // Add a vaporization threshold
+    // - Add a vaporization threshold (damage dependent, so per-explosion type?)
 
     // TODO after opening draft:
     // - Make explosion window EUI & remove preview commands
@@ -36,6 +39,7 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IRobustRandom _robustRandom = default!;
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
+        [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly IConfigurationManager _cfg = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
@@ -57,6 +61,8 @@ namespace Content.Server.Explosion
         public override void Initialize()
         {
             base.Initialize();
+
+            SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnAirtightDamaged);
 
             _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, value => TilesPerTick = value, true);
             _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => PhysicsThrow = value, true);

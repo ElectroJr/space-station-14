@@ -83,7 +83,7 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <param name="gridId">The grid where the epicenter tile is located</param>
         /// <param name="epicenterTile">The center of the explosion, specified as a tile index</param>
-        /// <param name="intensity">The final sum of the tile intensities. This governs the overall size of the
+        /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
         /// <param name="slope">How quickly does the intensity decrease when moving away from the epicenter.</param>
         /// <param name="maxIntensity">The maximum intensity that the explosion can have at any given tile. This
@@ -94,11 +94,14 @@ namespace Content.Server.Explosion
             GridId gridId,
             Vector2i epicenterTile,
             string typeID,
-            float intensity,
+            float totalIntensity,
             float slope,
             float maxIntensity,
             HashSet<Vector2i>? exclude = null)
         {
+            if (totalIntensity <= 0 || slope <= 0)
+                return (new(), new());
+
             var intensityStepSize = slope / 2;
 
             // This is the list of sets of tiles that will be targeted by our explosions.
@@ -111,8 +114,8 @@ namespace Content.Server.Explosion
             var iteration = 3;
 
             // is this even a multi-tile explosion?
-            if (intensity < slope)
-                return (tileSetList, new() { 0, intensity, 0 });
+            if (totalIntensity < slope)
+                return (tileSetList, new() { 0, totalIntensity, 0 });
 
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.
@@ -121,7 +124,7 @@ namespace Content.Server.Explosion
             processedTiles.Add(epicenterTile);
             var tilesInIteration = new List<int> { 0, 1, 0 };
             List<float> tileSetIntensity = new () { 0, slope, 0 };
-            float remainingIntensity = intensity - slope;
+            float remainingIntensity = totalIntensity - slope;
 
             // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
             // explosion cannot LEAVE a tile in a certain direction, while delayedSpreader is when an explosion cannot

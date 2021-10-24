@@ -1,18 +1,11 @@
 using Content.Server.Atmos.Components;
-using Content.Server.Destructible;
 using Content.Server.Explosion;
 using Content.Shared.Atmos;
-using Content.Shared.Damage;
-using Content.Shared.Explosion;
 using JetBrains.Annotations;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
-using Robust.Shared.Prototypes;
-using System;
-using System.Collections.Generic;
 
 namespace Content.Server.Atmos.EntitySystems
 {
@@ -20,22 +13,8 @@ namespace Content.Server.Atmos.EntitySystems
     public class AirtightSystem : EntitySystem
     {
         [Dependency] private readonly IMapManager _mapManager = default!;
-        [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly AtmosphereSystem _atmosphereSystem = default!;
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
-        [Dependency] private readonly DamageableSystem _damageableSystem = default!;
-        [Dependency] private readonly DestructibleSystem _destructibleSystem = default!;
-
-        public const int EntitiesUpdatedPerTick = 10;
-
-        /// <summary>
-        ///     A queue to evaluate the entity explosion tolerance.
-        /// </summary>
-        /// <remarks>
-        ///     Without a queue, this requires a massive amount of calculations in individual ticks whenever explosions
-        ///     happen.
-        /// </remarks>
-        private readonly Queue<EntityUid> _outdatedEntities = new();
 
         public override void Initialize()
         {
@@ -44,28 +23,6 @@ namespace Content.Server.Atmos.EntitySystems
             SubscribeLocalEvent<AirtightComponent, MapInitEvent>(OnMapInit);
             SubscribeLocalEvent<AirtightComponent, AnchorStateChangedEvent>(OnAirtightPositionChanged);
             SubscribeLocalEvent<AirtightComponent, RotateEvent>(OnAirtightRotated);
-            SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnDamageChanged);
-        }
-
-        public bool Updating;
-
-        public override void Update(float frameTime)
-        {
-            base.Update(frameTime);
-
-            var toUpdate = EntitiesUpdatedPerTick;
-            while (toUpdate > 0 && _outdatedEntities.TryDequeue(out var entity))
-            {
-                UpdateExplosionTolerance(entity);
-                toUpdate--;
-                Updating = true;
-            }
-
-            if (Updating && _outdatedEntities.Count == 0)
-            {
-                Updating = false;
-                Logger.Info("Finished computing airtight integrity.");
-            }
         }
 
         private void OnAirtightInit(EntityUid uid, AirtightComponent airtight, ComponentInit args)
@@ -80,13 +37,6 @@ namespace Content.Server.Atmos.EntitySystems
             // requires airtight entities to be anchored for performance.
             airtight.Owner.Transform.Anchored = true;
 
-            if (airtight.ExplosionTolerance == null)
-            {
-                // No tolerance was specified, we have to compute our own.
-                _outdatedEntities.Enqueue(uid);
-                return;
-            }
-
             UpdatePosition(airtight);
         }
 
@@ -99,8 +49,6 @@ namespace Content.Server.Atmos.EntitySystems
                 _atmosphereSystem.FixVacuum(airtight.LastPosition.Item1, airtight.LastPosition.Item2);
             }
         }
-
-        private void OnDamageChanged(EntityUid uid, AirtightComponent component, DamageChangedEvent args) => _outdatedEntities.Enqueue(uid);
 
         private void OnMapInit(EntityUid uid, AirtightComponent airtight, MapInitEvent args)
         {
@@ -149,7 +97,7 @@ namespace Content.Server.Atmos.EntitySystems
             if (!gridId.IsValid())
                 return;
 
-            _explosionSystem.UpdateTolerance(gridId, pos);
+            _explosionSystem.UpdateAirtightMap(gridId, pos);
             _atmosphereSystem.UpdateAdjacent(gridId, pos);
             _atmosphereSystem.InvalidateTile(gridId, pos);
         }
@@ -172,31 +120,6 @@ namespace Content.Server.Atmos.EntitySystems
             }
 
             return newAirBlockedDirs;
-        }
-
-        /// <summary>
-        ///     How much explosion damage is needed to destroy an air-blocking entity?
-        /// </summary>
-        private void UpdateExplosionTolerance(EntityUid uid, AirtightComponent? airtight = null)
-        {
-            if (!Resolve(uid, ref airtight, logMissing: false))
-                return;
-
-            airtight.ExplosionTolerance = new();
-            foreach (var type in _prototypeManager.EnumeratePrototypes<ExplosionPrototype>())
-            {
-                // how much total damage is needed to destroy this entity?
-                var damageNeeded = _destructibleSystem.DestroyedAt(uid);
-
-                if (!float.IsNaN(damageNeeded))
-                {
-                    // What multiple of the explosion set will achieve this?
-                    var maxScale = 10 * damageNeeded / type.DamagePerIntensity.Total;
-                    airtight.ExplosionTolerance[type.ID] = _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, (int) Math.Ceiling(damageNeeded), maxScale);
-                }
-
-                _explosionSystem.UpdateTolerance(uid);
-            }
         }
     }
 }
