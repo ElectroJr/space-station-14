@@ -91,19 +91,18 @@ namespace Content.Server.Explosion
         public Dictionary<string, float> GetExplosionTolerance(EntityUid uid)
         {
             // how much total damage is needed to destroy this entity?
-            var damage = MathF.Ceiling(_destructibleSystem.DestroyedAt(uid));
+            var totalDamageTarget = MathF.Ceiling(_destructibleSystem.DestroyedAt(uid));
 
             Dictionary<string, float> explosionTolerance = new();
 
-            if (float.IsNaN(damage))
+            if (float.IsNaN(totalDamageTarget))
                 return explosionTolerance;
 
             // What multiple of each explosion type damage set will result in the damage exceeding the required amount?
             foreach (var type in _prototypeManager.EnumeratePrototypes<ExplosionPrototype>())
             {   
-                var maxScale = 10 * damage / type.DamagePerIntensity.Total;
                 explosionTolerance[type.ID] =
-                    _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, (int) damage, maxScale);
+                    _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, totalDamageTarget);
             }
 
             return explosionTolerance;

@@ -20,4 +20,5 @@
       Blunt: 3
       Piercing: 3
   lightColor: Green
-  #wysi texturePath: /Textures/Effects/green_fire.rsi 
+  # wysi texturePath: /Textures/Effects/green_fire.rsi 
+  # that or just a white fire texture that can be modulated and reused for cryo & other explosion types

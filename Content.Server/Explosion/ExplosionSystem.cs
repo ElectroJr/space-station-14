@@ -24,11 +24,13 @@ using Robust.Shared.Random;
 namespace Content.Server.Explosion
 {
     // TODO:
-    // - Tile damage: make sure we do it like atmos, and not the random selection
-    // - Damage resistances: make -ve multipliers go away and simplify the calculation
-    // - Make tile break chance use the explosion prototype
-    // - Add a vaporization threshold (damage dependent, so per-explosion type?)
+    // - give storage/containers a damage passthrough
+    //   - basically: if bool false --> dont pass damage
+    //   - if true: apply modifer then pass damage
+    //   - if you want to only pass damage over a certain amount, give it a large flat reduction
     // - as a placeholder, make explosion in space just map to the first known grid.
+    // - remove IExAct
+    // - Give existing explosions reasonable stats
 
     // TODO after opening draft:
     // - Make explosion window EUI & remove preview commands

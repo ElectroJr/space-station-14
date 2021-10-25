@@ -6,6 +6,7 @@ using Robust.Shared.GameObjects;
 using Robust.Shared.GameStates;
 using Robust.Shared.IoC;
 using Robust.Shared.Log;
+using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
 
 namespace Content.Shared.Damage
@@ -200,100 +201,127 @@ namespace Content.Shared.Damage
         }
 
         /// <summary>
-        ///     Figure out how much you need to scale some baseDamage such that the final total damage of a given
-        ///     damageable component after resistances are applied is equal to the requested amount. Basically "I have
-        ///     an object some resistances, how much damage to I need to deal to it to actually change it's final damage
-        ///     total to a given amount"?
+        ///     This function figures out by how much you need to scale some baseDamage such that the final total damage
+        ///     of a given damageable component (after resistances are applied) is equal to the requested amount.
         /// </summary>
+        /// <remarks>
+        ///     It turns out applying a damage modifier / resistance set is easy, but the reverse is somewhat
+        ///     convoluted. In the wors case, this ends up finding a root using bisection. This solver also assumes that
+        ///     this process does not involve any healing. I.e., the base damage specifier has no healing and the <see
+        ///     cref="DamageModifierSet"/> has only positive coefficients. This ensures that the final damage is a
+        ///     monotonic function.
+        /// </remarks>
         /// <returns>Returns a multiplier if it can find it, otherwise returns float.NaN</returns>
-        public float InverseResistanceSolve(EntityUid uid, DamageSpecifier baseDamage, int damageTarget, float maxScale = 100, float precision = 1, DamageableComponent? damageable = null)
+        public float InverseResistanceSolve(EntityUid uid, DamageSpecifier baseDamage, float totalDamageTarget, float tolerance = 1, DamageableComponent? damageable = null)
         {
             if (!Resolve(uid, ref damageable))
                 return float.NaN;
 
-            // First, we take out base input damage and remove any damage types that are not actually applicable to the target
-            DamageSpecifier damage = new(baseDamage);
-            foreach (var type in damage.DamageDict.Keys)
-            {
-                if (!damageable.Damage.DamageDict.ContainsKey(type))
-                    damage.DamageDict.Remove(type);
-            }
+            if (damageable.TotalDamage > totalDamageTarget)
+                return 0;
 
-            // Is there even any applicable damage?
-            damage.TrimZeros();
-            if (damage.Empty)
-                return float.NaN;
+            totalDamageTarget -= damageable.TotalDamage;
+            Dictionary<string, float> damage = new();
+
+            // Include only damage types that are actually applicable to the container.
+            float total = 0;
+            foreach (var (type, quantity) in baseDamage.DamageDict)
+            {
+                // Does the container support this type?
+                if (!damageable.Damage.DamageDict.ContainsKey(type))
+                    continue;
+
+                // Currently, this doesn't support a mix of healing and damage
+                if (quantity < 0)
+                    return float.NaN;
+
+                damage.Add(type, quantity);
+                total += quantity;
+            }
 
             // Resolve this component's damage modifier
             DamageModifierSetPrototype? modifier = null;
-            if (damageable.DamageModifierSetId != null)
+            if (damageable.DamageModifierSetId == null ||
+                !_prototypeManager.TryIndex(damageable.DamageModifierSetId, out modifier))
             {
-                _prototypeManager.TryIndex(damageable.DamageModifierSetId, out modifier);
+                // No modifier. This makes the calculation trivial.
+                return totalDamageTarget / total;
             }
 
-            // using the modifier, define a function that maps a damage scaling factor to the distance from the desired damage
-            Func<float, int> damageDelta;
-            int sign = Math.Sign(damageTarget);
-
-            damageDelta = scale =>
+            // adjust each damage type by the modifier set coefficients
+            total = 0;
+            float totalReduction = 0;
+            foreach (var type in damage.Keys)
             {
-                var finalDamage = (modifier == null)
-                ? damageable.Damage + scale * damage
-                : damageable.Damage + DamageSpecifier.ApplyModifierSet(scale * damage, modifier);
-                finalDamage.ClampMin(0);
-                return sign * (finalDamage.Total - damageTarget);
-            };
+                if (!modifier.Coefficients.TryGetValue(type, out var coef))
+                {
+                    total += damage[type];
+                    continue;
+                }
 
-            // Note that resultingDamage is not a monotonic function. Consider a resistance set that has:
-            // - maps burn damage 1:1
-            // - reduces blunt damage by 20 (to a min of zero), and then multiplies by -5 (healing)
-            // initially, as damage increases the burn damage goes up, and total damage goes up.
-            // but when input blunt damage becomes larger than 20, the blunt damage will be begin healing, eventually overpowering the burn damage.
+                // We don't support a mix of healing and damage
+                if (coef < 0)
+                    return float.NaN;
 
-            // the scale factor only goes as low as 0. We use this as one endpoint of our search
-            // the damageDelta at x0 is always negative
+                damage[type] *= coef;
+                total += damage[type];
+                totalReduction += modifier.FlatReduction.GetValueOrDefault(type);
+            }
+
+            if (modifier.FlatReduction.Count == 0)
+            {
+                // No Flat reductions. Again, this makes the calculation pretty trivial.
+                return totalDamageTarget / total;
+            }
+
+            // We will perform a bisection search. here we define a function that maps a damage scaling factor to the
+            // distance from the desired final damage
+
+            float CalcDamage(float scale)
+            {
+                float result = 0;
+                foreach (var (type, quantity) in damage)
+                {
+                    var reduction = modifier.FlatReduction.GetValueOrDefault(type);
+                    result += Math.Max(0, scale * quantity - reduction);
+                }
+
+                return result;
+            }
+
+            // Next we define the endpoins of the bisection search. First: what is the maximum scale that could possibly
+            // be required? Given that the flat reductions cannot reduce the incoming damage below zero, the actual
+            // reduction may be less than total reduction. But the total reduction gives the upper limit of by how much
+            // the damage could be reduced. So assuming full reduction leads to the largest possible scale guess.
+            float x1 = (totalDamageTarget + totalReduction) / total;
+
+            // Next, we check that the maximum value is not just the correct result. This actually happens most of the
+            // time when it comes to explosions (which is currently the only thing that requires this calculation).
+            // Fortunately this means we usually do not actually need to do a bisection search!
+            if (MathHelper.CloseTo(CalcDamage(x1), totalDamageTarget, tolerance))
+                return x1;
+
+            // For the minimum value, we just use 0.
             float x0 = 0;
 
-            // for the other search endpoint (x1) we use the maximum scale.
-            // here the damage delta SHOULD always be positive
-            float x1 = maxScale;
-
-            if (damageDelta(x1) < 0)
-            {
-                // Well apparently it isn't positive for this x1 value.
-                // MAYBE the maxScale is not big enough. OR MAYBE there is a root, but as mentioned the function is not monotonic, so we can't be sure.
-                // so lets try another endpoint.
-
-                // what scale is needed if the target has NO resistance set?
-                x1 = (float) damageTarget / damage.Total;
-
-                if (damageDelta(x1) < 0)
-                {
-                    // welp at least we tried
-                    return float.NaN;
-                }
-            }
+            // for the initial guess, we just ignore the flat reductions
+            float xGuess = totalDamageTarget / total;
+            var result = CalcDamage(xGuess);
 
             // begin a bisection search.
             // If the output wasn't an integer, id use some sort of gradient based search. there probably is some way of doing it with ints, but eh fuck it.
-            float xGuess;
-            int result;
-            do
+            while (!MathHelper.CloseTo(result, totalDamageTarget, tolerance))
             {
-                xGuess = (x0 + x1) / 2;
-                result = damageDelta(xGuess);
-
-                if (result == 0)
-                    break;
-
-                if (result < 0)
+                if (result < totalDamageTarget)
                     x0 = xGuess;
                 else
                     x1 = xGuess;
 
-            } while (Math.Abs(x1 - x0) > precision);
+                xGuess = (x0 + x1) / 2;
+                result = CalcDamage(xGuess);
+            }
 
-            return x1;
+            return xGuess;
         }
     }
 
