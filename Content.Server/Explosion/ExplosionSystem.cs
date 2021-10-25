@@ -24,15 +24,19 @@ using Robust.Shared.Random;
 namespace Content.Server.Explosion
 {
     // TODO:
-    // - rejig the AirtightMap
-    // - move functions from airtight to explosion
+    // - Tile damage: make sure we do it like atmos, and not the random selection
+    // - Damage resistances: make -ve multipliers go away and simplify the calculation
     // - Make tile break chance use the explosion prototype
-    // - Improved directional blocking (if not become unblocked, only damage blocking entity)
     // - Add a vaporization threshold (damage dependent, so per-explosion type?)
+    // - as a placeholder, make explosion in space just map to the first known grid.
 
     // TODO after opening draft:
     // - Make explosion window EUI & remove preview commands
     // - Grid jump
+    // - Improved directional blocking (if not become unblocked, only damage blocking entity)
+    //   - Also requires modified debug overlay
+    //   - For other entities on that tile, damage will go from 0 to MANY in a single iteration
+    //   - This is fine, in the aftermath they will see no difference
 
     public sealed partial class ExplosionSystem : EntitySystem
     {
@@ -131,7 +135,7 @@ namespace Content.Server.Explosion
                 if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef))
                 {
                     ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
-                    DamageFloorTile(tileRef, intensity, damagedTiles);
+                    DamageFloorTile(tileRef, intensity, damagedTiles, explosion.ExplosionType);
                 }
 
                 ExplodeSpace(explosion.MapLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
@@ -245,38 +249,18 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
-        ///     Every time a tile is broken, the intensity is reduced by this much and the tile-break chance is re-rolled.
-        /// </summary>
-        /// <remarks>
-        ///     Effectively, in order for an explosion to have a chance of double-breaking a tile, the intensity needs
-        ///     to be larger than this value. As tile breaking will eventually lead to space tiles & a vacuum forming, this
-        ///     number should not be set too small. Otherwise even small explosions could punch a hole through the
-        ///     station.
-        /// </remarks>
-        public const float TileBreakIntensityDecrease = 12f;
-
-        /// <summary>
-        ///     Explosion intensity dependent chance for a tile to break down to some base turf.
-        /// </summary>
-        private float TileBreakChance(float intensity)
-        {
-            // ~ 10% at intensity 4, 90% at intensity ~12.5
-            return (intensity < 1) ? 0 : (1 + MathF.Tanh(intensity/4 - 2)) / 2;
-        }
-
-        /// <summary>
         ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
         /// </summary>
-        public void DamageFloorTile(TileRef tileRef, float intensity, List<(Vector2i GridIndices, Tile Tile)> damagedTiles)
+        public void DamageFloorTile(TileRef tileRef, float intensity, List<(Vector2i GridIndices, Tile Tile)> damagedTiles, ExplosionPrototype type)
         {
             if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
                 return;
 
             var tileDef = _tileDefinitionManager[tileRef.Tile.TypeId];
 
-            while (_robustRandom.Prob(TileBreakChance(intensity)))
+            while (_robustRandom.Prob(type.TileBreakChance(intensity)))
             {
-                intensity -= TileBreakIntensityDecrease;
+                intensity -= type.TileBreakRerollReduction;
 
                 if (tileDef is not ContentTileDefinition contentTileDef)
                     break;
@@ -285,8 +269,7 @@ namespace Content.Server.Explosion
                 if (contentTileDef.BaseTurfs.Count == 0)
                     break;
 
-                // randomly select a new tile
-                tileDef = _tileDefinitionManager[_robustRandom.Pick(contentTileDef.BaseTurfs)];
+                tileDef = _tileDefinitionManager[contentTileDef.BaseTurfs[^1]];
             }
 
             if (tileDef.TileId == tileRef.Tile.TypeId)

@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+using System;
 using Content.Shared.Damage;
 using Content.Shared.Sound;
+using Robust.Shared.Log;
 using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Serialization.Manager.Attributes;
@@ -17,14 +18,21 @@ namespace Content.Shared.Explosion
         ///     Damage to deal to entities. This is scaled by the explosion intensity.
         /// </summary>
         [DataField("damagePerIntensity", required: true)]
-        public DamageSpecifier DamagePerIntensity = default!;
+        public readonly DamageSpecifier DamagePerIntensity = default!;
 
         /// <summary>
-        ///     This dictionary maps the explosion intensity to a tile break chance. For values in between, linear
-        ///     interpolation is used.
+        ///     This set of points, together with <see cref="_tileBreakIntensity"/> define a function that maps the
+        ///     explosion intensity to a tile break chance via linear interpolation. 
         /// </summary>
         [DataField("tileBreakChance")]
-        public Dictionary<float, float> TileBreakChance = new() { {0f, 0f }, {15f, 1f} };
+        private readonly float[] _tileBreakChance = { 0f, 1f };
+
+        /// <summary>
+        ///     This set of points, together with <see cref="_tileBreakChance"/> define a function that maps the
+        ///     explosion intensity to a tile break chance via linear interpolation. 
+        /// </summary>
+        [DataField("tileBreakIntensity")]
+        private readonly float[] _tileBreakIntensity = {0f, 15f };
 
         /// <summary>
         ///     When a tile is broken by an explosion, the intensity is reduced by this amount and is used to try and
@@ -34,25 +42,48 @@ namespace Content.Shared.Explosion
         ///     If this number is too small, even relatively weak explosions can have a non-zero
         ///     chance to create a space tile.
         /// </remarks>
-        [DataField("breakRerollReduction")]
-        public float BreakRerollReduction = 10f;
+        [DataField("tileBreakRerollReduction")]
+        public readonly float TileBreakRerollReduction = 10f;
 
         /// <summary>
         ///     Color emited by a point light at the centre of the explosion.
         /// </summary>
         [DataField("lightColor")]
-        public Color LightColor = Color.Orange;
+        public readonly Color LightColor = Color.Orange;
 
         /// <summary>
         ///     Color used to modulate the atmos-plasma-fire effect.
         /// </summary>
         [DataField("fireModColor")]
-        public Color? FireModColor;
+        public readonly Color? FireModColor;
 
         [DataField("Sound")]
-        public SoundSpecifier Sound = new SoundCollectionSpecifier("explosion");
+        public readonly SoundSpecifier Sound = new SoundCollectionSpecifier("explosion");
 
         [DataField("texturePath")]
-        public string TexturePath = "/Textures/Effects/fire.rsi";
+        public readonly string TexturePath = "/Textures/Effects/fire.rsi";
+
+        /// <summary>
+        ///     Basic function for linear interpolation of _tileBreakChance and _tileBreakIntensity
+        /// </summary>
+        public float TileBreakChance(float intensity)
+        {
+            if (_tileBreakChance.Length == 0 || _tileBreakChance.Length != _tileBreakIntensity.Length)
+            {
+                Logger.Error($"Malformed tile break chance definitions for explosion prototype: {ID}");
+                return 0;
+            }
+
+            if (intensity >= _tileBreakIntensity[^1] || _tileBreakIntensity.Length == 1)
+                return _tileBreakChance[^1];
+
+            if (intensity <= _tileBreakIntensity[0])
+                return _tileBreakChance[0];
+
+            int i = Array.FindIndex(_tileBreakIntensity, k => k >= intensity);
+
+            var slope = (_tileBreakChance[i] - _tileBreakChance[i - 1]) / (_tileBreakIntensity[i] - _tileBreakIntensity[i - 1]);
+            return _tileBreakChance[i - 1] + slope * (intensity - _tileBreakIntensity[i - 1]);
+        }
     }
 }

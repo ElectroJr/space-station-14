@@ -5,10 +5,9 @@
       Heat: 5
       Blunt: 5
       Piercing: 5
-  tileBreakChance:
-    0: 0
-    20: 1.0
-  breakRerollReduction: 10
+  tileBreakChance: [0, 0.75, 1]
+  tileBreakIntensity: [0, 20, 30]
+  tileBreakRerollReduction: 15
   lightColor: Orange
   
 
@@ -20,9 +19,5 @@
       Heat: 4
       Blunt: 3
       Piercing: 3
-  tileBreakChance:
-    0: 0
-    20: 1.0
-  breakRerollReduction: 20
   lightColor: Green
   #wysi texturePath: /Textures/Effects/green_fire.rsi 
