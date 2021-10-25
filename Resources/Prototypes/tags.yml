@@ -89,9 +89,6 @@
   id: Egg
 
 - type: Tag
-  id: ExplosivePassable
-
-- type: Tag
   id: FireAxe
 
 - type: Tag
