@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using JetBrains.Annotations;
 using Robust.Shared.GameObjects;
@@ -35,14 +35,6 @@ namespace Content.Shared.Acts
         void OnBreak(BreakageEventArgs eventArgs);
     }
 
-    public interface IExAct
-    {
-        /// <summary>
-        /// Called when explosion reaches the entity
-        /// </summary>
-        void OnExplosion(ExplosionEventArgs eventArgs);
-    }
-
     public class ExplosionEventArgs : EventArgs
     {
         public EntityCoordinates Source { get; set; }
@@ -68,22 +60,6 @@ namespace Content.Shared.Acts
             }
 
             owner.QueueDelete();
-        }
-
-        public void HandleExplosion(EntityCoordinates source, IEntity target, ExplosionSeverity severity)
-        {
-            var eventArgs = new ExplosionEventArgs
-            {
-                Source = source,
-                Target = target,
-                Severity = severity
-            };
-            var exActs = target.GetAllComponents<IExAct>().ToList();
-
-            foreach (var exAct in exActs)
-            {
-                exAct.OnExplosion(eventArgs);
-            }
         }
 
         public void HandleBreakage(IEntity owner)

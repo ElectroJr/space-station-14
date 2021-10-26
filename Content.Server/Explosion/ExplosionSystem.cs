@@ -24,13 +24,12 @@ using Robust.Shared.Random;
 namespace Content.Server.Explosion
 {
     // TODO:
-    // - give storage/containers a damage passthrough
-    //   - basically: if bool false --> dont pass damage
-    //   - if true: apply modifer then pass damage
-    //   - if you want to only pass damage over a certain amount, give it a large flat reduction
     // - as a placeholder, make explosion in space just map to the first known grid.
-    // - remove IExAct
     // - Give existing explosions reasonable stats
+    // - MAAAYBE undo chunky salsa. Consequences:
+    //  - Can do explosion expansion iteratively. Deal damage, then check if free, then find neighbors
+    //  - No more need for figuring out how much damage an entity needs to take in order to break --> MUCH SIMPLER
+    //  - But: No more previews
 
     // TODO after opening draft:
     // - Make explosion window EUI & remove preview commands
