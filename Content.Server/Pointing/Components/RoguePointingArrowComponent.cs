@@ -1,5 +1,6 @@
 using System.Linq;
 using Content.Server.Explosion;
+using Content.Shared.Explosion;
 using Content.Shared.Pointing.Components;
 using Content.Shared.Sound;
 using Robust.Server.GameObjects;
@@ -11,6 +12,7 @@ using Robust.Shared.Maths;
 using Robust.Shared.Player;
 using Robust.Shared.Random;
 using Robust.Shared.Serialization.Manager.Attributes;
+using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype;
 using Robust.Shared.ViewVariables;
 using DrawDepth = Content.Shared.DrawDepth.DrawDepth;
 
@@ -40,9 +42,6 @@ namespace Content.Server.Pointing.Components
         [ViewVariables(VVAccess.ReadWrite)]
         [DataField("chasingTime")]
         private float _chasingTime = 1;
-
-        [DataField("explosionSound")]
-        private SoundSpecifier _explosionSound = new SoundCollectionSpecifier("explosion");
 
         private IEntity? RandomNearbyPlayer()
         {
@@ -122,10 +121,7 @@ namespace Content.Server.Pointing.Components
                 return;
             }
 
-            Owner.SpawnExplosion(0, 2, 1, 1);
-            SoundSystem.Play(Filter.Pvs(Owner), _explosionSound.GetSound(), Owner);
-
-            Owner.Delete();
+            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(Owner.Uid);
         }
     }
 }

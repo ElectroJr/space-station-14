@@ -15,7 +15,7 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
     {
         public void Execute(IEntity owner, DestructibleSystem system)
         {
-            owner.SpawnExplosion();  
+            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(owner.Uid);  
         }
     }
 }

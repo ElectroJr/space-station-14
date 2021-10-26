@@ -124,6 +124,37 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
+        ///     Given an entity with an explosive component, spawn the appropriate explosion.
+        /// </summary>
+        /// <remarks>
+        ///     Also accepts radius or intensity arguments. This is useful for explosives where the intensity is not
+        ///     specified in the yaml, but determined dynamically (e.g., by the quantity of a solution in a reaction).
+        /// </remarks>
+        public void TriggerExplosive(EntityUid uid, ExplosiveComponent? explosive = null, bool delete = true, float? totalIntensity = null, float? radius = null)
+        {
+            if (!Resolve(uid, ref explosive))
+                return;
+
+            if (explosive.Exploded)
+                return;
+
+            if (radius != null)
+                totalIntensity ??= RadiusToIntensity((float) radius, explosive.IntensitySlope, explosive.MaxIntensity);
+
+            totalIntensity ??= explosive.TotalIntensity;
+
+            explosive.Exploded = true;
+            QueueExplosion(uid,
+                explosive.ExplosionType,
+                (float) totalIntensity,
+                explosive.IntensitySlope,
+                explosive.MaxIntensity );
+
+            if (delete)
+                EntityManager.QueueDeleteEntity(uid);
+        }
+
+        /// <summary>
         ///     Deal damage, throw entities, and break tiles. Returns the number tiles that were processed.
         /// </summary>
         private int ProcessExplosion(Explosion explosion, int tilesToProcess)
@@ -161,7 +192,7 @@ namespace Content.Server.Explosion
         ///     covered by the explosion. Until you get to radius 30+, this is functionally equivalent to the
         ///     actual radius.
         /// </remarks>
-        public static float RadiusToIntensity(float radius, float slope, float maxIntensity = 0)
+        public float RadiusToIntensity(float radius, float slope, float maxIntensity = 0)
         {
             // If you consider the intensity at each tile in an explosion to be a height. Then a circular explosion is
             // shaped like a cone. So total intensity is like the volume of a cone with height = slope * radius. Of
@@ -181,7 +212,7 @@ namespace Content.Server.Explosion
             return coneVolume - (h * MathF.PI / 3 * MathF.Pow(h / slope, 2));
         }
 
-        public void QueueExplosion(EntityUid uid, ExplosionPrototype type, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(EntityUid uid, string typeId, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
@@ -189,12 +220,15 @@ namespace Content.Server.Explosion
             if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
                 return;
 
-            QueueExplosion(transform.GridID, grid.TileIndicesFor(transform.Coordinates), type, intensity, slope, maxTileIntensity, excludedTiles);
+            QueueExplosion(transform.GridID, grid.TileIndicesFor(transform.Coordinates), typeId, intensity, slope, maxTileIntensity, excludedTiles);
         }
 
-        public void QueueExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(GridId gridId, Vector2i epicenter, string typeId, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             if (totalIntensity <= 0 || slope <= 0)
+                return;
+
+            if (!_prototypeManager.TryIndex<ExplosionPrototype>(typeId, out var type))
                 return;
 
             _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, type, totalIntensity, slope, maxTileIntensity, excludedTiles));

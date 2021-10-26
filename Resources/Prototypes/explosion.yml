@@ -5,11 +5,10 @@
       Heat: 5
       Blunt: 5
       Piercing: 5
-  tileBreakChance: [0, 0.75, 1]
-  tileBreakIntensity: [0, 20, 30]
-  tileBreakRerollReduction: 15
+  tileBreakChance: [0, 0.5, 1]
+  tileBreakIntensity: [0, 5, 15]
+  tileBreakRerollReduction: 10
   lightColor: Orange
-  
 
 - type: explosion
   id: Dirty

@@ -1,8 +1,6 @@
 using System;
-using Content.Server.Chemistry.Components;
 using Content.Server.Explosion;
 using Content.Server.Power.Components;
-using Content.Shared.Chemistry;
 using Content.Shared.Examine;
 using Content.Shared.PowerCell;
 using Content.Shared.Rounding;
@@ -69,12 +67,9 @@ namespace Content.Server.PowerCell.Components
 
         private void Explode()
         {
-            var heavy = (int) Math.Ceiling(Math.Sqrt(CurrentCharge) / 60);
-            var light = (int) Math.Ceiling(Math.Sqrt(CurrentCharge) / 30);
-
+            var radius = MathF.Min( 5, MathF.Ceiling(MathF.Sqrt(CurrentCharge) / 30));
             CurrentCharge = 0;
-            Owner.SpawnExplosion(0, heavy, light, light*2);
-            Owner.Delete();
+            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(Owner.Uid,radius: radius);
         }
 
         private void UpdateVisuals()

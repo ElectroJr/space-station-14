@@ -100,7 +100,7 @@ namespace Content.Server.Administration.Commands
 
             if (args[0] == "spawn")
             {
-                EntitySystem.Get<ExplosionSystem>().QueueExplosion(gridId, tile, type, intensity, slope, maxIntensity, excluded);
+                EntitySystem.Get<ExplosionSystem>().QueueExplosion(gridId, tile, type.ID, intensity, slope, maxIntensity, excluded);
                 return;
             }
 

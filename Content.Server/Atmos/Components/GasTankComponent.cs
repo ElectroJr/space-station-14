@@ -264,14 +264,13 @@ namespace Content.Server.Atmos.Components
                 var range = (pressure - TankFragmentPressure) / TankFragmentScale;
 
                 // Let's cap the explosion, yeah?
+                // > No super-pressurized nuke cannisters? Booooo! Fun police ruining everything.
                 if (range > MaxExplosionRange)
                 {
                     range = MaxExplosionRange;
                 }
 
-                Owner.SpawnExplosion((int) (range * 0.25f), (int) (range * 0.5f), (int) (range * 1.5f), 1);
-
-                Owner.QueueDelete();
+                EntitySystem.Get<ExplosionSystem>().TriggerExplosive(Owner.Uid, radius: range);
                 return;
             }
 

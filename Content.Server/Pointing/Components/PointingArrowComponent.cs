@@ -1,4 +1,5 @@
-﻿using Content.Shared.Pointing.Components;
+using Content.Server.Explosion.Components;
+using Content.Shared.Pointing.Components;
 using Robust.Server.GameObjects;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Serialization.Manager.Attributes;
@@ -77,6 +78,7 @@ namespace Content.Server.Pointing.Components
                 {
                     Owner.RemoveComponent<PointingArrowComponent>();
                     Owner.AddComponent<RoguePointingArrowComponent>();
+                    Owner.AddComponent<ExplosiveComponent>();
                     return;
                 }
 

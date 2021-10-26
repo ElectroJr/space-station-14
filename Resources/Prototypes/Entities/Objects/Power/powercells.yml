@@ -13,6 +13,8 @@
         !type:PhysShapeAabb
           bounds: "-0.3,-0.15,0.3,0.2" # TODO: these are placeholder values
   - type: PowerCell
+  - type: Explosive
+    explosionType: Default
   - type: Sprite
     netsync: false
   - type: SolutionContainerManager

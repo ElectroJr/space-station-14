@@ -3,7 +3,6 @@ using Content.Server.Doors.Components;
 using Content.Server.Explosion.Components;
 using Content.Server.Flash;
 using Content.Server.Flash.Components;
-using Content.Shared.Acts;
 using Content.Shared.Audio;
 using Content.Shared.Doors;
 using JetBrains.Annotations;
@@ -35,6 +34,7 @@ namespace Content.Server.Explosion
     public sealed class TriggerSystem : EntitySystem
     {
         [Dependency] private readonly FlashSystem _flashSystem = default!;
+        [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
 
         public override void Initialize()
         {
@@ -51,22 +51,7 @@ namespace Content.Server.Explosion
         #region Explosions
         private void HandleExplodeTrigger(EntityUid uid, ExplodeOnTriggerComponent component, TriggerEvent args)
         {
-            if (!EntityManager.TryGetComponent(uid, out ExplosiveComponent? explosiveComponent)) return;
-
-            Explode(uid, explosiveComponent);
-        }
-
-        // You really shouldn't call this directly (TODO Change that when ExplosionHelper gets changed).
-        public void Explode(EntityUid uid, ExplosiveComponent component)
-        {
-            if (component.Exploding)
-            {
-                return;
-            }
-
-            component.Exploding = true;
-            component.Owner.SpawnExplosion(component.DevastationRange, component.HeavyImpactRange, component.LightImpactRange, component.FlashRange);
-            EntityManager.QueueDeleteEntity(uid);
+            _explosionSystem.TriggerExplosive(uid);
         }
         #endregion
 

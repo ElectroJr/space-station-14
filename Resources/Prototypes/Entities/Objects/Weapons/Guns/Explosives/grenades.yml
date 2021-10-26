@@ -18,10 +18,10 @@
   - type: OnUseTimerTrigger
     delay: 3.5
   - type: Explosive
-    devastationRange: 0
-    heavyImpactRange: 2
-    lightImpactRange: 4
-    flashRange: 7
+    explosionType: Default
+    maxIntensity: 10
+    intensitySlope: 2
+    totalIntensity: 100 # about a ~4 tile radius
   - type: ExplodeOnTrigger
   - type: Damageable
     damageContainer: Inorganic
@@ -96,10 +96,9 @@
   - type: OnUseTimerTrigger
     delay: 5
   - type: Explosive
-    devastationRange: 1
-    heavyImpactRange: 3
-    lightImpactRange: 5
-    flashRange: 10
+    explosionType: Default
+    totalIntensity: 200
+    maxIntensity: 10 # caps at 150 damage
   - type: ExplodeOnTrigger
   - type: Damageable
     damageContainer: Inorganic
@@ -133,9 +132,10 @@
   - type: OnUseTimerTrigger
     delay: 5
   - type: Explosive
-    devastationRange: 25
-    heavyImpactRange: 25
-    flashRange: 50
+    explosionType: Default
+    totalIntensity: 20000 # ~15 tile radius.
+    intensitySlope: 5
+    maxIntensity: 50
   - type: ExplodeOnTrigger
   - type: Damageable
     damageContainer: Inorganic

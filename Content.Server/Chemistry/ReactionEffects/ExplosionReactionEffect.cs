@@ -1,57 +1,61 @@
 using System;
-using Content.Server.Chemistry.Components;
 using Content.Server.Explosion;
 using Content.Shared.Chemistry.Components;
-using Content.Shared.Chemistry.Components.SolutionManager;
 using Content.Shared.Chemistry.Reaction;
+using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Serialization.Manager.Attributes;
+using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype;
 
 namespace Content.Server.Chemistry.ReactionEffects
 {
     [DataDefinition]
     public class ExplosionReactionEffect : IReactionEffect
     {
-        [DataField("devastationRange")] private float _devastationRange = 1;
-        [DataField("heavyImpactRange")] private float _heavyImpactRange = 2;
-        [DataField("lightImpactRange")] private float _lightImpactRange = 3;
-        [DataField("flashRange")] private float _flashRange;
+        /// <summary>
+        ///     The type of explosion. Determines damage types and tile break chance scaling.
+        /// </summary>
+        [DataField("explosionType", required: true, customTypeSerializer: typeof(PrototypeIdSerializer<ExplosionPrototype>))]
+        public string ExplosionType = default!;
 
         /// <summary>
-        /// If true, then scale ranges by intensity. If not, the ranges are the same regardless of reactant amount.
+        ///     The max intensity the explosion can have at a given tile. Places an upper limit of damage & tile break
+        ///     chance.
         /// </summary>
-        [DataField("scaled")] private bool _scaled;
+        [DataField("maxIntensity")]
+        public float MaxIntensity = 5;
 
         /// <summary>
-        /// Maximum scaling on ranges. For example, if it equals 5, then it won't scaled anywhere past
-        /// 5 times the minimum reactant amount.
+        ///     How quickly intensity drops off as you move away from the epicenter
         /// </summary>
-        [DataField("maxScale")] private float _maxScale = 1;
+        [DataField("intensitySlope")]
+        public float IntensitySlope = 1;
 
-        public void React(Solution solution, IEntity solutionEntity, double intensity)
+        /// <summary>
+        ///     The maximum total intensity that this chemical reaction can achieve.
+        /// </summary>
+        /// <remarks>
+        ///     A slope of 1 & MaxTotalIntensity of 100 corresponds to a radius of around 4.5 tiles.
+        /// </remarks>
+        [DataField("maxTotalIntensity")]
+        public float MaxTotalIntensity = 100;
+
+        /// <summary>
+        ///     The intensity of the explosion per unit reaction.
+        /// </summary>
+        [DataField("intensityPerUnit")]
+        public float IntensityPerUnit = 1;
+
+        public void React(Solution solution, IEntity solutionEntity, double quantity)
         {
-            var floatIntensity = (float) intensity;
-      
-            if (!solutionEntity.HasComponent<SolutionContainerManagerComponent>())
-                return;
+            var intensity = (float) Math.Min(quantity * IntensityPerUnit, MaxTotalIntensity);
 
-            //Handle scaling
-            if (_scaled)
-            {
-                floatIntensity = MathF.Min(floatIntensity, _maxScale);
-            }
-            else
-            {
-                floatIntensity = 1;
-            }
-
-            //Calculate intensities
-            var finalDevastationRange = (int)MathF.Round(_devastationRange * floatIntensity);
-            var finalHeavyImpactRange = (int)MathF.Round(_heavyImpactRange * floatIntensity);
-            var finalLightImpactRange = (int)MathF.Round(_lightImpactRange * floatIntensity);
-            var finalFlashRange = (int)MathF.Round(_flashRange * floatIntensity);
-            solutionEntity.SpawnExplosion(finalDevastationRange,
-                finalHeavyImpactRange, finalLightImpactRange, finalFlashRange);
+            EntitySystem.Get<ExplosionSystem>().QueueExplosion(
+                solutionEntity.Uid,
+                ExplosionType,
+                intensity,
+                IntensitySlope,
+                MaxIntensity);
         }
     }
 }
