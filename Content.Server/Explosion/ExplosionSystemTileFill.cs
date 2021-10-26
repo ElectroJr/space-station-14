@@ -19,33 +19,17 @@ namespace Content.Server.Explosion
         public const int MaxArea = 7854;
 
         /// <summary>
-        ///     Get the list of tiles that will be damaged when the given explosion is spawned.
-        /// </summary>
-        public (List<HashSet<Vector2i>>?, List<float>?) GetExplosionTiles(MapCoordinates epicenter, string typeID, float totalIntensity, float slope, float maxIntensity)
-        {
-            if (totalIntensity <= 0)
-                return (null, null);
-
-            if (!_mapManager.TryFindGridAt(epicenter, out var grid))
-                return (null, null);
-
-            var epicenterTile = grid.TileIndicesFor(epicenter);
-
-            return GetExplosionTiles(grid.Index, epicenterTile, typeID, totalIntensity, slope, maxIntensity);
-        }
-
-        /// <summary>
         ///     This function returns a set of tiles to exclude from an explosion, for use with directional explosions.
         ///     The angle is relative to the grid the explosion is being spawned on.
         /// </summary>
         public HashSet<Vector2i> GetDirectionalRestriction(
-            GridId gridId,
-            Vector2i epicenter,
+            MapCoordinates coords,
             Angle angle,
             float spread,
             float distance)
         {
-            var grid = _mapManager.GetGrid(gridId);
+            if (!_mapManager.TryFindGridAt(coords, out var grid))
+                return new();
 
             // Our directed explosion MUST have at least one directly adjacent tile it can propagate to. We enforce this by
             // increasing the arc size until it contains a neighbor. If the direction is pointed exactly towards a
@@ -58,14 +42,15 @@ namespace Content.Server.Explosion
             // effectively determines "how far" the explosive is directed, before it spreads out normally. If the
             // explosion wraps around this circle, it will look very odd, so it should probably be scaled with the
             // explosion size.
-            var circle = new Circle(grid.GridTileToWorldPos(epicenter), distance);
+            var circle = new Circle(coords.Position, distance);
+            var centerTile = grid.WorldToTile(coords.Position);
 
             HashSet<Vector2i> excluded = new();
             foreach (var tileRef in grid.GetTilesIntersecting(circle, ignoreEmpty: false))
             {
                 // As we only care about angles, it doesn't matter whether we use vector2i grid indices or Vector2
                 // tile-centers to calculate angles.
-                var relativeAngle = Math.Abs((angle - new Angle(tileRef.GridIndices - epicenter)).Reduced().Degrees);
+                var relativeAngle = Math.Abs((angle - new Angle(tileRef.GridIndices - centerTile)).Reduced().Degrees);
 
                 if (relativeAngle > 180)
                     relativeAngle  = 360 - relativeAngle;
@@ -92,7 +77,7 @@ namespace Content.Server.Explosion
         /// <returns>Returns a list of tile-sets and a list of intensity values which describe the explosion.</returns>
         public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
             GridId gridId,
-            Vector2i epicenterTile,
+            HashSet<Vector2i> initialTiles,
             string typeID,
             float totalIntensity,
             float slope,
@@ -107,24 +92,21 @@ namespace Content.Server.Explosion
             // This is the list of sets of tiles that will be targeted by our explosions.
             // Here we initialize tileSetList. The first three entries are trivial, but make the following for loop
             // logic neater. ALl things considered, this is a trivial waste of memory.
-            List<HashSet<Vector2i>> tileSetList = new();
-            tileSetList.Add(new HashSet<Vector2i>());
-            tileSetList.Add(new HashSet<Vector2i> { epicenterTile });
-            tileSetList.Add(new HashSet<Vector2i>());
+            List<HashSet<Vector2i>> tileSetList = new() {new(), initialTiles, new() };
             var iteration = 3;
 
             // is this even a multi-tile explosion?
-            if (totalIntensity < slope)
-                return (tileSetList, new() { 0, totalIntensity, 0 });
+            if (totalIntensity < slope * initialTiles.Count)
+                return (tileSetList, new() { 0, totalIntensity / initialTiles.Count, 0 });
 
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.
             // Therefore, can also used to exclude tiles
             HashSet<Vector2i> processedTiles = exclude ?? new();
-            processedTiles.Add(epicenterTile);
-            var tilesInIteration = new List<int> { 0, 1, 0 };
+            processedTiles.UnionWith(initialTiles);
+            var tilesInIteration = new List<int> { 0, initialTiles.Count, 0 };
             List<float> tileSetIntensity = new () { 0, slope, 0 };
-            float remainingIntensity = totalIntensity - slope;
+            float remainingIntensity = totalIntensity - slope * initialTiles.Count;
 
             // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
             // explosion cannot LEAVE a tile in a certain direction, while delayedSpreader is when an explosion cannot

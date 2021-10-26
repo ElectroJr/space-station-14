@@ -20,14 +20,15 @@ namespace Content.Server.Explosion
             RaiseNetworkEvent(ExplosionOverlayEvent.Empty, session.ConnectedClient);
         }
 
-        public void Preview(ICommonSession session, GridId gridId, Vector2i tile, ExplosionPrototype type, float intensity, float slope, float maxIntensity, HashSet<Vector2i> excluded)
+        public void Preview(ICommonSession session, MapCoordinates coords, ExplosionPrototype type, float intensity, float slope, float maxIntensity, HashSet<Vector2i> excluded)
         {
-            if (!_mapManager.TryGetGrid(gridId, out var grid))
+            if (!_mapManager.TryFindGridAt(coords, out var grid))
                 return;
 
-            var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(gridId, tile, type.ID, intensity, slope, maxIntensity, excluded);
+            HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(coords) };
+            var (tiles, intensityList) = _explosionSystem.GetExplosionTiles(grid.Index, initialTiles, type.ID, intensity, slope, maxIntensity, excluded);
 
-            ExplosionOverlayEvent args = new(grid.GridTileToWorld(tile), type.ID, tiles, intensityList, gridId, slope, intensity);
+            ExplosionOverlayEvent args = new(coords, type.ID, tiles, intensityList, grid.Index, slope, intensity);
             RaiseNetworkEvent(args, session.ConnectedClient);
         }
     }

@@ -18,7 +18,7 @@ namespace Content.Server.Administration.Commands
     {
         public string Command => "explosion";
         public string Description => "Train go boom";
-        public string Help => "Usage: explosion (spawn|preview|clear) <x> <y> <gridId> <intensity> [slope] [maxIntensity] [prototypeId] [angle] [spread] [distance]\n" +
+        public string Help => "Usage: explosion (spawn|preview|clear) <x> <y> <mapId> <intensity> [slope] [maxIntensity] [prototypeId] [angle] [spread] [distance]\n" +
                               "If the first argument is 'Spawn', this will create an explosion. Prev will generate a preview overlay and clear will remove the overlay.\n" +
                               "The last three arguments are only required for directional explosions.";
 
@@ -47,14 +47,14 @@ namespace Content.Server.Administration.Commands
                 return;
 
             // try parse required arguments
-            if (!int.TryParse(args[1], out var x) || !int.TryParse(args[2], out var y) ||
+            if (!float.TryParse(args[1], out var x) || !float.TryParse(args[2], out var y) ||
                 !int.TryParse(args[3], out var id) || !float.TryParse(args[4], out var intensity))
             {
                 return;
             }
 
-            var gridId = new GridId(id);
-            Vector2i tile = (x, y);
+            var mapId = new MapId(id);
+            MapCoordinates coords = new((x, y), mapId);
 
             float slope = 1;
             if (args.Length > 5 && !float.TryParse(args[5], out slope))
@@ -96,11 +96,11 @@ namespace Content.Server.Administration.Commands
 
             var excluded = !directedExplosion
                 ? new HashSet<Vector2i>()
-                : explosionSystem.GetDirectionalRestriction(gridId, tile, Angle.FromDegrees(angle), spread, distance);
+                : explosionSystem.GetDirectionalRestriction(coords, Angle.FromDegrees(angle), spread, distance);
 
             if (args[0] == "spawn")
             {
-                EntitySystem.Get<ExplosionSystem>().QueueExplosion(gridId, tile, type.ID, intensity, slope, maxIntensity, excluded);
+                EntitySystem.Get<ExplosionSystem>().QueueExplosion(coords, type.ID, intensity, slope, maxIntensity, excluded);
                 return;
             }
 
@@ -110,7 +110,7 @@ namespace Content.Server.Administration.Commands
                 return;
             }
 
-            EntitySystem.Get<ExplosionDebugOverlaySystem>().Preview(player, gridId, tile, type, intensity, slope, maxIntensity, excluded);
+            EntitySystem.Get<ExplosionDebugOverlaySystem>().Preview(player, coords, type, intensity, slope, maxIntensity, excluded);
         }
     }
 }

@@ -35,13 +35,6 @@ namespace Content.Shared.Acts
         void OnBreak(BreakageEventArgs eventArgs);
     }
 
-    public class ExplosionEventArgs : EventArgs
-    {
-        public EntityCoordinates Source { get; set; }
-        public IEntity Target { get; set; } = default!;
-        public ExplosionSeverity Severity { get; set; }
-    }
-
     [UsedImplicitly]
     public sealed class ActSystem : EntitySystem
     {
@@ -74,12 +67,5 @@ namespace Content.Shared.Acts
                 breakAct.OnBreak(eventArgs);
             }
         }
-    }
-
-    public enum ExplosionSeverity
-    {
-        Light,
-        Heavy,
-        Destruction,
     }
 }

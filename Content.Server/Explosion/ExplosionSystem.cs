@@ -25,8 +25,8 @@ namespace Content.Server.Explosion
 {
     // TODO:
     // - Make projectile explosions NOT spawn explosions INSIDE of entities
-    // - as a placeholder, make explosion in space just map to the first known grid.
-    // - Give existing explosions reasonable stats
+    // --> FIX n future proofing: instead of getting the tile the entity is on, get ALL intersecting tiles
+    // - as a placeholder for grid hop, make explosion in space just map to the first known grid.
     // - MAAAYBE undo chunky salsa. Consequences:
     //  - Can do explosion expansion iteratively. Deal damage, then check if free, then find neighbors
     //  - No more need for figuring out how much damage an entity needs to take in order to break --> MUCH SIMPLER
@@ -40,6 +40,11 @@ namespace Content.Server.Explosion
     //   - For other entities on that tile, damage will go from 0 to MANY in a single iteration
     //   - This is fine, in the aftermath they will see no difference
 
+    // KNOWN ISSUES: on-collision explosives (e.g. rpgs) can "tunnel" through walls a bit this is fine for solid walls
+    // and such, but leads to odd behavior with reinforced windoors. an rpg shot against a windoor can damage entities
+    // on the other side, even if the windoor doesn't break. This is NOT new to this refactor, its just much more
+    // visually apparent when it happens.
+
     public sealed partial class ExplosionSystem : EntitySystem
     {
         [Dependency] private readonly IMapManager _mapManager = default!;
@@ -48,6 +53,7 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly IConfigurationManager _cfg = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
+        [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
 
@@ -213,18 +219,43 @@ namespace Content.Server.Explosion
             return coneVolume - (h * MathF.PI / 3 * MathF.Pow(h / slope, 2));
         }
 
+        /// <summary>
+        ///     Queue an explosions, with an epicenter given by the tiles that some entity is intersecting.
+        /// </summary>
         public void QueueExplosion(EntityUid uid, string typeId, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
 
-            if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
+            if (!_mapManager.TryFindGridAt(transform.MapPosition, out var grid))
                 return;
 
-            QueueExplosion(transform.GridID, grid.TileIndicesFor(transform.Coordinates), typeId, intensity, slope, maxTileIntensity, excludedTiles);
+            var box = _entityLookup.GetWorldAabbFromEntity(EntityManager.GetEntity(uid));
+            HashSet<Vector2i> initialTiles = new();
+            foreach (var tile in grid.GetTilesIntersecting(box))
+            {
+                initialTiles.Add(tile.GridIndices);
+            }
+
+            QueueExplosion(grid.Index, transform.MapPosition, initialTiles, typeId, intensity, slope, maxTileIntensity, excludedTiles);
         }
 
-        public void QueueExplosion(GridId gridId, Vector2i epicenter, string typeId, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        /// <summary>
+        ///     Queue an explosions, with a center specified by some map coordinates.
+        /// </summary>
+        public void QueueExplosion(MapCoordinates coords, string typeId, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        {
+            if (!_mapManager.TryFindGridAt(coords, out var grid))
+                return;
+
+            HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(coords) };
+            QueueExplosion(grid.Index, coords, initialTiles, typeId, intensity, slope, maxTileIntensity, excludedTiles);
+        }
+
+        /// <summary>
+        ///     Queue an explosion, with a specified epicenter and set of starting tiles.
+        /// </summary>
+        public void QueueExplosion(GridId gridId, MapCoordinates epicenter, HashSet<Vector2i> initialTiles, string typeId, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             if (totalIntensity <= 0 || slope <= 0)
                 return;
@@ -232,30 +263,30 @@ namespace Content.Server.Explosion
             if (!_prototypeManager.TryIndex<ExplosionPrototype>(typeId, out var type))
                 return;
 
-            _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, type, totalIntensity, slope, maxTileIntensity, excludedTiles));
+            _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, initialTiles, type, totalIntensity, slope, maxTileIntensity, excludedTiles));
         }
 
-        private Explosion SpawnExplosion(GridId gridId, Vector2i epicenter, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        private Explosion SpawnExplosion(GridId gridId, MapCoordinates epicenter, HashSet<Vector2i> initialTiles, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, epicenter, type.ID, totalIntensity, slope, maxTileIntensity, excludedTiles);
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity, excludedTiles);
             var grid = _mapManager.GetGrid(gridId);
 
-            RaiseNetworkEvent(new ExplosionEvent(grid.GridTileToWorld(epicenter), type.ID, tileSetList, tileSetIntensity, gridId));
+            RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, gridId));
 
             // sound & screen shake
             var explosionSoundParams = AudioParams.Default.WithAttenuation(Attenuation.InverseDistanceClamped);
             explosionSoundParams.RolloffFactor = 5f;
             explosionSoundParams.Volume = 0;
             var range = 3 * (tileSetList.Count - 2);
-            var filter = Filter.Empty().AddInRange(grid.GridTileToWorld(epicenter), range);
+            var filter = Filter.Empty().AddInRange(epicenter, range);
             SoundSystem.Play(filter, type.Sound.GetSound(), explosionSoundParams.WithMaxDistance(range));
-            CameraShakeInRange(filter, grid.GridTileToWorld(epicenter), totalIntensity);
+            CameraShakeInRange(filter, epicenter, totalIntensity);
 
             return new (type,
                         tileSetList,
                         tileSetIntensity!,
                         grid,
-                        grid.GridTileToWorld(epicenter));
+                        epicenter);
         }
 
         private void CameraShakeInRange(Filter filter, MapCoordinates epicenter, float totalIntensity)
