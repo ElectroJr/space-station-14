@@ -33,9 +33,9 @@ namespace Content.Client.Explosion
                 overlayManager.AddOverlay(_overlay);
         }
 
-        public override void Update(float frameTime)
+        public override void FrameUpdate(float frameTime)
         {
-            base.Update(frameTime);
+            base.FrameUpdate(frameTime);
 
             foreach (var explosion in _overlay.CompletedExplosions.ToArray())
             {

@@ -55,7 +55,8 @@ namespace Content.Client.Explosion
             var drawHandle = args.WorldHandle;
             var worldBounds = _eyeManager.GetWorldViewbounds();
 
-            DrawExplosion(drawHandle, worldBounds, ActiveExplosion, Index);
+            if (ActiveExplosion != null)
+                DrawExplosion(drawHandle, worldBounds, ActiveExplosion, Index);
 
             foreach (var exp in CompletedExplosions)
             {
@@ -65,11 +66,8 @@ namespace Content.Client.Explosion
             drawHandle.SetTransform(Matrix3.Identity);
         }
 
-        private void DrawExplosion(DrawingHandleWorld drawHandle, Box2Rotated worldBounds, Explosion? exp, int index)
+        private void DrawExplosion(DrawingHandleWorld drawHandle, Box2Rotated worldBounds, Explosion exp, int index)
         {
-            if (exp == null)
-                return;
-
             drawHandle.SetTransform(exp.Grid.WorldMatrix);
             var gridBounds = exp.Grid.InvWorldMatrix.TransformBox(worldBounds);
 

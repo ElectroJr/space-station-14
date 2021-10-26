@@ -24,6 +24,7 @@ using Robust.Shared.Random;
 namespace Content.Server.Explosion
 {
     // TODO:
+    // - Make projectile explosions NOT spawn explosions INSIDE of entities
     // - as a placeholder, make explosion in space just map to the first known grid.
     // - Give existing explosions reasonable stats
     // - MAAAYBE undo chunky salsa. Consequences:
