@@ -1,6 +1,6 @@
 using System.Linq;
 using Content.Server.Explosion;
-using Content.Shared.Explosion;
+using Content.Server.Explosion.Components;
 using Content.Shared.Pointing.Components;
 using Content.Shared.Sound;
 using Robust.Server.GameObjects;
@@ -12,7 +12,6 @@ using Robust.Shared.Maths;
 using Robust.Shared.Player;
 using Robust.Shared.Random;
 using Robust.Shared.Serialization.Manager.Attributes;
-using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype;
 using Robust.Shared.ViewVariables;
 using DrawDepth = Content.Shared.DrawDepth.DrawDepth;
 
@@ -23,6 +22,7 @@ namespace Content.Server.Pointing.Components
     {
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IRobustRandom _random = default!;
+        [Dependency] private readonly IEntityManager _entityManager = default!;
 
         [ViewVariables]
         private IEntity? _chasing;
@@ -42,6 +42,16 @@ namespace Content.Server.Pointing.Components
         [ViewVariables(VVAccess.ReadWrite)]
         [DataField("chasingTime")]
         private float _chasingTime = 1;
+
+        protected override void Initialize()
+        {
+            base.Initialize();
+
+            // currently RoguePointingArrowComponent is not defined anywhere in yaml, its JUST added by
+            // PointingArrowComponent. This makes it awkward to define explosive properties for it. For now, lets just
+            // use the default ExplosiveComponent arguments.
+            _entityManager.EnsureComponent<ExplosiveComponent>(Owner.Uid);
+        }
 
         private IEntity? RandomNearbyPlayer()
         {

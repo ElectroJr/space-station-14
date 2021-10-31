@@ -34,8 +34,8 @@ namespace Content.Server.Explosion
         /// <remarks>
         ///     Gets a list of all airtight entities on a tile. Assembles a <see cref="AtmosDirection"/> that specifies
         ///     what directions are blocked, along with the largest explosion tolerance. Note that this means that the
-        ///     explosion map will actually be inaccurate if you have something like a windoor & a reinforced windoor on
-        ///     the same tile.
+        ///     explosion map will actually be inaccurate if you have something like a normal and a reinforced windoor
+        ///     on the same tile.
         /// </remarks>
         public void UpdateAirtightMap(IMapGrid grid, Vector2i tile)
         {

@@ -7,8 +7,13 @@ using Robust.Shared.ViewVariables;
 namespace Content.Server.Explosion.Components
 {
     /// <summary>
-    ///     Specifies an explosion that can be spawned by this entity. The explosion itself if spawned via <see cref="ExplosionSystem.TriggerExplosive"/>
+    ///     Specifies an explosion that can be spawned by this entity. The explosion itself is spawned via <see
+    ///     cref="ExplosionSystem.TriggerExplosive"/>.
     /// </summary>
+    /// <remarks>
+    ///      The total intensity) may be overridden by whatever system actually calls TriggerExplosive(), but this
+    ///      component still determines the explosion type and other properties.
+    /// </remarks>
     [RegisterComponent]
     public class ExplosiveComponent : Component
     {

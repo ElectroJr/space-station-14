@@ -36,7 +36,6 @@ namespace Content.Client.Administration.UI.SpawnExplosion
 
         protected override void Draw(in OverlayDrawArgs args)
         {
-
             if (Grid == null)
                 return;
 
