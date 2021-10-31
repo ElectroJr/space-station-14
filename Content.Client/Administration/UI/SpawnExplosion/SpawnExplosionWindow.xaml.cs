@@ -13,11 +13,11 @@ using Robust.Shared.Prototypes;
 using static Robust.Client.UserInterface.Controls.BaseButton;
 using static Robust.Client.UserInterface.Controls.OptionButton;
 
-namespace Content.Client.Sandbox
+namespace Content.Client.Administration.UI.SpawnExplosion
 {
     [GenerateTypedNameReferences]
     [UsedImplicitly]
-    public partial class ExplosionSpawnWindow : SS14Window
+    public partial class SpawnExplosionWindow : SS14Window
     {
         [Dependency] private readonly IClientConsoleHost _conHost = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;

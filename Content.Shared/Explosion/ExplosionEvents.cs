@@ -46,26 +46,4 @@ namespace Content.Shared.Explosion
             Index = index;
         }
     }
-
-    /// <summary>
-    ///     Used  to preview Admin explosion spawning.
-    /// </summary>
-    [Serializable, NetSerializable]
-    public sealed class ExplosionOverlayEvent : ExplosionEvent
-    {
-        public float Slope;
-        public float TotalIntensity;
-
-        public ExplosionOverlayEvent(MapCoordinates epicenter, string typeID, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, float slope, float totalIntensity)
-            : base(epicenter, typeID, tiles, intensity, grid)
-        {
-            Slope = slope;
-            TotalIntensity = totalIntensity;
-        }
-
-        /// <summary>
-        ///     Used to clear the currently shown overlay.
-        /// </summary>
-        public static ExplosionOverlayEvent Empty = new(MapCoordinates.Nullspace, "", new List<HashSet<Vector2i>>(), new List<float> (), GridId.Invalid, 0, 0);
-    }
 }

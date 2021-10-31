@@ -258,7 +258,6 @@ namespace Content.Server.Explosion
         private Explosion SpawnExplosion(GridId gridId, MapCoordinates epicenter, HashSet<Vector2i> initialTiles, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity, excludedTiles);
-            var grid = _mapManager.GetGrid(gridId);
 
             RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, gridId));
 
@@ -274,7 +273,7 @@ namespace Content.Server.Explosion
             return new (type,
                         tileSetList,
                         tileSetIntensity!,
-                        grid,
+                        _mapManager.GetGrid(gridId),
                         epicenter);
         }
 
@@ -295,7 +294,7 @@ namespace Content.Server.Explosion
                     delta = new(0.01f, 0);
 
                 var distance = delta.Length;
-                var effect = (int) (5 * Math.Pow(totalIntensity,0.5) * (1 / (1 + distance)));
+                var effect = (int) (5 * Math.Pow(totalIntensity, 0.5) * (1 / (1 + distance)));
                 if (effect > 0.01f)
                 {
                     var kick = - delta.Normalized * effect;

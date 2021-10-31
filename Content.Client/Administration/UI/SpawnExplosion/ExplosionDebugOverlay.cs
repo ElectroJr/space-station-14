@@ -8,7 +8,7 @@ using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using System.Collections.Generic;
 
-namespace Content.Client.Explosion
+namespace Content.Client.Administration.UI.SpawnExplosion
 {
     [UsedImplicitly]
     public sealed class ExplosionDebugOverlay : Overlay

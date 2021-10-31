@@ -1,0 +1,59 @@
+using Content.Server.EUI;
+using Content.Server.Explosion;
+using Content.Shared.Administration;
+using Content.Shared.Chemistry.Components.SolutionManager;
+using Content.Shared.Eui;
+using JetBrains.Annotations;
+using Robust.Shared.GameObjects;
+using Robust.Shared.IoC;
+using Robust.Shared.Map;
+using Robust.Shared.Maths;
+using System.Collections.Generic;
+
+namespace Content.Server.Administration.UI
+{
+    /// <summary>
+    ///     Admin Eui for spawning and preview-ing explosions
+    /// </summary>
+    [UsedImplicitly]
+    public sealed class SpawnExplosionEui : BaseEui
+    {
+        public override void HandleMessage(EuiMessageBase msg)
+        {
+            if (msg is SpawnExplosionEuiMsg.Close)
+            {
+                Close();
+                return;
+            }
+
+            if (msg is not SpawnExplosionEuiMsg.PreviewRequest request)
+                return;
+
+            if (request.TotalIntensity <= 0 || request.IntensitySlope <= 0)
+                return;
+
+            var mapManager = IoCManager.Resolve<IMapManager>();
+            if (!mapManager.TryFindGridAt(request.Epicenter, out var grid))
+            {
+                // TODO EXPLOSIONS get proper multi-grid explosions working. For now, default to first grid.
+                grid = mapManager.GetAllMapGrids(request.Epicenter.MapId).FirstOrDefault();
+                if (grid == null)
+                    return;
+            }
+
+
+            var sys = EntitySystem.Get<ExplosionSystem>();
+            var excludedTiles = sys.GetDirectionalRestriction();
+            HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(request.Epicenter) };
+            var (tileSetList, tileSetIntensity) = sys.GetExplosionTiles(
+                grid.Index,
+                initialTiles,
+                request.TypeId,
+                request.TotalIntensity,
+                request.IntensitySlope,
+                request.MaxIntensity,
+                excludedTiles);
+
+        }
+    }
+}
