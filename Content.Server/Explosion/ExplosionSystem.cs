@@ -10,7 +10,9 @@ using Content.Shared.CCVar;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.Maps;
+using Content.Shared.Sound;
 using Robust.Server.Containers;
+using Robust.Server.Player;
 using Robust.Shared.Audio;
 using Robust.Shared.Configuration;
 using Robust.Shared.GameObjects;
@@ -42,6 +44,7 @@ namespace Content.Server.Explosion
         [Dependency] private readonly ITileDefinitionManager _tileDefinitionManager = default!;
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly IConfigurationManager _cfg = default!;
+        [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
@@ -58,6 +61,10 @@ namespace Content.Server.Explosion
         private Queue<Func<Explosion>> _explosionQueue = new();
 
         private Explosion? _activeExplosion;
+
+        private AudioParams _audioParams = AudioParams.Default
+            .WithAttenuation(Attenuation.InverseDistanceClamped)
+            .WithRolloffFactor(0.25f);
 
         public override void Initialize()
         {
@@ -128,7 +135,9 @@ namespace Content.Server.Explosion
         /// </remarks>
         public void TriggerExplosive(EntityUid uid, ExplosiveComponent? explosive = null, bool delete = true, float? totalIntensity = null, float? radius = null)
         {
-            if (!Resolve(uid, ref explosive))
+            // log missing: false, because some entities (e.g. liquid tanks) attempt to trigger explosions when damaged,
+            // but may not actually be explosive.
+            if (!Resolve(uid, ref explosive, logMissing: false))
                 return;
 
             if (explosive.Exploded)
@@ -218,7 +227,7 @@ namespace Content.Server.Explosion
 
             // Subtract the volume of the missing cone segment, with height:
             var h =  slope * radius - maxIntensity;
-            return coneVolume - (h * MathF.PI / 3 * MathF.Pow(h / slope, 2));
+            return coneVolume - h * MathF.PI / 3 * MathF.Pow(h / slope, 2);
         }
 
         /// <summary>
@@ -291,25 +300,26 @@ namespace Content.Server.Explosion
 
             RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, gridId));
 
-            // sound & screen shake
-            var explosionSoundParams = AudioParams.Default.WithAttenuation(Attenuation.InverseDistanceClamped);
-            explosionSoundParams.RolloffFactor = 5f;
-            explosionSoundParams.Volume = 0;
-            var range = 3 * (tileSetList.Count - 2);
-            var filter = Filter.Empty().AddInRange(epicenter, range);
-            SoundSystem.Play(filter, type.Sound.GetSound(), explosionSoundParams.WithMaxDistance(range));
-            CameraShakeInRange(filter, epicenter, totalIntensity);
+            // camera shake
+            CameraShake(tileSetList.Count * 2.5f, epicenter, totalIntensity);
+
+            // play sound. For whatever bloody reason, sound system requires ENTITY coordinates.
+            var grid = _mapManager.GetGrid(gridId);
+            var gridCoords = grid.MapToGrid(epicenter);
+            var audioRange = tileSetList.Count * 5;
+            var filter = Filter.Empty().AddInRange(epicenter, audioRange);
+            SoundSystem.Play(filter, type.Sound.GetSound(), gridCoords, _audioParams.WithMaxDistance(audioRange));
 
             return new (type,
                         tileSetList,
                         tileSetIntensity!,
-                        _mapManager.GetGrid(gridId),
+                        grid,
                         epicenter);
         }
 
-        private void CameraShakeInRange(Filter filter, MapCoordinates epicenter, float totalIntensity)
+        private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)
         {
-            foreach (var player in filter.Recipients)
+            foreach (var player in _playerManager.GetPlayersInRange(epicenter, (int) range))
             {
                 if (player.AttachedEntity == null)
                     continue;
@@ -324,12 +334,9 @@ namespace Content.Server.Explosion
                     delta = new(0.01f, 0);
 
                 var distance = delta.Length;
-                var effect = (int) (5 * Math.Pow(totalIntensity, 0.5) * (1 / (1 + distance)));
+                var effect = 5 * MathF.Pow(totalIntensity, 0.5f) * (1 - distance / range);
                 if (effect > 0.01f)
-                {
-                    var kick = - delta.Normalized * effect;
-                    recoil.Kick(kick);
-                }
+                    recoil.Kick(-delta.Normalized * effect);
             }
         }
 

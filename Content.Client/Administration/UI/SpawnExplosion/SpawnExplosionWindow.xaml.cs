@@ -129,7 +129,9 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         
         private void SubmitButtonOnOnPressed(ButtonEventArgs args)
         {
+            // need to make room to view the fireworks
             Preview.Pressed = false;
+            Eui.ClearOverlay();
 
             // for the actual explosion, we will just re-use the explosion command.
             // so assemble command arguments:
