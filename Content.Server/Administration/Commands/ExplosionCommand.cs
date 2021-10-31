@@ -1,7 +1,6 @@
 using Content.Server.Explosion;
 using Content.Shared.Administration;
 using Content.Shared.Explosion;
-using Robust.Server.Player;
 using Robust.Shared.Console;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
@@ -13,63 +12,51 @@ using System.Linq;
 
 namespace Content.Server.Administration.Commands
 {
-    [AdminCommand(AdminFlags.Fun)]
+    [AdminCommand(AdminFlags.Fun)] // for the admin. Not so much for anyone else.
     public sealed class ExplosionCommand : IConsoleCommand
     {
         public string Command => "explosion";
         public string Description => "Train go boom";
-        public string Help => "Usage: explosion (spawn|preview|clear) <x> <y> <mapId> <intensity> [slope] [maxIntensity] [prototypeId] [angle] [spread] [distance]\n" +
-                              "If the first argument is 'Spawn', this will create an explosion. Prev will generate a preview overlay and clear will remove the overlay.\n" +
-                              "The last three arguments are only required for directional explosions.";
+        public string Help => "Usage: explosion <x> <y> <intensity> [mapId] [slope] [maxIntensity] [prototypeId] [angle] [spread] [distance]";
 
         public void Execute(IConsoleShell shell, string argStr, string[] args)
         {
-            var player = shell.Player as IPlayerSession;
-
-            if (args.Length >= 1 && args[0] == "clear")
+            if (args.Length < 3)
             {
-                if (player?.AttachedEntity == null)
-                {
-                    shell.WriteLine("You must have an attached entity.");
-                    return;
-                }
-                EntitySystem.Get<ExplosionDebugOverlaySystem>().ClearPreview(player);
+                shell.WriteLine("Not enough arguments.");
                 return;
             }
-
-            if (args[0] != "spawn" && args[0] != "preview")
-            {
-                shell.WriteLine("Invalid argument.");
-                return;
-            }
-
-            if (args.Length < 5)
-                return;
 
             // try parse required arguments
-            if (!float.TryParse(args[1], out var x) || !float.TryParse(args[2], out var y) ||
-                !int.TryParse(args[3], out var id) || !float.TryParse(args[4], out var intensity))
+            if (!float.TryParse(args[0], out var x) ||
+                !float.TryParse(args[1], out var y) ||
+                !float.TryParse(args[2], out var intensity))
             {
+                shell.WriteLine("Failed to parse arguments");
                 return;
             }
+
+            int id = 1;
+            if (args.Length > 3 && !int.TryParse(args[3], out id))
+                return;
 
             var mapId = new MapId(id);
             MapCoordinates coords = new((x, y), mapId);
 
             float slope = 1;
-            if (args.Length > 5 && !float.TryParse(args[5], out slope))
+            if (args.Length > 4 && !float.TryParse(args[4], out slope))
                 return;
 
             float maxIntensity = 50;
-            if (args.Length > 6 && !float.TryParse(args[6], out maxIntensity))
+            if (args.Length > 5 && !float.TryParse(args[5], out maxIntensity))
                 return;
 
 
             ExplosionPrototype? type;
             var protoMan = IoCManager.Resolve<IPrototypeManager>();
-            if (args.Length > 7)
+            if (args.Length > 6)
             {
-                if (!protoMan.TryIndex(args[7], out type))
+                if (!protoMan.TryIndex(args[6], out type))
                     return;
             }
             else
@@ -78,39 +65,25 @@ namespace Content.Server.Administration.Commands
                 type = protoMan.EnumeratePrototypes<ExplosionPrototype>().First();
             }
 
-
-            bool directedExplosion = args.Length > 8;
             float angle = 0;
-            if (args.Length > 8 && !float.TryParse(args[8], out angle))
+            if (args.Length > 7 && !float.TryParse(args[7], out angle))
                 return;
 
             float spread = 60;
-            if (args.Length > 9 && !float.TryParse(args[9], out spread))
+            if (args.Length > 8 && !float.TryParse(args[8], out spread))
                 return;
 
             float distance = 5;
-            if (args.Length > 10 && !float.TryParse(args[10], out distance))
+            if (args.Length > 9 && !float.TryParse(args[9], out distance))
                 return;
 
             var explosionSystem = EntitySystem.Get<ExplosionSystem>();
 
-            var excluded = !directedExplosion
-                ? new HashSet<Vector2i>()
-                : explosionSystem.GetDirectionalRestriction(coords, Angle.FromDegrees(angle), spread, distance);
+            var excluded = (args.Length > 7)
+                ? explosionSystem.GetDirectionalRestriction(coords, Angle.FromDegrees(angle), spread, distance)
+                : new HashSet<Vector2i>();
 
-            if (args[0] == "spawn")
-            {
-                EntitySystem.Get<ExplosionSystem>().QueueExplosion(coords, type.ID, intensity, slope, maxIntensity, excluded);
-                return;
-            }
-
-            if (player?.AttachedEntity == null)
-            {
-                shell.WriteLine("You must have an attached entity.");
-                return;
-            }
-
-            EntitySystem.Get<ExplosionDebugOverlaySystem>().Preview(player, coords, type, intensity, slope, maxIntensity, excluded);
+            explosionSystem.QueueExplosion(coords, type.ID, intensity, slope, maxIntensity, excluded);
         }
     }
 }

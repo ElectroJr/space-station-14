@@ -27,7 +27,11 @@ namespace Content.Client.Sandbox
 
         private List<MapId> _mapData = new();
         private List<string> _explosionTypes = new();
-        private bool _preview;
+
+        /// <summary>
+        ///     Used to prevent uneccesary preview updates when setting fields.
+        /// </summary>
+        private bool _pausePreview ;
 
         public ExplosionSpawnWindow()
         {
@@ -38,9 +42,9 @@ namespace Content.Client.Sandbox
             MapOptions.OnItemSelected += MapSelected;
             Recentre.OnPressed += (_) => SetLocation();
             Directed.OnToggled += DirectedToggled;
-            Preview.OnToggled += PreviewToggled;
             Spawn.OnPressed += SubmitButtonOnOnPressed;
 
+            Preview.OnToggled += (_) => UpdatePreview();
             MapX.OnValueChanged += (_) => UpdatePreview();
             MapY.OnValueChanged += (_) => UpdatePreview();
             Intensity.OnValueChanged += (_) => UpdatePreview();
@@ -63,15 +67,6 @@ namespace Content.Client.Sandbox
             UpdatePreview();
         }
 
-        private void PreviewToggled(ButtonToggledEventArgs args)
-        {
-            _preview = Preview.Pressed;
-            if (!_preview)
-                _conHost.ExecuteCommand("explosion clear");
-            else
-                UpdatePreview();
-        }
-
         private void DirectedToggled(ButtonToggledEventArgs args)
         {
             DirectedBox.Visible = Directed.Pressed;
@@ -88,10 +83,10 @@ namespace Content.Client.Sandbox
         protected override void EnteredTree()
         {
             SetLocation();
-            UpdateExplosionTypes();
+            UpdateExplosionTypeOptions();
         }
 
-        private void UpdateExplosionTypes()
+        private void UpdateExplosionTypeOptions()
         {
             _explosionTypes.Clear();
             ExplosionOption.Clear();
@@ -102,7 +97,7 @@ namespace Content.Client.Sandbox
             }
         }
 
-        private void UpdateMaps()
+        private void UpdateMapOptions()
         {
             _mapData.Clear();
             MapOptions.Clear();
@@ -118,55 +113,41 @@ namespace Content.Client.Sandbox
         /// </summary>
         private void SetLocation()
         {
-            UpdateMaps();
+            UpdateMapOptions();
 
             var transform = _playerManager.LocalPlayer?.ControlledEntity?.Transform;
             if (transform == null)
                 return;
 
-            // avoid a triple preview update when setting values
-            _preview = false;
-
+            _pausePreview = true;
             MapOptions.Select(_mapData.IndexOf(transform.MapID));
             (MapX.Value,  MapY.Value) = transform.MapPosition.Position;
+            _pausePreview = false;
 
-            _preview = Preview.Pressed;
             UpdatePreview();
         }
 
-        private void UpdatePreview()
+        private void UpdatePreview(bool clear = false)
         {
-            if (_preview)
-                _conHost.ExecuteCommand("explosion preview " + GetCommandArgs());
+            if (_pausePreview)
+                return;
         }
-
-        /// <summary>
-        ///     Parse all the explosion data into arguments for the explosion command.
-        /// </summary>
-        private string GetCommandArgs()
+        
+        private void SubmitButtonOnOnPressed(ButtonEventArgs args)
         {
+            Preview.Pressed = false;
+
+            // for the actual explosion, we will just re-use the explosion command.
+            // so assemble command arguments:
             var mapId = _mapData[MapOptions.SelectedId];
             var explosionType = _explosionTypes[ExplosionOption.SelectedId];
-
-            var args = $"{MapX.Value} {MapY.Value} {mapId} {Intensity.Value} " +
+            var cmd = $"explosion {MapX.Value} {MapY.Value} {Intensity.Value} {mapId} " +
                 $"{Slope.Value} {MaxIntensity.Value} {explosionType}";
 
             if (Directed.Pressed)
-                args += $" {Angle.Value} {Spread.Value} {Distance.Value}";
+                cmd += $" {Angle.Value} {Spread.Value} {Distance.Value}";
 
-            return args;
-        }
-
-        private void SubmitButtonOnOnPressed(ButtonEventArgs args)
-        {
-            if (_preview)
-            {
-                // Clear preview. Need a view to appreciate the fireworks.
-                _preview = Preview.Pressed = false;
-                _conHost.ExecuteCommand("explosion clear");
-            }
-
-            _conHost.ExecuteCommand("explosion spawn " + GetCommandArgs());
+            _conHost.ExecuteCommand(cmd);
         }
     }
 }
