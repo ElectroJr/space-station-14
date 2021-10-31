@@ -10,16 +10,16 @@
         </BoxContainer>
         
         <BoxContainer Orientation="Horizontal">
-            <Label Text="Grid" MinSize="120 0" />
-            <OptionButton Name="GridOptions" MinSize="70 0" HorizontalExpand="True" />
+            <Label Text="MapId" MinSize="120 0" />
+            <OptionButton Name="MapOptions" MinSize="70 0" HorizontalExpand="True" />
         </BoxContainer>
         <BoxContainer Orientation="Horizontal">
-            <Label Text="X" MinSize="120 0" />
-            <SpinBox Name="TileX" MinSize="70 0" HorizontalExpand="True" />
+            <Label Text="X (Map)" MinSize="120 0" />
+            <FloatSpinBox Name="MapX" MinSize="70 0" HorizontalExpand="True" />
         </BoxContainer>
         <BoxContainer Orientation="Horizontal">
-            <Label Text="Y" MinSize="120 0" />
-            <SpinBox Name="TileY" MinSize="70 0" HorizontalExpand="True" />
+            <Label Text="Y (Map)" MinSize="120 0" />
+            <FloatSpinBox Name="MapY" MinSize="70 0" HorizontalExpand="True" />
         </BoxContainer>
         <Button Name="Recentre" Text="Current Position" />
 
@@ -40,6 +40,7 @@
         </BoxContainer>
 
         <Control MinSize="0 20"/>
+        
         <CheckBox Name="Directed" Text="Directional"/>
         <BoxContainer Name="DirectedBox" Orientation="Vertical" Visible="False" MaxHeight="90">
             <BoxContainer Orientation="Horizontal">

@@ -14,11 +14,6 @@ namespace Content.Client.Explosion
     public sealed class ExplosionOverlay : Overlay
     {
         /// <summary>
-        /// Fire.rsi has 3 fire states, and two other states that we dont want.
-        /// </summary>
-        private const int TotalFireStates = 3;
-
-        /// <summary>
         ///     The explosion that needs to be drawn. This explosion is currently being processed by the server and
         ///     expanding outwards.
         /// </summary>
@@ -56,24 +51,28 @@ namespace Content.Client.Explosion
             var worldBounds = _eyeManager.GetWorldViewbounds();
 
             if (ActiveExplosion != null)
-                DrawExplosion(drawHandle, worldBounds, ActiveExplosion, Index);
+            {
+                var gridBounds = ActiveExplosion.Grid.InvWorldMatrix.TransformBox(worldBounds);
+                DrawExplosion(drawHandle, gridBounds, ActiveExplosion, Index);
+            }
 
             foreach (var exp in CompletedExplosions)
             {
-                DrawExplosion(drawHandle, worldBounds, exp, exp.Tiles.Count);
+                var gridBounds = exp.Grid.InvWorldMatrix.TransformBox(worldBounds);
+                DrawExplosion(drawHandle, gridBounds, exp, exp.Tiles.Count);
             }
 
             drawHandle.SetTransform(Matrix3.Identity);
         }
 
-        private void DrawExplosion(DrawingHandleWorld drawHandle, Box2Rotated worldBounds, Explosion exp, int index)
+        private void DrawExplosion(DrawingHandleWorld drawHandle, Box2 gridBounds, Explosion exp, int index)
         {
             drawHandle.SetTransform(exp.Grid.WorldMatrix);
-            var gridBounds = exp.Grid.InvWorldMatrix.TransformBox(worldBounds);
 
             for (var j = 0; j < index; j++)
             {
-                var frames = exp.Frames[(int) Math.Min(exp.Intensity[j] / IntensityPerState, TotalFireStates - 1)];
+                var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.Frames.Count - 1);
+                var frames = exp.Frames[frameIndex];
                 DrawExplodingTiles(drawHandle, exp.Grid, exp.Tiles[j], gridBounds, frames);
             }
         }

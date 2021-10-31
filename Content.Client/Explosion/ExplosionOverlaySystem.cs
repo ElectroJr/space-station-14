@@ -11,6 +11,10 @@ using System.Collections.Generic;
 
 namespace Content.Client.Explosion
 {
+    /// <summary>
+    ///     This system is responsible for showing the client-side explosion effects (light source & fire-overlay). The
+    ///     fire overlay code is just a bastardized version of the atmos plasma fire overlay and uses the same texture.
+    /// </summary>
     public sealed class ExplosionOverlaySystem : EntitySystem
     {
         private ExplosionOverlay _overlay = default!;
@@ -37,6 +41,8 @@ namespace Content.Client.Explosion
         {
             base.FrameUpdate(frameTime);
 
+            // increment the lifetime of completed explosions, and remove them if they have been ons screen for more
+            // than ExplosionPersistence seconds
             foreach (var explosion in _overlay.CompletedExplosions.ToArray())
             {
                 explosion.Lifetime += frameTime;
@@ -49,6 +55,10 @@ namespace Content.Client.Explosion
             }
         }
 
+        /// <summary>
+        ///     The server has processed some explosion. This updates the client-side overlay so that the area covered
+        ///     by the fire-visual matches up with the area that the explosion has affected.
+        /// </summary>
         private void HandleExplosionUpdate(ExplosionOverlayUpdateEvent args)
         {
             if (_overlay.ActiveExplosion == null)
@@ -64,6 +74,10 @@ namespace Content.Client.Explosion
             _overlay.ActiveExplosion = null;
         }
 
+        /// <summary>
+        ///     A new explosion occurred. This prepares the client-side light entity and stores the
+        ///     explosion/fire-effect overlay data.
+        /// </summary>
         private void OnExplosion(ExplosionEvent args)
         {
             var light = EntityManager.SpawnEntity("ExplosionLight", args.Epicenter);
@@ -85,16 +99,26 @@ namespace Content.Client.Explosion
 
     internal class Explosion
     {
-        public List<Texture[]> Frames = new();
         public IMapGrid Grid;
         public List<HashSet<Vector2i>> Tiles;
         public List<float> Intensity;
         public EntityUid LightEntity;
 
         /// <summary>
-        ///     How long we have been drawing this explosion, starting from the time it was completed/full drawn.
+        ///     How long have we been drawing this explosion, starting from the time the explosion was fully drawn.
         /// </summary>
         public float Lifetime;
+
+        /// <summary>
+        ///     The textures used for the explosion fire effect. Each fire-state is associated with an explosion
+        ///     intensity range, and each stat itself has several textures.
+        /// </summary>
+        public List<Texture[]> Frames = new();
+
+        /// <summary>
+        ///     We want the first three states in Fire.rsi, and not the last two.
+        /// </summary>
+        private const int TotalFireStates = 3;
 
         internal Explosion(ExplosionEvent args, IEntity light)
         {
@@ -111,10 +135,12 @@ namespace Content.Client.Explosion
             lightComp.Energy = lightComp.Radius;
             lightComp.Color = type.LightColor;
 
-            var resource = IoCManager.Resolve<IResourceCache>().GetResource<RSIResource>(type.TexturePath).RSI;
-            foreach (var state in resource)
+            var fireRsi = IoCManager.Resolve<IResourceCache>().GetResource<RSIResource>(type.TexturePath).RSI;
+            foreach (var state in fireRsi)
             {
                 Frames.Add(state.GetFrames(RSI.State.Direction.South));
+                if (Frames.Count == TotalFireStates)
+                    break;
             }
         }
     }

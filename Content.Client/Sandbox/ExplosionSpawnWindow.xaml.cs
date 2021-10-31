@@ -9,7 +9,6 @@ using Robust.Client.UserInterface.XAML;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
 using static Robust.Client.UserInterface.Controls.BaseButton;
 using static Robust.Client.UserInterface.Controls.OptionButton;
@@ -26,7 +25,7 @@ namespace Content.Client.Sandbox
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
 
-        private List<GridId> _gridData = new();
+        private List<MapId> _mapData = new();
         private List<string> _explosionTypes = new();
         private bool _preview;
 
@@ -36,17 +35,14 @@ namespace Content.Client.Sandbox
             IoCManager.InjectDependencies(this);
 
             ExplosionOption.OnItemSelected += ExplosionSelected ;
-            GridOptions.OnItemSelected += GridSelected;
+            MapOptions.OnItemSelected += MapSelected;
             Recentre.OnPressed += (_) => SetLocation();
             Directed.OnToggled += DirectedToggled;
             Preview.OnToggled += PreviewToggled;
             Spawn.OnPressed += SubmitButtonOnOnPressed;
 
-            TileX.InitDefaultButtons();
-            TileY.InitDefaultButtons();
-
-            TileX.ValueChanged += (_, _) => UpdatePreview();
-            TileY.ValueChanged += (_, _) => UpdatePreview();
+            MapX.OnValueChanged += (_) => UpdatePreview();
+            MapY.OnValueChanged += (_) => UpdatePreview();
             Intensity.OnValueChanged += (_) => UpdatePreview();
             Slope.OnValueChanged += (_) => UpdatePreview();
             MaxIntensity.OnValueChanged += (_) => UpdatePreview();
@@ -61,9 +57,9 @@ namespace Content.Client.Sandbox
             UpdatePreview();
         }
 
-        private void GridSelected(ItemSelectedEventArgs args)
+        private void MapSelected(ItemSelectedEventArgs args)
         {
-            GridOptions.SelectId(args.Id);
+            MapOptions.SelectId(args.Id);
             UpdatePreview();
         }
 
@@ -106,19 +102,15 @@ namespace Content.Client.Sandbox
             }
         }
 
-        private void UpdateGrids()
+        private void UpdateMaps()
         {
-            _gridData.Clear();
-            GridOptions.Clear();
-            foreach (var grid in _mapManager.GetAllGrids())
+            _mapData.Clear();
+            MapOptions.Clear();
+            foreach (var map in _mapManager.GetAllMapIds())
             {
-                _gridData.Add(grid.Index);
-                GridOptions.AddItem($"{grid.Index}");
+                _mapData.Add(map);
+                MapOptions.AddItem(map.ToString());
             }
-
-            // spaaaaaaace
-            _gridData.Add(GridId.Invalid);
-            GridOptions.AddItem($"{GridId.Invalid}"); 
         }
 
         /// <summary>
@@ -126,7 +118,7 @@ namespace Content.Client.Sandbox
         /// </summary>
         private void SetLocation()
         {
-            UpdateGrids();
+            UpdateMaps();
 
             var transform = _playerManager.LocalPlayer?.ControlledEntity?.Transform;
             if (transform == null)
@@ -135,16 +127,8 @@ namespace Content.Client.Sandbox
             // avoid a triple preview update when setting values
             _preview = false;
 
-            GridOptions.Select(_gridData.IndexOf(transform.GridID));
-
-            Vector2i tileIndices;
-            if (_mapManager.TryGetGrid(transform.GridID, out var grid))
-                tileIndices = grid.TileIndicesFor(transform.Coordinates);
-            else
-                tileIndices = transform.Coordinates.ToVector2i(_entityManager, _mapManager);
-
-            TileX.Value = tileIndices.X;
-            TileY.Value = tileIndices.Y;
+            MapOptions.Select(_mapData.IndexOf(transform.MapID));
+            (MapX.Value,  MapY.Value) = transform.MapPosition.Position;
 
             _preview = Preview.Pressed;
             UpdatePreview();
@@ -161,16 +145,14 @@ namespace Content.Client.Sandbox
         /// </summary>
         private string GetCommandArgs()
         {
-            var gridId = _gridData[GridOptions.SelectedId];
+            var mapId = _mapData[MapOptions.SelectedId];
             var explosionType = _explosionTypes[ExplosionOption.SelectedId];
 
-            var args = $"{TileX.Value} {TileY.Value} {gridId} {Intensity.Value} " +
+            var args = $"{MapX.Value} {MapY.Value} {mapId} {Intensity.Value} " +
                 $"{Slope.Value} {MaxIntensity.Value} {explosionType}";
 
-            if (!Directed.Pressed)
-                return args;
-
-            args += $" {Angle.Value} {Spread.Value} {Distance.Value}";
+            if (Directed.Pressed)
+                args += $" {Angle.Value} {Spread.Value} {Distance.Value}";
 
             return args;
         }

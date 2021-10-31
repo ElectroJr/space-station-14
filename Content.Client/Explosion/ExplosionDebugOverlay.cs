@@ -58,11 +58,17 @@ namespace Content.Client.Explosion
         {
             var handle = args.ScreenHandle;
             var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
+            var worldBounds = _eyeManager.GetWorldViewbounds();
+            var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
 
             for (int i = 2; i < Tiles.Count; i++)
             {
                 foreach (var tile in Tiles[i])
                 {
+                    // is the center of this tile visible to the user?
+                    if (!gridBounds.Contains((Vector2) tile + 0.5f))
+                        continue;
+
                     var worldCenter = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
                     var screenCenter = _eyeManager.WorldToScreen(worldCenter);
                     
@@ -89,6 +95,8 @@ namespace Content.Client.Explosion
         {
             var handle = args.WorldHandle;
             var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
+            var worldBounds = _eyeManager.GetWorldViewbounds();
+            var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
 
             for (int i = 0; i < Tiles.Count; i++)
             {
@@ -98,9 +106,13 @@ namespace Content.Client.Explosion
 
                 foreach (var tile in Tiles[i])
                 {
-                    var centre = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
-                    var box = Box2.UnitCentered.Translated(centre);
-                    var rotatedBox = new Box2Rotated(box, gridXform.WorldRotation, centre);                    
+                    // is the center of this tile visible to the user?
+                    if (!gridBounds.Contains((Vector2) tile + 0.5f))
+                        continue;
+
+                    var worldCenter = gridXform.WorldMatrix.Transform((Vector2) tile + 0.5f);
+                    var worldBox = Box2.UnitCentered.Translated(worldCenter);
+                    var rotatedBox = new Box2Rotated(worldBox, gridXform.WorldRotation, worldCenter);                    
 
                     handle.DrawRect(rotatedBox, color, false);
                     handle.DrawRect(rotatedBox, colorTransparent);

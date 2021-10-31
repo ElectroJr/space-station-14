@@ -24,13 +24,7 @@ using Robust.Shared.Random;
 namespace Content.Server.Explosion
 {
     // TODO:
-    // - Make projectile explosions NOT spawn explosions INSIDE of entities
-    // --> FIX n future proofing: instead of getting the tile the entity is on, get ALL intersecting tiles
     // - as a placeholder for grid hop, make explosion in space just map to the first known grid.
-    // - MAAAYBE undo chunky salsa. Consequences:
-    //  - Can do explosion expansion iteratively. Deal damage, then check if free, then find neighbors
-    //  - No more need for figuring out how much damage an entity needs to take in order to break --> MUCH SIMPLER
-    //  - But: No more previews
 
     // TODO after opening draft:
     // - Make explosion window EUI & remove preview commands
@@ -227,17 +221,7 @@ namespace Content.Server.Explosion
             if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
 
-            if (!_mapManager.TryFindGridAt(transform.MapPosition, out var grid))
-                return;
-
-            var box = _entityLookup.GetWorldAabbFromEntity(EntityManager.GetEntity(uid));
-            HashSet<Vector2i> initialTiles = new();
-            foreach (var tile in grid.GetTilesIntersecting(box))
-            {
-                initialTiles.Add(tile.GridIndices);
-            }
-
-            QueueExplosion(grid.Index, transform.MapPosition, initialTiles, typeId, intensity, slope, maxTileIntensity, excludedTiles);
+            QueueExplosion(transform.MapPosition, typeId, intensity, slope, maxTileIntensity, excludedTiles);
         }
 
         /// <summary>
@@ -246,7 +230,12 @@ namespace Content.Server.Explosion
         public void QueueExplosion(MapCoordinates coords, string typeId, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
         {
             if (!_mapManager.TryFindGridAt(coords, out var grid))
-                return;
+            {
+                // TODO EXPLOSIONS get proper multi-grid explosions working. For now, default to first grid.
+                grid = _mapManager.GetAllMapGrids(coords.MapId).FirstOrDefault();
+                if (grid == null)
+                    return;
+            }
 
             HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(coords) };
             QueueExplosion(grid.Index, coords, initialTiles, typeId, intensity, slope, maxTileIntensity, excludedTiles);
