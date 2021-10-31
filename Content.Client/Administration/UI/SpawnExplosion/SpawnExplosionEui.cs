@@ -4,17 +4,23 @@ using Content.Shared.Eui;
 using JetBrains.Annotations;
 using Robust.Client.Graphics;
 using Robust.Shared.IoC;
+using Robust.Shared.Map;
 
 namespace Content.Client.Administration.UI.SpawnExplosion
 {
     [UsedImplicitly]
     public sealed class SpawnExplosionEui : BaseEui
     {
+        [Dependency] private readonly IOverlayManager _overlayManager = default!;
+        [Dependency] private readonly IMapManager _mapManager = default!;
+
         private readonly SpawnExplosionWindow _window;
+        private ExplosionDebugOverlay? _debugOverlay;
 
         public SpawnExplosionEui()
         {
-            _window = new SpawnExplosionWindow();
+            IoCManager.InjectDependencies(this);
+            _window = new SpawnExplosionWindow(this);
             _window.OnClose += () => SendMessage(new SpawnExplosionEuiMsg.Close());
         }
 
@@ -29,35 +35,42 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             base.Closed();
             _window.OnClose -= () => SendMessage(new SpawnExplosionEuiMsg.Close());
             _window.Close();
-
-            var overlayManager = IoCManager.Resolve<IOverlayManager>();
-            if (overlayManager.HasOverlay<ExplosionDebugOverlay>())
-                overlayManager.RemoveOverlay<ExplosionDebugOverlay>();
+            ClearOverlay();
         }
 
-        public override void HandleState(EuiStateBase state)
+        public void ClearOverlay()
         {
-            var outfitState = (SpawnExplosionEuiState) state;
-            _window.TargetEntityId = outfitState.TargetEntityId;
+            if (_overlayManager.HasOverlay<ExplosionDebugOverlay>())
+                _overlayManager.RemoveOverlay<ExplosionDebugOverlay>();
+            _debugOverlay = null;
+        }
 
-            if (args.Epicenter == MapCoordinates.Nullspace)
-            {
-                // remove the explosion overlay
-                if (_overlayManager.HasOverlay<ExplosionDebugOverlay>())
-                    _overlayManager.RemoveOverlay(Overlay);
+        public void RequestPreviewData(MapCoordinates epicenter, string typeId, float totalIntensity, float intensitySlope, float maxIntensity)
+        {
+            var msg = new SpawnExplosionEuiMsg.PreviewRequest(epicenter, typeId, totalIntensity, intensitySlope, maxIntensity);
+            SendMessage(msg);
+        }
 
-                Overlay.Tiles.Clear();
+        /// <summary>
+        ///     Receive explosion preview data and add a clientside explosion preview overlay
+        /// </summary>
+        /// <param name="msg"></param>
+        public override void HandleMessage(EuiMessageBase msg)
+        {
+            if (msg is not SpawnExplosionEuiMsg.PreviewData data)
                 return;
+
+            if (_debugOverlay == null)
+            {
+                _debugOverlay = new();
+                _overlayManager.AddOverlay(_debugOverlay);
             }
 
-            Overlay.Tiles = args.Tiles;
-            Overlay.Intensity = args.Intensity;
-            Overlay.Slope = args.Slope;
-            Overlay.TotalIntensity = args.TotalIntensity;
-            _mapManager.TryGetGrid(args.GridId, out Overlay.Grid);
-
-            if (!_overlayManager.HasOverlay<ExplosionDebugOverlay>())
-                _overlayManager.AddOverlay(Overlay);
+            _debugOverlay.Tiles = data.Explosion.Tiles;
+            _debugOverlay.Intensity = data.Explosion.Intensity;
+            _debugOverlay.Slope = data.Slope;
+            _debugOverlay.TotalIntensity = data.TotalIntensity;
+            _mapManager.TryGetGrid(data.Explosion.GridId, out _debugOverlay.Grid);
         }
     }
 }

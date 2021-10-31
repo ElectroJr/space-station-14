@@ -23,12 +23,8 @@ using Robust.Shared.Random;
 
 namespace Content.Server.Explosion
 {
-    // TODO:
-    // - as a placeholder for grid hop, make explosion in space just map to the first known grid.
-
     // TODO after opening draft:
-    // - Make explosion window EUI & remove preview commands
-    // - Grid jump
+    // - cross-grid explosions jump
     // - Improved directional blocking (if not become unblocked, only damage blocking entity)
     //   - Also requires modified debug overlay
     //   - For other entities on that tile, damage will go from 0 to MANY in a single iteration
@@ -47,7 +43,6 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly IConfigurationManager _cfg = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
-        [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
 

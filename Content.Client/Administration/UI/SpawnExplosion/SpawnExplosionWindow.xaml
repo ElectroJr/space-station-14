@@ -1,7 +1,7 @@
 <SS14Window
     xmlns="https://spacestation14.io"
     Title="{Loc 'admin-explosion-eui-title'}"
-    MinHeight="420">
+    SetHeight="380">
     <BoxContainer Name="MainContainer" Orientation="Vertical">
 
         <BoxContainer Orientation="Horizontal">

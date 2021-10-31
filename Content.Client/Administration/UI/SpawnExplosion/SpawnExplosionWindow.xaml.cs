@@ -23,6 +23,8 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
 
+
+        private readonly SpawnExplosionEui Eui;
         private List<MapId> _mapData = new();
         private List<string> _explosionTypes = new();
 
@@ -31,10 +33,11 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         /// </summary>
         private bool _pausePreview ;
 
-        public SpawnExplosionWindow()
+        public SpawnExplosionWindow(SpawnExplosionEui eui)
         {
             RobustXamlLoader.Load(this);
             IoCManager.InjectDependencies(this);
+            Eui = eui;
 
             ExplosionOption.OnItemSelected += ExplosionSelected ;
             MapOptions.OnItemSelected += MapSelected;
@@ -108,10 +111,20 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             UpdatePreview();
         }
 
-        private void UpdatePreview(bool clear = false)
+        private void UpdatePreview()
         {
             if (_pausePreview)
                 return;
+
+            if (!Preview.Pressed)
+            {
+                Eui.ClearOverlay();
+                return;
+            }
+
+            MapCoordinates coords = new((MapX.Value, MapY.Value), _mapData[MapOptions.SelectedId]);
+            var explosionType = _explosionTypes[ExplosionOption.SelectedId];
+            Eui.RequestPreviewData(coords, explosionType, Intensity.Value, Slope.Value, MaxIntensity.Value);
         }
         
         private void SubmitButtonOnOnPressed(ButtonEventArgs args)

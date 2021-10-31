@@ -1,6 +1,9 @@
+using Content.Server.Administration.UI;
+using Content.Server.EUI;
 using Content.Server.Explosion;
 using Content.Shared.Administration;
 using Content.Shared.Explosion;
+using Robust.Server.Player;
 using Robust.Shared.Console;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
@@ -10,6 +13,28 @@ using System.Linq;
 
 namespace Content.Server.Administration.Commands
 {
+    [AdminCommand(AdminFlags.Fun)]
+    public sealed class OpenExplosionEui : IConsoleCommand
+    {
+        public string Command => "exeui";
+        public string Description => "Opens a window for easy access to station destruction";
+        public string Help => "Usage: exeui";
+
+        public void Execute(IConsoleShell shell, string argStr, string[] args)
+        {
+            var player = shell.Player as IPlayerSession;
+            if (player == null)
+            {
+                shell.WriteLine("This does not work from the server console.");
+                return;
+            }
+
+            var eui = IoCManager.Resolve<EuiManager>();
+            var ui = new SpawnExplosionEui();
+            eui.OpenEui(ui, player);
+        }
+    }
+
     [AdminCommand(AdminFlags.Fun)] // for the admin. Not so much for anyone else.
     public sealed class ExplosionCommand : IConsoleCommand
     {

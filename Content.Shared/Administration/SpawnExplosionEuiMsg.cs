@@ -21,16 +21,14 @@ namespace Content.Shared.Administration
         {
             public readonly MapCoordinates Epicenter;
             public readonly string TypeId;
-            public readonly HashSet<Vector2i> Excluded;
             public readonly float TotalIntensity;
             public readonly float IntensitySlope;
             public readonly float MaxIntensity;
 
-            public PreviewRequest(MapCoordinates epicenter, string typeId, HashSet<Vector2i> excluded, float totalIntensity, float intensitySlope, float maxIntensity)
+            public PreviewRequest(MapCoordinates epicenter, string typeId, float totalIntensity, float intensitySlope, float maxIntensity)
             {
                 Epicenter = epicenter;
                 TypeId = typeId;
-                Excluded = excluded;
                 TotalIntensity = totalIntensity;
                 IntensitySlope = intensitySlope;
                 MaxIntensity = maxIntensity;
@@ -47,11 +45,11 @@ namespace Content.Shared.Administration
             public readonly float TotalIntensity;
             public readonly ExplosionEvent Explosion;
 
-            public PreviewData(MapCoordinates epicenter, string typeID, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId grid, float slope, float totalIntensity)
+            public PreviewData(ExplosionEvent explosion, float slope, float totalIntensity)
             {
                 Slope = slope;
                 TotalIntensity = totalIntensity;
-                Explosion = new(epicenter, typeID, tiles, intensity, grid);
+                Explosion = explosion;
             }
         }
     }

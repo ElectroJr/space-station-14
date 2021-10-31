@@ -1,8 +1,8 @@
 using Content.Server.EUI;
 using Content.Server.Explosion;
 using Content.Shared.Administration;
-using Content.Shared.Chemistry.Components.SolutionManager;
 using Content.Shared.Eui;
+using Content.Shared.Explosion;
 using JetBrains.Annotations;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
@@ -53,6 +53,10 @@ namespace Content.Server.Administration.UI
                 request.IntensitySlope,
                 request.MaxIntensity);
 
+            // the explosion event that **would** be sent to all clients, if it were a real explosion.
+            var explosion = new ExplosionEvent(request.Epicenter, request.TypeId, tileSetList, tileSetIntensity, grid.Index);
+
+            SendMessage(new SpawnExplosionEuiMsg.PreviewData(explosion, request.IntensitySlope, request.TotalIntensity));
         }
     }
 }
