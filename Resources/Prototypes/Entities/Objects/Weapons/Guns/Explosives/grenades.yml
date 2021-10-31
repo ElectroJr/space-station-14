@@ -20,8 +20,8 @@
   - type: Explosive
     explosionType: Default
     maxIntensity: 10
-    intensitySlope: 2
-    totalIntensity: 100 # about a ~4 tile radius
+    intensitySlope: 3
+    totalIntensity: 120 # about a ~4 tile radius
   - type: ExplodeOnTrigger
   - type: Damageable
     damageContainer: Inorganic
@@ -97,8 +97,9 @@
     delay: 5
   - type: Explosive
     explosionType: Default
-    totalIntensity: 200
-    maxIntensity: 10 # caps at 150 damage
+    totalIntensity: 400
+    intensitySlope: 3
+    maxIntensity: 20
   - type: ExplodeOnTrigger
   - type: Damageable
     damageContainer: Inorganic

@@ -50,7 +50,7 @@ namespace Content.Server.Explosion
             var iteration = 3;
 
             // is this even a multi-tile explosion?
-            if (totalIntensity < slope * initialTiles.Count)
+            if (totalIntensity < intensityStepSize * initialTiles.Count)
                 return (tileSetList, new() { 0, totalIntensity / initialTiles.Count, 0 });
 
             // List of all tiles in the explosion.
@@ -58,8 +58,8 @@ namespace Content.Server.Explosion
             // Therefore, can also used to exclude tiles
             HashSet<Vector2i> processedTiles = new(initialTiles);
             var tilesInIteration = new List<int> { 0, initialTiles.Count, 0 };
-            List<float> tileSetIntensity = new () { 0, slope, 0 };
-            float remainingIntensity = totalIntensity - slope * initialTiles.Count;
+            List<float> tileSetIntensity = new () { 0, intensityStepSize, 0 };
+            float remainingIntensity = totalIntensity - intensityStepSize * initialTiles.Count;
 
             // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
             // explosion cannot LEAVE a tile in a certain direction, while delayedSpreader is when an explosion cannot
@@ -94,7 +94,33 @@ namespace Content.Server.Explosion
             {
                 var previousIntensity = remainingIntensity;
 
-                // First we will add a new iteration of tiles
+                // First, we try to increase the intensity of previous iterations.
+                for (var i = maxIntensityIndex; i < iteration; i++)
+                {
+                    if (tilesInIteration[i] * intensityStepSize >= remainingIntensity &&
+                        tilesInIteration[i] * (maxIntensity - tileSetIntensity[i]) >= remainingIntensity)
+                    {
+                        // there is not enough left to distribute. add a fractional amount and break.
+                        tileSetIntensity[i] += (float) remainingIntensity / tilesInIteration[i];
+                        exit = true;
+                        break;
+                    }
+
+                    tileSetIntensity[i] += intensityStepSize;
+                    remainingIntensity -= tilesInIteration[i] * intensityStepSize;
+
+                    if (tileSetIntensity[i] >= maxIntensity)
+                    {
+                        // reached max intensity, stop increasing intensity of this tile set and refund some intensity
+                        remainingIntensity += tilesInIteration[i] * (tileSetIntensity[i] - maxIntensity);
+                        maxIntensityIndex = i + 1;
+                        tileSetIntensity[i] = maxIntensity;
+                    }
+                }
+
+                if (exit) break;
+
+                // Next, we will add a new iteration of tiles
                 newTiles = new();
                 tileSetList.Add(newTiles);
                 tilesInIteration.Add(0);
@@ -153,37 +179,11 @@ namespace Content.Server.Explosion
                 tileSetIntensity.Add(intensityStepSize);
                 remainingIntensity -= tilesInIteration[^1] * intensityStepSize;
 
-                // Now that we added a complete new iteration of tiles, we try to increase the intensity of previous
-                // iterations.
-                for (var i = maxIntensityIndex; i < iteration; i++)
-                {
-                    if (tilesInIteration[i] * intensityStepSize >= remainingIntensity &&
-                        tilesInIteration[i] * (maxIntensity - tileSetIntensity[i]) >= remainingIntensity)
-                    {
-                        // there is not enough left to distribute. add a fractional amount and break.
-                        tileSetIntensity[i] += (float) remainingIntensity / tilesInIteration[i];
-                        exit = true;
-                        break;
-                    }
-
-                    tileSetIntensity[i] += intensityStepSize;
-                    remainingIntensity -= tilesInIteration[i] * intensityStepSize;
-
-                    if (tileSetIntensity[i] >= maxIntensity)
-                    {
-                        // reached max intensity, stop increasing intensity of this tile set and refund some intensity
-                        remainingIntensity += tilesInIteration[i] * (tileSetIntensity[i] - maxIntensity);
-                        maxIntensityIndex = i + 1;
-                        tileSetIntensity[i] = maxIntensity;
-                    }
-                }
-                if (exit) break;
-
                 if (processedTiles.Count >= MaxArea)
                     //Whooo! MAXCAP!
                     break;
 
-                if (remainingIntensity == previousIntensity)
+                if (remainingIntensity == previousIntensity && !delayedNeighbors.ContainsKey(iteration + 1))
                     // this can only happen if all tiles are at maxTileIntensity and there were no neighbors to expand
                     // to. Given that all tiles are at their maximum damage, no walls will be broken in future
                     // iterations and we can just exit early.
@@ -283,13 +283,13 @@ namespace Content.Server.Explosion
                     if (ignoreTileBlockers || blockedDirections == AtmosDirection.Invalid)
                         continue;
 
+                    // At what explosion iteration would this blocker be destroyed?
+                    var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / intensityStepSize);
+
                     // This tile has one or more airtight entities anchored to it blocking the explosion from traveling in
                     // some directions. First, check whether this blocker can even be destroyed by this explosion?
                     if (sealIntegrity > maxIntensity || float.IsNaN(sealIntegrity))
                         continue;
-
-                    // At what explosion iteration would this blocker be destroyed?
-                    var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / intensityStepSize);
 
                     // We will add this neighbor to delayedTiles instead of yielding it directly during this iteration
                     if (!delayedNeighbors.TryGetValue(clearIteration, out var list))

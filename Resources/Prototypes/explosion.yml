@@ -11,7 +11,7 @@
   lightColor: Orange
 
 - type: explosion
-  id: Dirty
+  id: Radioactive
   damagePerIntensity:
     types:
       Radiation: 5
@@ -19,5 +19,5 @@
       Blunt: 3
       Piercing: 3
   lightColor: Green
-  # wysi texturePath: /Textures/Effects/green_fire.rsi 
+  # somday: texturePath: /Textures/Effects/green_fire.rsi 
   # that or just a white fire texture that can be modulated and reused for cryo & other explosion types

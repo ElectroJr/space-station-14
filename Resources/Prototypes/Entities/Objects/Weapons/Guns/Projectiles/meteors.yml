@@ -18,9 +18,12 @@
     deleteOnCollide: false
   - type: Explosive
     explosionType: Default
-    totalIntensity: 750 # a ~7 tile radius.
-    intensitySlope: 2 # will kill you within ~4 tiles
-    maxIntensity: 20 # deals at most 300 damage to a single tile.
+    totalIntensity: 2000.0 # a ~4 tile radius.
+    intensitySlope: 20
+    maxIntensity: 60 
+    # enough to kill reinforced wlls in a 3x3 area
+    # so meteors are actually a problem for the station.
+    # though maybe reinforced walls should just be nerfed?
   - type: Physics
     bodyType: Dynamic
     fixedRotation: false
