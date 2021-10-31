@@ -6,7 +6,6 @@ using Robust.Client.Console;
 using Robust.Client.Player;
 using Robust.Client.UserInterface.CustomControls;
 using Robust.Client.UserInterface.XAML;
-using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Prototypes;
@@ -22,18 +21,17 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IClientConsoleHost _conHost = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IPlayerManager _playerManager = default!;
-        [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
 
         private List<MapId> _mapData = new();
         private List<string> _explosionTypes = new();
 
         /// <summary>
-        ///     Used to prevent uneccesary preview updates when setting fields.
+        ///     Used to prevent unnecessary preview updates when setting fields.
         /// </summary>
         private bool _pausePreview ;
 
-        public ExplosionSpawnWindow()
+        public SpawnExplosionWindow()
         {
             RobustXamlLoader.Load(this);
             IoCManager.InjectDependencies(this);
@@ -41,7 +39,6 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             ExplosionOption.OnItemSelected += ExplosionSelected ;
             MapOptions.OnItemSelected += MapSelected;
             Recentre.OnPressed += (_) => SetLocation();
-            Directed.OnToggled += DirectedToggled;
             Spawn.OnPressed += SubmitButtonOnOnPressed;
 
             Preview.OnToggled += (_) => UpdatePreview();
@@ -50,9 +47,6 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             Intensity.OnValueChanged += (_) => UpdatePreview();
             Slope.OnValueChanged += (_) => UpdatePreview();
             MaxIntensity.OnValueChanged += (_) => UpdatePreview();
-            Angle.OnValueChanged += (_) => UpdatePreview();
-            Spread.OnValueChanged += (_) => UpdatePreview();
-            Distance.OnValueChanged += (_) => UpdatePreview();
         }
 
         private void ExplosionSelected(ItemSelectedEventArgs args)
@@ -64,19 +58,6 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         private void MapSelected(ItemSelectedEventArgs args)
         {
             MapOptions.SelectId(args.Id);
-            UpdatePreview();
-        }
-
-        private void DirectedToggled(ButtonToggledEventArgs args)
-        {
-            DirectedBox.Visible = Directed.Pressed;
-
-            // Is there really no way to easily get auto-resizing windows!?
-            if (DirectedBox.Visible)
-                SetHeight = Height + DirectedBox.MaxHeight;
-            else
-                SetHeight = Height - DirectedBox.MaxHeight;
-
             UpdatePreview();
         }
 
@@ -143,10 +124,6 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             var explosionType = _explosionTypes[ExplosionOption.SelectedId];
             var cmd = $"explosion {MapX.Value} {MapY.Value} {Intensity.Value} {mapId} " +
                 $"{Slope.Value} {MaxIntensity.Value} {explosionType}";
-
-            if (Directed.Pressed)
-                cmd += $" {Angle.Value} {Spread.Value} {Distance.Value}";
-
             _conHost.ExecuteCommand(cmd);
         }
     }

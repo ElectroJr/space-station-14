@@ -19,61 +19,16 @@ namespace Content.Server.Explosion
         public const int MaxArea = 7854;
 
         /// <summary>
-        ///     This function returns a set of tiles to exclude from an explosion, for use with directional explosions.
-        ///     The angle is relative to the grid the explosion is being spawned on.
-        /// </summary>
-        public HashSet<Vector2i> GetDirectionalRestriction(
-            MapCoordinates coords,
-            Angle angle,
-            float spread,
-            float distance)
-        {
-            if (!_mapManager.TryFindGridAt(coords, out var grid))
-                return new();
-
-            // Our directed explosion MUST have at least one directly adjacent tile it can propagate to. We enforce this by
-            // increasing the arc size until it contains a neighbor. If the direction is pointed exactly towards a
-            // neighboring tile, then the spread can be arbitrarily small
-            var deltaAngle = angle - angle.GetCardinalDir().ToAngle();
-            var minSpread = (float) (1 + 2 * Math.Abs(deltaAngle.Degrees));
-            spread = Math.Max(spread, minSpread) +0.01f;
-
-            // Get a circle centered on the epicenter, which is used to exclude tiles. The radius of this circle
-            // effectively determines "how far" the explosive is directed, before it spreads out normally. If the
-            // explosion wraps around this circle, it will look very odd, so it should probably be scaled with the
-            // explosion size.
-            var circle = new Circle(coords.Position, distance);
-            var centerTile = grid.WorldToTile(coords.Position);
-
-            HashSet<Vector2i> excluded = new();
-            foreach (var tileRef in grid.GetTilesIntersecting(circle, ignoreEmpty: false))
-            {
-                // As we only care about angles, it doesn't matter whether we use vector2i grid indices or Vector2
-                // tile-centers to calculate angles.
-                var relativeAngle = Math.Abs((angle - new Angle(tileRef.GridIndices - centerTile)).Reduced().Degrees);
-
-                if (relativeAngle > 180)
-                    relativeAngle  = 360 - relativeAngle;
-
-                // check whether the tile is outside of the included arc. If so, exclude it.
-                if (Math.Abs(relativeAngle) * 2 > spread)
-                    excluded.Add(tileRef.GridIndices);
-            }
-
-            return excluded;
-        }
-
-        /// <summary>
         ///     This is the main explosion generating function. 
         /// </summary>
         /// <param name="gridId">The grid where the epicenter tile is located</param>
-        /// <param name="epicenterTile">The center of the explosion, specified as a tile index</param>
+        /// <param name="initialTiles"> The initial set of tiles, or the "epicenter" tiles.</param>
+        /// <param name="typeID">The explosion type. this determines the explosion damage</param>
         /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
         /// <param name="slope">How quickly does the intensity decrease when moving away from the epicenter.</param>
         /// <param name="maxIntensity">The maximum intensity that the explosion can have at any given tile. This
         /// effectively caps the damage that this explosion can do.</param>
-        /// <param name="exclude">A set of tiles to exclude from the explosion.</param>
         /// <returns>Returns a list of tile-sets and a list of intensity values which describe the explosion.</returns>
         public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
             GridId gridId,
@@ -81,8 +36,7 @@ namespace Content.Server.Explosion
             string typeID,
             float totalIntensity,
             float slope,
-            float maxIntensity,
-            HashSet<Vector2i>? exclude = null)
+            float maxIntensity)
         {
             if (totalIntensity <= 0 || slope <= 0)
                 return (new(), new());
@@ -102,8 +56,7 @@ namespace Content.Server.Explosion
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.
             // Therefore, can also used to exclude tiles
-            HashSet<Vector2i> processedTiles = exclude ?? new();
-            processedTiles.UnionWith(initialTiles);
+            HashSet<Vector2i> processedTiles = new(initialTiles);
             var tilesInIteration = new List<int> { 0, initialTiles.Count, 0 };
             List<float> tileSetIntensity = new () { 0, slope, 0 };
             float remainingIntensity = totalIntensity - slope * initialTiles.Count;

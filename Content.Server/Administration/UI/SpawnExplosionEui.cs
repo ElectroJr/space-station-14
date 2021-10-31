@@ -9,6 +9,7 @@ using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Content.Server.Administration.UI
 {
@@ -41,18 +42,16 @@ namespace Content.Server.Administration.UI
                     return;
             }
 
-
             var sys = EntitySystem.Get<ExplosionSystem>();
-            var excludedTiles = sys.GetDirectionalRestriction();
             HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(request.Epicenter) };
+
             var (tileSetList, tileSetIntensity) = sys.GetExplosionTiles(
                 grid.Index,
                 initialTiles,
                 request.TypeId,
                 request.TotalIntensity,
                 request.IntensitySlope,
-                request.MaxIntensity,
-                excludedTiles);
+                request.MaxIntensity);
 
         }
     }

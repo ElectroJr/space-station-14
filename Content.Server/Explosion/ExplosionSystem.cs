@@ -167,11 +167,24 @@ namespace Content.Server.Explosion
             {
                 if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef))
                 {
-                    ExplodeTile(explosion.GridLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+                    ExplodeTile(explosion.GridLookup,
+                        explosion.Grid,
+                        tileIndices,
+                        intensity,
+                        damage,
+                        explosion.Epicenter,
+                        explosion.ProcessedEntities);
+
                     DamageFloorTile(tileRef, intensity, damagedTiles, explosion.ExplosionType);
                 }
 
-                ExplodeSpace(explosion.MapLookup, explosion.Grid, tileIndices, intensity, damage, explosion.Epicenter, explosion.ProcessedEntities);
+                ExplodeSpace(explosion.MapLookup,
+                    explosion.Grid,
+                    tileIndices,
+                    intensity,
+                    damage,
+                    explosion.Epicenter,
+                    explosion.ProcessedEntities);
 
                 processedTiles++;
                 if (processedTiles == tilesToProcess)
@@ -216,18 +229,26 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Queue an explosions, with an epicenter given by the tiles that some entity is intersecting.
         /// </summary>
-        public void QueueExplosion(EntityUid uid, string typeId, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(EntityUid uid,
+            string typeId,
+            float intensity,
+            float slope,
+            float maxTileIntensity)
         {
             if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
                 return;
 
-            QueueExplosion(transform.MapPosition, typeId, intensity, slope, maxTileIntensity, excludedTiles);
+            QueueExplosion(transform.MapPosition, typeId, intensity, slope, maxTileIntensity);
         }
 
         /// <summary>
         ///     Queue an explosions, with a center specified by some map coordinates.
         /// </summary>
-        public void QueueExplosion(MapCoordinates coords, string typeId, float intensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(MapCoordinates coords,
+            string typeId,
+            float intensity,
+            float slope,
+            float maxTileIntensity)
         {
             if (!_mapManager.TryFindGridAt(coords, out var grid))
             {
@@ -238,13 +259,19 @@ namespace Content.Server.Explosion
             }
 
             HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(coords) };
-            QueueExplosion(grid.Index, coords, initialTiles, typeId, intensity, slope, maxTileIntensity, excludedTiles);
+            QueueExplosion(grid.Index, coords, initialTiles, typeId, intensity, slope, maxTileIntensity);
         }
 
         /// <summary>
         ///     Queue an explosion, with a specified epicenter and set of starting tiles.
         /// </summary>
-        public void QueueExplosion(GridId gridId, MapCoordinates epicenter, HashSet<Vector2i> initialTiles, string typeId, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        public void QueueExplosion(GridId gridId,
+            MapCoordinates epicenter,
+            HashSet<Vector2i> initialTiles,
+            string typeId,
+            float totalIntensity,
+            float slope,
+            float maxTileIntensity)
         {
             if (totalIntensity <= 0 || slope <= 0)
                 return;
@@ -252,12 +279,20 @@ namespace Content.Server.Explosion
             if (!_prototypeManager.TryIndex<ExplosionPrototype>(typeId, out var type))
                 return;
 
-            _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, initialTiles, type, totalIntensity, slope, maxTileIntensity, excludedTiles));
+            _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, initialTiles, type, totalIntensity,
+                slope, maxTileIntensity));
         }
 
-        private Explosion SpawnExplosion(GridId gridId, MapCoordinates epicenter, HashSet<Vector2i> initialTiles, ExplosionPrototype type, float totalIntensity, float slope, float maxTileIntensity, HashSet<Vector2i>? excludedTiles = null)
+        private Explosion SpawnExplosion(GridId gridId,
+            MapCoordinates epicenter,
+            HashSet<Vector2i> initialTiles,
+            ExplosionPrototype type,
+            float totalIntensity,
+            float slope,
+            float maxTileIntensity)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity, excludedTiles);
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, initialTiles, type.ID, totalIntensity,
+                slope, maxTileIntensity);
 
             RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, gridId));
 
@@ -304,9 +339,13 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
-        ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the tile.
+        ///     Tries to damage the FLOOR TILE. Not to be confused with damaging / affecting entities intersecting the
+        ///     tile.
         /// </summary>
-        public void DamageFloorTile(TileRef tileRef, float intensity, List<(Vector2i GridIndices, Tile Tile)> damagedTiles, ExplosionPrototype type)
+        public void DamageFloorTile(TileRef tileRef,
+            float intensity,
+            List<(Vector2i GridIndices, Tile Tile)> damagedTiles,
+            ExplosionPrototype type)
         {
             if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
                 return;
@@ -336,7 +375,13 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Find entities on a tile using GridTileLookupSystem and apply explosion effects. 
         /// </summary>
-        public void ExplodeTile(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
+        public void ExplodeTile(EntityLookupComponent lookup,
+            IMapGrid grid,
+            Vector2i tile,
+            float intensity,
+            DamageSpecifier damage,
+            MapCoordinates epicenter,
+            HashSet<EntityUid> processed)
         {
             var gridBox = Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
 
@@ -344,8 +389,12 @@ namespace Content.Server.Explosion
 
             void ProcessEntity(IEntity entity)
             {
-                if (entity.Deleted || !processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                if (entity.Deleted ||
+                    !processed.Add(entity.Uid) ||
+                    _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                {
                     return;
+                }
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
 
@@ -392,19 +441,31 @@ namespace Content.Server.Explosion
         /// <summary>
         ///     Same as <see cref="ExplodeTile"/>, but using a slower entity lookup and without tiles to damage.
         /// </summary>
-        internal void ExplodeSpace(EntityLookupComponent lookup, IMapGrid grid, Vector2i tile, float intensity, DamageSpecifier damage, MapCoordinates epicenter, HashSet<EntityUid> processed)
+        internal void ExplodeSpace(EntityLookupComponent lookup,
+            IMapGrid grid,
+            Vector2i tile,
+            float intensity,
+            DamageSpecifier damage,
+            MapCoordinates epicenter,
+            HashSet<EntityUid> processed)
         {
             var gridBox = Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
             var worldBox = grid.WorldMatrix.TransformBox(gridBox);
             var throwForce = 10 * MathF.Sqrt(intensity);
 
             var matrix = grid.InvWorldMatrix;
-            Func<IEntity, bool> contains = (IEntity entity) => gridBox.Contains(matrix.Transform(entity.Transform.WorldPosition));
+            Func<IEntity, bool> contains = (IEntity entity) =>
+                gridBox.Contains(matrix.Transform(entity.Transform.WorldPosition));
 
             void ProcessEntity(IEntity entity)
             {
-                if (entity.Deleted || !contains(entity) || !processed.Add(entity.Uid) || _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                if (entity.Deleted ||
+                    !contains(entity) ||
+                    !processed.Add(entity.Uid) ||
+                    _containerSystem.IsEntityInContainer(entity.Uid, entity.Transform))
+                {
                     return;
+                }
 
                 _damageableSystem.TryChangeDamage(entity.Uid, damage);
 
@@ -453,7 +514,8 @@ namespace Content.Server.Explosion
         public readonly HashSet<EntityUid> ProcessedEntities = new();
 
         /// <summary>
-        ///     Tracks how close this explosion is to having been fully processed. Used to update client side explosion overlays.
+        ///     Tracks how close this explosion is to having been fully processed. Used to update client side explosion
+        ///     overlays.
         /// </summary>
         public int TileIteration = 1;
 
@@ -480,8 +542,9 @@ namespace Content.Server.Explosion
             Epicenter = epicenter;
             Grid = grid;
 
-            // We will remove tile sets from the list as we process them. We want to start the explosion from the center (currently the first entry).
-            // But this causes a slow List.RemoveAt(), reshuffling entries every time. So we reverse the list.
+            // We will remove tile sets from the list as we process them. We want to start the explosion from the center
+            // (currently the first entry). But this causes a slow List.RemoveAt(), reshuffling entries every time. So
+            // we reverse the list.
             _tileSetList.Reverse();
             _tileSetIntensity.Reverse();
 
@@ -489,7 +552,9 @@ namespace Content.Server.Explosion
             _tileEnumerator = _tileSetList.Last().GetEnumerator();
 
             // Is there really no way to directly get the map uid?
-            MapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId).GetComponent<EntityLookupComponent>();
+            MapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId)
+                .GetComponent<EntityLookupComponent>();
+
             GridLookup = IoCManager.Resolve<IEntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
         }
 
@@ -511,7 +576,9 @@ namespace Content.Server.Explosion
                     continue;
                 }
 
-                yield return (_tileEnumerator.Current, _tileSetIntensity[^1], ExplosionType.DamagePerIntensity * _tileSetIntensity[^1]);
+                yield return (_tileEnumerator.Current,
+                    _tileSetIntensity[^1],
+                    ExplosionType.DamagePerIntensity * _tileSetIntensity[^1]);
             }
         }
     }

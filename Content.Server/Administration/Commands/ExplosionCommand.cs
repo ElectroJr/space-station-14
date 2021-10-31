@@ -5,9 +5,7 @@ using Robust.Shared.Console;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Content.Server.Administration.Commands
@@ -17,7 +15,7 @@ namespace Content.Server.Administration.Commands
     {
         public string Command => "explosion";
         public string Description => "Train go boom";
-        public string Help => "Usage: explosion <x> <y> <intensity> [mapId] [slope] [maxIntensity] [prototypeId] [angle] [spread] [distance]";
+        public string Help => "Usage: explosion <x> <y> <intensity> [mapId] [slope] [maxIntensity] [prototypeId]";
 
         public void Execute(IConsoleShell shell, string argStr, string[] args)
         {
@@ -65,25 +63,7 @@ namespace Content.Server.Administration.Commands
                 type = protoMan.EnumeratePrototypes<ExplosionPrototype>().First();
             }
 
-            float angle = 0;
-            if (args.Length > 7 && !float.TryParse(args[7], out angle))
-                return;
-
-            float spread = 60;
-            if (args.Length > 8 && !float.TryParse(args[8], out spread))
-                return;
-
-            float distance = 5;
-            if (args.Length > 9 && !float.TryParse(args[9], out distance))
-                return;
-
-            var explosionSystem = EntitySystem.Get<ExplosionSystem>();
-
-            var excluded = (args.Length > 7)
-                ? explosionSystem.GetDirectionalRestriction(coords, Angle.FromDegrees(angle), spread, distance)
-                : new HashSet<Vector2i>();
-
-            explosionSystem.QueueExplosion(coords, type.ID, intensity, slope, maxIntensity, excluded);
+            EntitySystem.Get<ExplosionSystem>().QueueExplosion(coords, type.ID, intensity, slope, maxIntensity);
         }
     }
 }

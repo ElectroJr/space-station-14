@@ -41,24 +41,6 @@
 
         <Control MinSize="0 20"/>
 
-        <CheckBox Name="Directed" Text="{Loc 'admin-explosion-eui-label-directional'}"/>
-        <BoxContainer Name="DirectedBox" Orientation="Vertical" Visible="False" MaxHeight="90">
-            <BoxContainer Orientation="Horizontal">
-                <Label Text="{Loc 'admin-explosion-eui-label-angle'}" MinSize="120 0"/>
-                <FloatSpinBox Name="Angle" MinSize="130 0" HorizontalExpand="True" Value="90"/>
-            </BoxContainer>
-            <BoxContainer Orientation="Horizontal">
-                <Label Text="{Loc 'admin-explosion-eui-label-spread'}" MinSize="120 0"/>
-                <FloatSpinBox Name="Spread" MinSize="130 0" HorizontalExpand="True" Value="180"/>
-            </BoxContainer>
-            <BoxContainer Orientation="Horizontal">
-                <Label Text="{Loc 'admin-explosion-eui-label-distance'}" MinSize="120 0" />
-                <FloatSpinBox Name="Distance" MinSize="130  0" HorizontalExpand="True" Value="10"/>
-            </BoxContainer>
-        </BoxContainer>
-        
-        <Control MinSize="0 20"/>
-
         <Button Name="Spawn" Text="{Loc 'admin-explosion-eui-label-spawn'}" />
     </BoxContainer>
 </SS14Window>
