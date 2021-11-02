@@ -166,6 +166,17 @@
     netsync: false
     sprite: Objects/Weapons/Guns/Projectiles/rocket.rsi
     state: frag
+  - type: Physics
+    bodyType: Dynamic
+    fixtures:
+    - shape:
+        !type:PhysShapeAabb
+          bounds: "-0.12,-0.1,0.12,0.4"
+      hard: false
+      mask:
+      - Impassable
+      layer:
+      - MobImpassable
   - type: ExplodeOnTrigger
   - type: DeleteOnTrigger
   - type: TriggerOnCollide

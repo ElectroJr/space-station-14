@@ -83,8 +83,8 @@ namespace Content.Server.Explosion
                 // nothing to do
                 return;
 
-            var tilesToProcess = TilesPerTick;
-            while (tilesToProcess > 0)
+            var tilesRemaining = TilesPerTick;
+            while (tilesRemaining > 0)
             {
                 // if we don't have one, get a new explosion to process
                 if (_activeExplosion == null)
@@ -100,8 +100,8 @@ namespace Content.Server.Explosion
                         _nodeGroupSystem.Snoozing = true;
                 }
 
-                var processed = ProcessExplosion(_activeExplosion, tilesToProcess);
-                tilesToProcess -= processed;
+                var processed = ProcessExplosion(_activeExplosion, tilesRemaining);
+                tilesRemaining -= processed;
                 if (processed == 0)
                     _activeExplosion = null;
             }
