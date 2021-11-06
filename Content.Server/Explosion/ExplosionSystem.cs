@@ -169,7 +169,7 @@ namespace Content.Server.Explosion
 
             foreach (var (tileIndices, intensity, damage) in explosion)
             {
-                if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef))
+                if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef) && !tileRef.Tile.IsEmpty)
                 {
                     ExplodeTile(explosion.GridLookup,
                         explosion.Grid,
@@ -181,14 +181,14 @@ namespace Content.Server.Explosion
 
                     DamageFloorTile(tileRef, intensity, damagedTiles, explosion.ExplosionType);
                 }
-
-                ExplodeSpace(explosion.MapLookup,
-                    explosion.Grid,
-                    tileIndices,
-                    intensity,
-                    damage,
-                    explosion.Epicenter,
-                    explosion.ProcessedEntities);
+                else
+                    ExplodeSpace(explosion.MapLookup,
+                        explosion.Grid,
+                        tileIndices,
+                        intensity,
+                        damage,
+                        explosion.Epicenter,
+                        explosion.ProcessedEntities);
 
                 processedTiles++;
                 if (processedTiles == tilesToProcess)

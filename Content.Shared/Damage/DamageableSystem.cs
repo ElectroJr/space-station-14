@@ -229,11 +229,11 @@ namespace Content.Shared.Damage
             if (damageable.TotalDamage > totalDamageTarget)
                 return 0;
 
-            totalDamageTarget -= damageable.TotalDamage;
+            totalDamageTarget -= damageable.TotalDamage.Float();
             Dictionary<string, float> damage = new();
 
             // Include only damage types that are actually applicable to the container.
-            float total = 0;
+            
             foreach (var (type, quantity) in baseDamage.DamageDict)
             {
                 // Does the container support this type?
@@ -244,43 +244,40 @@ namespace Content.Shared.Damage
                 if (quantity < 0)
                     return float.NaN;
 
-                damage.Add(type, quantity);
-                total += quantity;
+                damage.Add(type, quantity.Float());
             }
 
             // Resolve this component's damage modifier
-            DamageModifierSetPrototype? modifier = null;
+            DamageModifierSetPrototype? modifier;
             if (damageable.DamageModifierSetId == null ||
                 !_prototypeManager.TryIndex(damageable.DamageModifierSetId, out modifier))
             {
                 // No modifier. This makes the calculation trivial.
-                return totalDamageTarget / total;
+                return totalDamageTarget / damage.Values.Sum();
             }
 
             // adjust each damage type by the modifier set coefficients
-            total = 0;
-            float totalReduction = 0;
+            Dictionary<string, float> reductions = new();
             foreach (var type in damage.Keys)
             {
-                if (!modifier.Coefficients.TryGetValue(type, out var coef))
-                {
-                    total += damage[type];
-                    continue;
-                }
+                if (!modifier.Coefficients.TryGetValue(type, out var coeff))
+                    coeff = 1;
 
                 // We don't support a mix of healing and damage
-                if (coef < 0)
+                if (coeff < 0)
                     return float.NaN;
 
-                damage[type] *= coef;
-                total += damage[type];
-                totalReduction += modifier.FlatReduction.GetValueOrDefault(type);
-            }
+                damage[type] *= coeff;
 
-            if (modifier.FlatReduction.Count == 0)
+                if (modifier.FlatReduction.TryGetValue(type, out var red))
+                    reductions[type] = red * coeff;
+            }
+            var totalDamage = damage.Values.Sum();
+
+            if (reductions.Count == 0)
             {
-                // No Flat reductions. Again, this makes the calculation pretty trivial.
-                return totalDamageTarget / total;
+                // No applicable flat reductions. Again, this makes the calculation pretty trivial.
+                return totalDamageTarget / totalDamage;
             }
 
             // We will perform a bisection search. here we define a function that maps a damage scaling factor to the
@@ -291,8 +288,7 @@ namespace Content.Shared.Damage
                 float result = 0;
                 foreach (var (type, quantity) in damage)
                 {
-                    var reduction = modifier.FlatReduction.GetValueOrDefault(type);
-                    result += Math.Max(0, scale * quantity - reduction);
+                    result += Math.Max(0, scale * quantity - reductions.GetValueOrDefault(type));
                 }
 
                 return result;
@@ -302,7 +298,7 @@ namespace Content.Shared.Damage
             // be required? Given that the flat reductions cannot reduce the incoming damage below zero, the actual
             // reduction may be less than total reduction. But the total reduction gives the upper limit of by how much
             // the damage could be reduced. So assuming full reduction leads to the largest possible scale guess.
-            float x1 = (totalDamageTarget + totalReduction) / total;
+            float x1 = (totalDamageTarget + reductions.Values.Sum()) / totalDamage;
 
             // Next, we check that the maximum value is not just the correct result. This actually happens most of the
             // time when it comes to explosions (which is currently the only thing that requires this calculation).
@@ -314,13 +310,19 @@ namespace Content.Shared.Damage
             float x0 = 0;
 
             // for the initial guess, we just ignore the flat reductions
-            float xGuess = totalDamageTarget / total;
+            float xGuess = totalDamageTarget / totalDamage;
             var result = CalcDamage(xGuess);
+
+            // avoid stuck loop, just in case something goes wrong
+            var maxIteration = 100;
+            var iteration = 0; 
 
             // begin a bisection search.
             // If the output wasn't an integer, id use some sort of gradient based search. there probably is some way of doing it with ints, but eh fuck it.
-            while (!MathHelper.CloseTo(result, totalDamageTarget, tolerance))
+            while (!MathHelper.CloseTo(result, totalDamageTarget, tolerance) && iteration < maxIteration)
             {
+                iteration++;
+
                 if (result < totalDamageTarget)
                     x0 = xGuess;
                 else
@@ -329,6 +331,9 @@ namespace Content.Shared.Damage
                 xGuess = (x0 + x1) / 2;
                 result = CalcDamage(xGuess);
             }
+
+            if (iteration == maxIteration)
+                Logger.Error($"DamageableSystem.InverseResistanceSolve got stuck in infinite loop when processing entity {uid}");
 
             return xGuess;
         }

@@ -106,7 +106,8 @@ namespace Content.Server.Pointing.EntitySystems
                     return;
                 }
 
-                component.Owner.SpawnExplosion(0, 2, 1, 1);
+                // TODO EXPLOSION
+                //component.Owner.SpawnExplosion(0, 2, 1, 1);
                 SoundSystem.Play(Filter.Pvs(uid, entityManager: EntityManager), component.ExplosionSound.GetSound(), uid);
 
                 EntityManager.QueueDeleteEntity(uid);
