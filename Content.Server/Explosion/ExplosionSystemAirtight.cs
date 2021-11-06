@@ -18,8 +18,10 @@ namespace Content.Server.Explosion
         [Dependency] private readonly DestructibleSystem _destructibleSystem = default!;
 
         // Each tile has a (Dictionary<string, float>, AtmosDirection) value. This specifies what directions are
-        // blocked, and how much damage an explosion needs to deal in order to destroy the blocking entity. This mess of
-        // a variable maps the Grid ID and Vector2i grid indices to these values.
+        // blocked, and how intense a given explosion type needs to be in order to destroy the blocking entity. This
+        // mess of a variable maps the Grid ID and Vector2i grid indices to these values.
+        //
+        // I hate this. Please someone save me from my shit code.
         public Dictionary<GridId, Dictionary<Vector2i, (Dictionary<string, float>, AtmosDirection)>> AirtightMap = new();
 
         public void UpdateAirtightMap(GridId gridId, Vector2i tile)
@@ -33,9 +35,10 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <remarks>
         ///     Gets a list of all airtight entities on a tile. Assembles a <see cref="AtmosDirection"/> that specifies
-        ///     what directions are blocked, along with the largest explosion tolerance. Note that this means that the
-        ///     explosion map will actually be inaccurate if you have something like a normal and a reinforced windoor
-        ///     on the same tile.
+        ///     what directions are blocked, along with the largest explosion tolerance. Note that as we only keep track
+        ///     of the largest tolerance, this means that the explosion map will actually be inaccurate if you have
+        ///     something like a normal and a reinforced windoor on the same tile. But given that this is a pretty rare
+        ///     occurrence, I am fine with this.
         /// </remarks>
         public void UpdateAirtightMap(IMapGrid grid, Vector2i tile)
         {
@@ -66,7 +69,7 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
-        ///     How much explosion damage is needed to destroy an air-blocking entity?
+        ///     On receiving damage, re-evaluate how much explosion damage is needed to destroy an airtight entity.
         /// </summary>
         private void OnAirtightDamaged(EntityUid uid, AirtightComponent airtight, DamageChangedEvent args)
         {
@@ -75,10 +78,8 @@ namespace Content.Server.Explosion
             // do we need to update our explosion blocking map?
             if (!airtight.AirBlocked)
                 return;
-
             if (!EntityManager.TryGetComponent(uid, out ITransformComponent transform) || !transform.Anchored)
                 return;
-
             if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
                 return;
 
@@ -90,7 +91,7 @@ namespace Content.Server.Explosion
         /// </summary>
         public Dictionary<string, float> GetExplosionTolerance(EntityUid uid)
         {
-            // how much total damage is needed to destroy this entity?
+            // How much total damage is needed to destroy this entity?
             var totalDamageTarget = MathF.Ceiling(_destructibleSystem.DestroyedAt(uid));
 
             Dictionary<string, float> explosionTolerance = new();

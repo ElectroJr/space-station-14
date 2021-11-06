@@ -9,7 +9,7 @@ using Robust.Shared.Maths;
 namespace Content.Server.Explosion
 {
     // This partial part of the explosion system has all of the functions used to create the actual explosion map.
-    // I.e, to get the sets of tiles & damage values that describe an explosion.
+    // I.e, to get the sets of tiles & intensity values that describe an explosion.
 
     public sealed partial class ExplosionSystem : EntitySystem
     {
@@ -22,14 +22,14 @@ namespace Content.Server.Explosion
         ///     This is the main explosion generating function. 
         /// </summary>
         /// <param name="gridId">The grid where the epicenter tile is located</param>
-        /// <param name="initialTiles"> The initial set of tiles, or the "epicenter" tiles.</param>
+        /// <param name="initialTiles"> The initial set of tiles, the "epicenter" tiles.</param>
         /// <param name="typeID">The explosion type. this determines the explosion damage</param>
         /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
         /// explosion</param>
         /// <param name="slope">How quickly does the intensity decrease when moving away from the epicenter.</param>
         /// <param name="maxIntensity">The maximum intensity that the explosion can have at any given tile. This
         /// effectively caps the damage that this explosion can do.</param>
-        /// <returns>Returns a list of tile-sets and a list of intensity values which describe the explosion.</returns>
+        /// <returns>A list of tile-sets and a list of intensity values which describe the explosion.</returns>
         public (List<HashSet<Vector2i>>, List<float>) GetExplosionTiles(
             GridId gridId,
             HashSet<Vector2i> initialTiles,
@@ -45,7 +45,7 @@ namespace Content.Server.Explosion
 
             // This is the list of sets of tiles that will be targeted by our explosions.
             // Here we initialize tileSetList. The first three entries are trivial, but make the following for loop
-            // logic neater. ALl things considered, this is a trivial waste of memory.
+            // logic neater.
             List<HashSet<Vector2i>> tileSetList = new() {new(), initialTiles, new() };
             var iteration = 3;
 
@@ -55,15 +55,12 @@ namespace Content.Server.Explosion
 
             // List of all tiles in the explosion.
             // Used to avoid explosions looping back in on themselves.
-            // Therefore, can also used to exclude tiles
             HashSet<Vector2i> processedTiles = new(initialTiles);
+
+            // these variables keep track of the total intensity we have distributed
             var tilesInIteration = new List<int> { 0, initialTiles.Count, 0 };
             List<float> tileSetIntensity = new () { 0, intensityStepSize, 0 };
             float remainingIntensity = totalIntensity - intensityStepSize * initialTiles.Count;
-
-            // Directional airtight blocking made this all super convoluted. basically: delayedNeighbor is when an
-            // explosion cannot LEAVE a tile in a certain direction, while delayedSpreader is when an explosion cannot
-            // ENTER a tile and spread outwards from there.
 
             // Tiles which neighbor an exploding tile, but have not yet had the explosion spread to them due to an
             // airtight entity on the exploding tile that prevents the explosion from spreading in that direction. These
@@ -81,8 +78,10 @@ namespace Content.Server.Explosion
             // What iteration each delayed spreader originally belong to
             Dictionary<Vector2i, int> delayedSpreaderIteration = new();
 
-            bool exit = false;
+            // keep track of tile iterations that have already reached maxIntensity
             int maxIntensityIndex = 1;
+
+            bool exit = false;
             if (!AirtightMap.TryGetValue(gridId, out var airtightMap))
             {
                 airtightMap = new();
@@ -92,6 +91,7 @@ namespace Content.Server.Explosion
             HashSet<Vector2i> newTiles;
             while (remainingIntensity > 0)
             {
+                // used to check if we can go home early
                 var previousIntensity = remainingIntensity;
 
                 // First, we try to increase the intensity of previous iterations.
@@ -100,7 +100,7 @@ namespace Content.Server.Explosion
                     if (tilesInIteration[i] * intensityStepSize >= remainingIntensity &&
                         tilesInIteration[i] * (maxIntensity - tileSetIntensity[i]) >= remainingIntensity)
                     {
-                        // there is not enough left to distribute. add a fractional amount and break.
+                        // there is not enough intensity left to distribute. add a fractional amount and break.
                         tileSetIntensity[i] += (float) remainingIntensity / tilesInIteration[i];
                         exit = true;
                         break;
@@ -131,12 +131,11 @@ namespace Content.Server.Explosion
                     var blockedDirections = AtmosDirection.Invalid;
                     float sealIntegrity = 0;
 
-                    // Note that if (grid, tile) is not a valid key, then airtight.BlockedDirections will default to 0 (no blocked directions)
                     if (airtightMap.TryGetValue(newTile, out var tuple))
                     {
                         blockedDirections = tuple.Item2;
                         if (!tuple.Item1.TryGetValue(typeID, out sealIntegrity))
-                            sealIntegrity = float.MaxValue;
+                            sealIntegrity = float.MaxValue; // indestructible airtight entity
                     }
 
                     // If the explosion is entering this new tile from an unblocked direction, we add it directly
@@ -151,11 +150,13 @@ namespace Content.Server.Explosion
                         continue;
                     }
 
+                    // the explosion is trying to enter from a blocked direction. Are we already attempting to enter
+                    // this tile from another blocked direction?
                     if (delayedSpreaderIteration.ContainsKey(newTile))
                         continue;
 
-                    // if this tile is blocked from all directions. then there is no way to snake around and spread
-                    // out from it without first breaking it. so we can already mark it as processed for future iterations.
+                    // If this tile is blocked from all directions. then there is no way to snake around and spread
+                    // out from it without first breaking the blocker. So we can already mark it as processed for future iterations.
                     if (blockedDirections == AtmosDirection.All)
                         processedTiles.Add(newTile);
 
@@ -192,8 +193,9 @@ namespace Content.Server.Explosion
                 iteration += 1;
             }
 
-            // final cleanup.
-            // Here we add delayedSpreaders to tileSetList.
+            // final cleanup. Here we add delayedSpreaders to tileSetList.
+            // TODO EXPLOSION don't do this? If an explosion was not able to "enter" a tile, just damage the blocking
+            // entity, and not general entities on that tile.
             foreach (var (tile, index) in delayedSpreaderIteration)
             {
                 tileSetList[index].Add(tile);
