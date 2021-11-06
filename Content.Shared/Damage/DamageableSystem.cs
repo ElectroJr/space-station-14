@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Damage.Prototypes;
+using Content.Shared.FixedPoint;
 using Robust.Shared.GameObjects;
 using Robust.Shared.GameStates;
 using Robust.Shared.IoC;
@@ -35,7 +36,7 @@ namespace Content.Shared.Damage
                 // container prototype
                 foreach (var type in damageContainerPrototype.SupportedTypes)
                 {
-                    component.Damage.DamageDict.TryAdd(type, 0);
+                    component.Damage.DamageDict.TryAdd(type, FixedPoint2.Zero);
                 }
 
                 foreach (var groupID in damageContainerPrototype.SupportedGroups)
@@ -43,7 +44,7 @@ namespace Content.Shared.Damage
                     var group = _prototypeManager.Index<DamageGroupPrototype>(groupID);
                     foreach (var type in group.DamageTypes)
                     {
-                        component.Damage.DamageDict.TryAdd(type, 0);
+                        component.Damage.DamageDict.TryAdd(type, FixedPoint2.Zero);
                     }
                 }
             }
@@ -52,7 +53,7 @@ namespace Content.Shared.Damage
                 // No DamageContainerPrototype was given. So we will allow the container to support all damage types
                 foreach (var type in _prototypeManager.EnumeratePrototypes<DamageTypePrototype>())
                 {
-                    component.Damage.DamageDict.TryAdd(type.ID, 0);
+                    component.Damage.DamageDict.TryAdd(type.ID, FixedPoint2.Zero);
                 }
             }
 
@@ -145,7 +146,7 @@ namespace Content.Shared.Damage
             DamageSpecifier oldDamage = new(damageable.Damage);
 
             damageable.Damage.ExclusiveAdd(damage);
-            damageable.Damage.ClampMin(0);
+            damageable.Damage.ClampMin(FixedPoint2.Zero);
 
             var delta = damageable.Damage - oldDamage;
             delta.TrimZeros();
@@ -164,7 +165,7 @@ namespace Content.Shared.Damage
         /// <remakrs>
         ///     Does nothing If the given damage value is negative.
         /// </remakrs>
-        public void SetAllDamage(DamageableComponent component, int newValue)
+        public void SetAllDamage(DamageableComponent component, FixedPoint2 newValue)
         {
             if (newValue < 0)
             {

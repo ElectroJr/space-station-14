@@ -64,4 +64,4 @@
       sprite: Effects/fire.rsi
       normalState: 1
       Sprite:
-        drawdepth: Overlays
+        drawdepth: Effects

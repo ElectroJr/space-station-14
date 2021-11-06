@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Content.Shared.Acts;
 using Content.Shared.Damage.Prototypes;
+using Content.Shared.FixedPoint;
 using Content.Shared.Radiation;
 using Robust.Shared.Analyzers;
 using Robust.Shared.GameObjects;
@@ -64,12 +65,12 @@ namespace Content.Shared.Damage
         ///     Groups which have no members that are supported by this component will not be present in this
         ///     dictionary.
         /// </remarks>
-        [ViewVariables] public Dictionary<string, int> DamagePerGroup = new();
+        [ViewVariables] public Dictionary<string, FixedPoint2> DamagePerGroup = new();
 
         /// <summary>
         ///     The sum of all damages in the DamageableComponent.
         /// </summary>
-        [ViewVariables] public int TotalDamage;
+        [ViewVariables] public FixedPoint2 TotalDamage;
 
         // Really these shouldn't be here. OnExplosion() and RadiationAct() should be handled elsewhere.
         [ViewVariables]
@@ -82,7 +83,7 @@ namespace Content.Shared.Damage
         // TODO RADIATION Remove this.
         void IRadiationAct.RadiationAct(float frameTime, SharedRadiationPulseComponent radiation)
         {
-            var damageValue = Math.Max((int) (frameTime * radiation.RadsPerSecond), 1);
+            var damageValue = FixedPoint2.New(MathF.Max((frameTime * radiation.RadsPerSecond), 1));
 
             // Radiation should really just be a damage group instead of a list of types.
             DamageSpecifier damage = new();
@@ -98,11 +99,11 @@ namespace Content.Shared.Damage
     [Serializable, NetSerializable]
     public class DamageableComponentState : ComponentState
     {
-        public readonly Dictionary<string, int> DamageDict;
+        public readonly Dictionary<string, FixedPoint2> DamageDict;
         public readonly string? ModifierSetId;
 
         public DamageableComponentState(
-            Dictionary<string, int> damageDict,
+            Dictionary<string, FixedPoint2> damageDict,
             string? modifierSetId)
         {
             DamageDict = damageDict;
