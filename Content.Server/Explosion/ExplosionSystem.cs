@@ -18,7 +18,6 @@ using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
-using Robust.Shared.Physics;
 using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
@@ -33,6 +32,7 @@ namespace Content.Server.Explosion
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly IConfigurationManager _cfg = default!;
         [Dependency] private readonly IPlayerManager _playerManager = default!;
+        [Dependency] private readonly IEntityLookup _entityLookup = default!;
         [Dependency] private readonly DamageableSystem _damageableSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
@@ -379,7 +379,7 @@ namespace Content.Server.Explosion
             // get the entities on a tile. Note that we cannot process them directly, or we get
             // enumerator-changed-while-enumerating errors.
             List<EntityUid> list = new();
-            lookup.Tree._b2Tree.FastQuery(ref gridBox, (ref IEntity entity) => list.Add(entity.Uid));
+            _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity.Uid));
             list.AddRange(grid.GetAnchoredEntities(tile));
 
             // process those entities
@@ -396,7 +396,7 @@ namespace Content.Server.Explosion
                 return;
 
             list.Clear();
-            lookup.Tree._b2Tree.FastQuery(ref gridBox, (ref IEntity entity) => list.Add(entity.Uid));
+            _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity.Uid));
 
             foreach (var e in list)
             {
@@ -423,13 +423,14 @@ namespace Content.Server.Explosion
             var matrix = grid.InvWorldMatrix;
             List<EntityUid> list = new();
 
-            B2DynamicTree<IEntity>.FastQueryCallback callback = (ref IEntity entity) =>
+            EntityQueryCallback callback = (entity) =>
             {
                 if (gridBox.Contains(matrix.Transform(entity.Transform.WorldPosition)))
                     list.Add(entity.Uid);
             };
 
-            lookup.Tree._b2Tree.FastQuery(ref worldBox, callback);
+            _entityLookup.FastEntitiesIntersecting(lookup, ref worldBox, callback);
+
             foreach (var entity in list)
             {
                 ProcessEntity(entity, epicenter, processed, damage, throwForce);
@@ -439,7 +440,7 @@ namespace Content.Server.Explosion
                 return;
 
             list.Clear();
-            lookup.Tree._b2Tree.FastQuery(ref worldBox, callback);
+            _entityLookup.FastEntitiesIntersecting(lookup, ref worldBox, callback);
             foreach (var entity in list)
             {
                 ProcessEntity(entity, epicenter, processed, null, throwForce);

@@ -187,9 +187,9 @@
         Blunt: 1
   - type: Explosive
     explosionType: Default
-    maxIntensity: 10
-    intensitySlope: 2
-    totalIntensity: 100 # about a ~4 tile radius
+    maxIntensity: 50
+    intensitySlope: 7.5
+    totalIntensity: 300
   - type: PointLight
     radius: 3.5
     color: orange
