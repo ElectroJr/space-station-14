@@ -67,6 +67,9 @@ namespace Content.Client.Explosion
 
         private void DrawExplosion(DrawingHandleWorld drawHandle, Box2 gridBounds, Explosion exp, int index)
         {
+            if (exp.Grid.ParentMapId != _eyeManager.CurrentMap)
+                return;
+
             drawHandle.SetTransform(exp.Grid.WorldMatrix);
 
             for (var j = 0; j < index; j++)

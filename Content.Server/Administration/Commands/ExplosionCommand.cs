@@ -16,7 +16,7 @@ namespace Content.Server.Administration.Commands
     [AdminCommand(AdminFlags.Fun)]
     public sealed class OpenExplosionEui : IConsoleCommand
     {
-        public string Command => "exeui";
+        public string Command => "explosionui";
         public string Description => "Opens a window for easy access to station destruction";
         public string Help => "Usage: exeui";
 
@@ -66,11 +66,11 @@ namespace Content.Server.Administration.Commands
             var mapId = new MapId(id);
             MapCoordinates coords = new((x, y), mapId);
 
-            float slope = 1;
+            float slope = 5;
             if (args.Length > 4 && !float.TryParse(args[4], out slope))
                 return;
 
-            float maxIntensity = 50;
+            float maxIntensity = 100;
             if (args.Length > 5 && !float.TryParse(args[5], out maxIntensity))
                 return;
 

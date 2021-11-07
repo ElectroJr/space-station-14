@@ -24,7 +24,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
 
 
-        private readonly SpawnExplosionEui Eui;
+        private readonly SpawnExplosionEui _eui;
         private List<MapId> _mapData = new();
         private List<string> _explosionTypes = new();
 
@@ -37,7 +37,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         {
             RobustXamlLoader.Load(this);
             IoCManager.InjectDependencies(this);
-            Eui = eui;
+            _eui = eui;
 
             ExplosionOption.OnItemSelected += ExplosionSelected ;
             MapOptions.OnItemSelected += MapSelected;
@@ -118,20 +118,20 @@ namespace Content.Client.Administration.UI.SpawnExplosion
 
             if (!Preview.Pressed)
             {
-                Eui.ClearOverlay();
+                _eui.ClearOverlay();
                 return;
             }
 
             MapCoordinates coords = new((MapX.Value, MapY.Value), _mapData[MapOptions.SelectedId]);
             var explosionType = _explosionTypes[ExplosionOption.SelectedId];
-            Eui.RequestPreviewData(coords, explosionType, Intensity.Value, Slope.Value, MaxIntensity.Value);
+            _eui.RequestPreviewData(coords, explosionType, Intensity.Value, Slope.Value, MaxIntensity.Value);
         }
         
         private void SubmitButtonOnOnPressed(ButtonEventArgs args)
         {
             // need to make room to view the fireworks
             Preview.Pressed = false;
-            Eui.ClearOverlay();
+            _eui.ClearOverlay();
 
             // for the actual explosion, we will just re-use the explosion command.
             // so assemble command arguments:

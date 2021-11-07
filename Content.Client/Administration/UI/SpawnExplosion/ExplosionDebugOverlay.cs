@@ -39,6 +39,9 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             if (Grid == null)
                 return;
 
+            if (Grid.ParentMapId != _eyeManager.CurrentMap)
+                return;
+
             if (Tiles.Count < 2 || Tiles[1].Count != 1)
                 return;
 

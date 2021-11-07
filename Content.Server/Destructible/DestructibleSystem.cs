@@ -41,7 +41,8 @@ namespace Content.Server.Destructible
             }
         }
 
-        // FFS this shouldn't be this hard. Maybe this should just be a field of the destructible component.....
+        // FFS this shouldn't be this hard. Maybe this should just be a field of the destructible component. Its not
+        // like there is currently any entity that is NOT just destroyed upon reaching a total-damage value.
         /// <summary>
         ///     Figure out how much damage an entity needs to have in order to be destroyed.
         /// </summary>
