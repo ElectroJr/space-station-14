@@ -21,6 +21,7 @@ namespace Content.Server.Pointing.EntitySystems
     {
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IRobustRandom _random = default!;
+        [Dependency] private readonly ExplosionSystem _explosion = default!;
 
         public override void Initialize()
         {
@@ -106,10 +107,7 @@ namespace Content.Server.Pointing.EntitySystems
                     return;
                 }
 
-                // TODO EXPLOSION
-                //component.Owner.SpawnExplosion(0, 2, 1, 1);
-                SoundSystem.Play(Filter.Pvs(uid, entityManager: EntityManager), component.ExplosionSound.GetSound(), uid);
-
+                _explosion.QueueExplosion(uid, "Default", 50, 3, 10);
                 EntityManager.QueueDeleteEntity(uid);
             }
         }

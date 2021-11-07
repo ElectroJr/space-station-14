@@ -28,7 +28,7 @@
         <CheckBox Name="Preview" Text="{Loc 'admin-explosion-eui-label-preview'}"/>
         <BoxContainer Orientation="Horizontal">
             <Label Text="{Loc 'admin-explosion-eui-label-total'}" MinSize="120 0"/>
-            <FloatSpinBox Name="Intensity" MinSize="130 0" HorizontalExpand="True" Value="50"/>
+            <FloatSpinBox Name="Intensity" MinSize="130 0" HorizontalExpand="True" Value="200"/>
         </BoxContainer>
         <BoxContainer Orientation="Horizontal">
             <Label Text="{Loc 'admin-explosion-eui-label-slope'}" MinSize="120 0" />
