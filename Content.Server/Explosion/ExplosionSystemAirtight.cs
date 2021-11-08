@@ -5,6 +5,7 @@ using Content.Server.Destructible;
 using Content.Shared.Atmos;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
+using Content.Shared.FixedPoint;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
@@ -92,18 +93,18 @@ namespace Content.Server.Explosion
         public Dictionary<string, float> GetExplosionTolerance(EntityUid uid)
         {
             // How much total damage is needed to destroy this entity?
-            var totalDamageTarget = MathF.Ceiling(_destructibleSystem.DestroyedAt(uid));
+            var totalDamageTarget = _destructibleSystem.DestroyedAt(uid);
 
             Dictionary<string, float> explosionTolerance = new();
 
-            if (float.IsNaN(totalDamageTarget))
+            if (totalDamageTarget == FixedPoint2.MaxValue)
                 return explosionTolerance;
 
             // What multiple of each explosion type damage set will result in the damage exceeding the required amount?
             foreach (var type in _prototypeManager.EnumeratePrototypes<ExplosionPrototype>())
             {   
                 explosionTolerance[type.ID] =
-                    _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, totalDamageTarget);
+                    _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, totalDamageTarget, 1);
             }
 
             return explosionTolerance;

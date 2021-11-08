@@ -215,13 +215,14 @@ namespace Content.Shared.Damage
         /// </summary>
         /// <remarks>
         ///     It turns out applying a damage modifier / resistance set is easy, but the reverse is somewhat
-        ///     convoluted. In the wors case, this ends up finding a root using bisection. This solver also assumes that
-        ///     this process does not involve any healing. I.e., the base damage specifier has no healing and the <see
-        ///     cref="DamageModifierSet"/> has only positive coefficients. This ensures that the final damage is a
-        ///     monotonic function.
+        ///     convoluted. In the worst case scenario, this ends up finding a root using bisection. This solver also
+        ///     assumes that this process does not involve any healing. I.e., the base damage specifier has no healing
+        ///     and the <see cref="DamageModifierSet"/> has only positive coefficients. This ensures that the final
+        ///     damage is a monotonic function.
         /// </remarks>
         /// <returns>Returns a multiplier if it can find it, otherwise returns float.NaN</returns>
-        public float InverseResistanceSolve(EntityUid uid, DamageSpecifier baseDamage, float totalDamageTarget, float tolerance = 1, DamageableComponent? damageable = null)
+        public float InverseResistanceSolve(EntityUid uid, DamageSpecifier baseDamage,
+            FixedPoint2 totalDamageTarget, FixedPoint2 tolerance, DamageableComponent? damageable = null)
         {
             if (!Resolve(uid, ref damageable))
                 return float.NaN;
@@ -229,11 +230,10 @@ namespace Content.Shared.Damage
             if (damageable.TotalDamage > totalDamageTarget)
                 return 0;
 
-            totalDamageTarget -= damageable.TotalDamage.Float();
-            Dictionary<string, float> damage = new();
+            totalDamageTarget -= damageable.TotalDamage;
+            Dictionary<string, FixedPoint2> damage = new();
 
             // Include only damage types that are actually applicable to the container.
-            
             foreach (var (type, quantity) in baseDamage.DamageDict)
             {
                 // Does the container support this type?
@@ -244,7 +244,7 @@ namespace Content.Shared.Damage
                 if (quantity < 0)
                     return float.NaN;
 
-                damage.Add(type, quantity.Float());
+                damage.Add(type, quantity);
             }
 
             // Resolve this component's damage modifier
@@ -253,11 +253,11 @@ namespace Content.Shared.Damage
                 !_prototypeManager.TryIndex(damageable.DamageModifierSetId, out modifier))
             {
                 // No modifier. This makes the calculation trivial.
-                return totalDamageTarget / damage.Values.Sum();
+                return (float) (totalDamageTarget / damage.Values.Sum());
             }
 
             // adjust each damage type by the modifier set coefficients
-            Dictionary<string, float> reductions = new();
+            Dictionary<string, FixedPoint2> reductions = new();
             foreach (var type in damage.Keys)
             {
                 if (!modifier.Coefficients.TryGetValue(type, out var coeff))
@@ -276,19 +276,19 @@ namespace Content.Shared.Damage
 
             if (reductions.Count == 0)
             {
-                // No applicable flat reductions. Again, this makes the calculation pretty trivial.
-                return totalDamageTarget / totalDamage;
+                // No applicable flat reductions. Again, this makes the calculation trivial.
+                return (float) (totalDamageTarget / totalDamage);
             }
 
-            // We will perform a bisection search. here we define a function that maps a damage scaling factor to the
+            // We **might** need to perform a bisection search. here we define a function that maps a damage scaling factor to the
             // distance from the desired final damage
 
-            float CalcDamage(float scale)
+            FixedPoint2 CalcDamage(float scale)
             {
-                float result = 0;
+                FixedPoint2 result = FixedPoint2.Zero;
                 foreach (var (type, quantity) in damage)
                 {
-                    result += Math.Max(0, scale * quantity - reductions.GetValueOrDefault(type));
+                    result += FixedPoint2.Max(FixedPoint2.Zero, scale * quantity - reductions.GetValueOrDefault(type));
                 }
 
                 return result;
@@ -296,21 +296,23 @@ namespace Content.Shared.Damage
 
             // Next we define the endpoins of the bisection search. First: what is the maximum scale that could possibly
             // be required? Given that the flat reductions cannot reduce the incoming damage below zero, the actual
-            // reduction may be less than total reduction. But the total reduction gives the upper limit of by how much
-            // the damage could be reduced. So assuming full reduction leads to the largest possible scale guess.
-            float x1 = (totalDamageTarget + reductions.Values.Sum()) / totalDamage;
+            // reduction may be less than total reduction. But the total reduction gives the upper limit on how much the
+            // damage could be reduced. So assuming full reduction leads to the largest possible scale guess.
+            float x1 = (float) ((totalDamageTarget + reductions.Values.Sum()) / totalDamage);
 
             // Next, we check that the maximum value is not just the correct result. This actually happens most of the
-            // time when it comes to explosions (which is currently the only thing that requires this calculation).
+            // time when it comes to explosions (which is currently the only thing that uses this calculation).
             // Fortunately this means we usually do not actually need to do a bisection search!
-            if (MathHelper.CloseTo(CalcDamage(x1), totalDamageTarget, tolerance))
+            if (CalcDamage(x1).EqualsApprox(totalDamageTarget, tolerance))
                 return x1;
+
+            // fuck.
 
             // For the minimum value, we just use 0.
             float x0 = 0;
 
             // for the initial guess, we just ignore the flat reductions
-            float xGuess = totalDamageTarget / totalDamage;
+            float xGuess = (float) (totalDamageTarget / totalDamage);
             var result = CalcDamage(xGuess);
 
             // avoid stuck loop, just in case something goes wrong
@@ -318,8 +320,7 @@ namespace Content.Shared.Damage
             var iteration = 0; 
 
             // begin a bisection search.
-            // If the output wasn't an integer, id use some sort of gradient based search. there probably is some way of doing it with ints, but eh fuck it.
-            while (!MathHelper.CloseTo(result, totalDamageTarget, tolerance) && iteration < maxIteration)
+            while (!result.EqualsApprox(totalDamageTarget, tolerance) && iteration < maxIteration)
             {
                 iteration++;
 
