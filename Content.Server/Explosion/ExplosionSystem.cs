@@ -16,6 +16,7 @@ using Robust.Shared.Audio;
 using Robust.Shared.Configuration;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Player;
@@ -257,7 +258,10 @@ namespace Content.Server.Explosion
                 return;
 
             if (!_prototypeManager.TryIndex<ExplosionPrototype>(typeId, out var type))
+            {
+                Logger.Error($"Attempted to spawn unknown explosion prototype: {type}");
                 return;
+            }
 
             _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, initialTiles, type, totalIntensity,
                 slope, maxTileIntensity));

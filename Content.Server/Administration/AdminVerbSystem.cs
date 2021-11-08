@@ -39,6 +39,7 @@ namespace Content.Server.Administration
         [Dependency] private readonly IConGroupController _groupController = default!;
         [Dependency] private readonly IAdminManager _adminManager = default!;
         [Dependency] private readonly IGameTiming _gameTiming = default!;
+        [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
         [Dependency] private readonly EuiManager _euiManager = default!;
         [Dependency] private readonly GhostRoleSystem _ghostRoleSystem = default!;
 
@@ -117,8 +118,8 @@ namespace Content.Server.Administration
                 verb.Category = VerbCategory.Debug;
                 verb.Act = () =>
                 {
-                    var coords = args.Target.Transform.Coordinates;
-                    //Timer.Spawn(_gameTiming.TickPeriod, () => ExplosionHelper.SpawnExplosion(coords, 0, 1, 2, 1), CancellationToken.None);
+                    var coords = args.Target.Transform.MapPosition;
+                    Timer.Spawn(_gameTiming.TickPeriod, () => _explosionSystem.QueueExplosion(coords, "Default", 30, 4, 8), CancellationToken.None);
                     if (args.Target.TryGetComponent(out SharedBodyComponent? body))
                     {
                         body.Gib();
