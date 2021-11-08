@@ -190,6 +190,8 @@ namespace Content.Server.Explosion
             // course, as the explosions are not perfectly circular, this formula isn't perfect, but the formula works
             // reasonably well.
 
+            // TODO EXPLOSION I guess this should actually use the formula for the volume of an Octagon-pyramid?
+
             var coneVolume = slope * MathF.PI / 3 * MathF.Pow(radius, 3);
 
             if (maxIntensity <= 0 || slope * radius < maxIntensity)

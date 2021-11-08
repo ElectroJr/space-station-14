@@ -11,7 +11,7 @@ namespace Content.Server.Explosion.Components
     ///     cref="ExplosionSystem.TriggerExplosive"/>.
     /// </summary>
     /// <remarks>
-    ///      The total intensity) may be overridden by whatever system actually calls TriggerExplosive(), but this
+    ///      The total intensity may be overridden by whatever system actually calls TriggerExplosive(), but this
     ///      component still determines the explosion type and other properties.
     /// </remarks>
     [RegisterComponent]
@@ -28,7 +28,7 @@ namespace Content.Server.Explosion.Components
         public string ExplosionType = default!;
 
         /// <summary>
-        ///     The maximum intensity the explosion can have on a single time. This limits the maximum damage & tile
+        ///     The maximum intensity the explosion can have on a single time. This limits the maximum damage and tile
         ///     break chance the explosion can achieve at any given location.
         /// </summary>
         [ViewVariables(VVAccess.ReadWrite)]

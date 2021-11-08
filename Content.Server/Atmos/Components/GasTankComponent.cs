@@ -266,7 +266,7 @@ namespace Content.Server.Atmos.Components
                 var range = (pressure - TankFragmentPressure) / TankFragmentScale;
 
                 // Let's cap the explosion, yeah?
-                // > No super-pressurized nuke cannisters? Booooo! Fun police ruining everything.
+                // !1984
                 if (range > MaxExplosionRange)
                 {
                     range = MaxExplosionRange;

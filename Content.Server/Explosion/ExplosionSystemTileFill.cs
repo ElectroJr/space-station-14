@@ -250,9 +250,9 @@ namespace Content.Server.Explosion
                 delayedNeighbors.Remove(iteration);
             }
 
-            // Gets the tiles that are directly adjacent to tiles that were added two iterations ago. If a tile has an
-            // airtight entity that blocks the explosion, those tiles are added to a list of delayed tiles that will be
-            // added to the explosion in some future iteration.
+            // Gets the tiles that are directly adjacent to other tiles. If a tile has an airtight entity that blocks
+            // the explosion, those tiles are added to a list of delayed tiles that will be added to the explosion in
+            // some future iteration.
             IEnumerable<(Vector2i, AtmosDirection)> GetNewAdjacentTiles(IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
             {
                 Vector2i newTile;
@@ -314,9 +314,9 @@ namespace Content.Server.Explosion
                 }
             }
 
-            // Get the tiles that are diagonally adjacent to the tiles from three iterations ago. Note that if there are
-            // ANY air blockers in some direction, that diagonal tiles is not added. The explosion will have to
-            // propagate along cardinal directions.
+            // Get the tiles that are diagonally adjacent to some tiles. Note that if there are ANY air blockers in some
+            // direction, that diagonal tiles is not added. The explosion will have to propagate along cardinal
+            // directions.
             IEnumerable<(Vector2i, AtmosDirection)> GetNewDiagonalTiles(IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
             {
                 Vector2i newTile;

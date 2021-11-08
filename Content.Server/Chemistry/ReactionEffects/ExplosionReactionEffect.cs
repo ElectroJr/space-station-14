@@ -21,7 +21,7 @@ namespace Content.Server.Chemistry.ReactionEffects
         public string ExplosionType = default!;
 
         /// <summary>
-        ///     The max intensity the explosion can have at a given tile. Places an upper limit of damage & tile break
+        ///     The max intensity the explosion can have at a given tile. Places an upper limit of damage and tile break
         ///     chance.
         /// </summary>
         [DataField("maxIntensity")]
@@ -34,10 +34,11 @@ namespace Content.Server.Chemistry.ReactionEffects
         public float IntensitySlope = 1;
 
         /// <summary>
-        ///     The maximum total intensity that this chemical reaction can achieve.
+        ///     The maximum total intensity that this chemical reaction can achieve. Basically here to prevent people
+        ///     from creating a nuke by collecting enough potassium and water.
         /// </summary>
         /// <remarks>
-        ///     A slope of 1 & MaxTotalIntensity of 100 corresponds to a radius of around 4.5 tiles.
+        ///     A slope of 1 and MaxTotalIntensity of 100 corresponds to a radius of around 4.5 tiles.
         /// </remarks>
         [DataField("maxTotalIntensity")]
         public float MaxTotalIntensity = 100;
