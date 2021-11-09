@@ -18,12 +18,23 @@ namespace Content.Server.Explosion
 
         [Dependency] private readonly DestructibleSystem _destructibleSystem = default!;
 
-        // Each tile has a (Dictionary<string, float>, AtmosDirection) value. This specifies what directions are
-        // blocked, and how intense a given explosion type needs to be in order to destroy the blocking entity. This
-        // mess of a variable maps the Grid ID and Vector2i grid indices to these values.
+        // The explosion intensity required to break an entity depends on the explosion type. So it is stored in a
+        // Dictionary<string, float>
         //
-        // I hate this. Please someone save me from my shit code.
+        // Hence, each tile has a (Dictionary<string, float>, AtmosDirection) value. This specifies what directions are
+        // blocked, and how intense a given explosion type needs to be in order to destroy ALL airtight entities on that
+        // tile.
+        //
+        // We then need this data for every tile on a grid. So this mess of a variable maps the Grid ID and Vector2i grid
+        // indices to this tile-data.
+        //
+        // Plz help. I hate this.
         public Dictionary<GridId, Dictionary<Vector2i, (Dictionary<string, float>, AtmosDirection)>> AirtightMap = new();
+        // I assume indexing a Dictionary<Vector2i, tile-data> is faster than indexing a Dictionary<TileRef, tile-data>?
+        // If it doesn't really matter, I could get rid of the grid ID dictionary. But then I would need to use TileRef
+        // everywhere in place of Vector2i, and I'm not sure how make that work fast with the neighbor-finding code. I
+        // still need to experiment with this.
+        // EXPLOSION TODO fix shit code
 
         public void UpdateAirtightMap(GridId gridId, Vector2i tile)
         {
@@ -92,7 +103,8 @@ namespace Content.Server.Explosion
         /// </summary>
         public Dictionary<string, float> GetExplosionTolerance(EntityUid uid)
         {
-            // How much total damage is needed to destroy this entity?
+            // How much total damage is needed to destroy this entity? This also includes "break" behaviors. This
+            // ASSUMES that this will result in a non-airtight entity.
             var totalDamageTarget = _destructibleSystem.DestroyedAt(uid);
 
             Dictionary<string, float> explosionTolerance = new();
