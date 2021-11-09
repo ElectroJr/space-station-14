@@ -46,22 +46,27 @@ namespace Content.Shared.Explosion
         public readonly float TileBreakRerollReduction = 10f;
 
         /// <summary>
-        ///     Color emited by a point light at the centre of the explosion.
+        ///     Color emitted by a point light at the center of the explosion.
         /// </summary>
         [DataField("lightColor")]
         public readonly Color LightColor = Color.Orange;
 
         /// <summary>
-        ///     Color used to modulate the atmos-plasma-fire effect.
+        ///     Color used to modulate the fire texture.
         /// </summary>
-        [DataField("fireModColor")]
-        public readonly Color? FireModColor;
+        [DataField("fireColor")]
+        public readonly Color? FireColor;
 
         [DataField("Sound")]
         public readonly SoundSpecifier Sound = new SoundCollectionSpecifier("explosion");
 
         [DataField("texturePath")]
         public readonly string TexturePath = "/Textures/Effects/fire.rsi";
+
+        // Theres probably a better way to do this. Currently Atmos just hard codes a constant int, so I have no one to
+        // steal code from.
+        [DataField("fireStates")]
+        public readonly int FireStates = 3;
 
         /// <summary>
         ///     Basic function for linear interpolation of _tileBreakChance and _tileBreakIntensity

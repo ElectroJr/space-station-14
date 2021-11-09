@@ -74,13 +74,13 @@ namespace Content.Client.Explosion
 
             for (var j = 0; j < index; j++)
             {
-                var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.Frames.Count - 1);
-                var frames = exp.Frames[frameIndex];
-                DrawExplodingTiles(drawHandle, exp.Grid, exp.Tiles[j], gridBounds, frames);
+                var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.FireFrames.Count - 1);
+                var frames = exp.FireFrames[frameIndex];
+                DrawExplodingTiles(drawHandle, exp.Grid, exp.Tiles[j], gridBounds, frames, exp.FireColor);
             }
         }
 
-        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, Box2 bounds, Texture[] frames)
+        private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, Box2 bounds, Texture[] frames, Color? modulate)
         {
             foreach (var tile in tiles)
             {
@@ -88,7 +88,7 @@ namespace Content.Client.Explosion
                     continue;
 
                 var texture = _robustRandom.Pick(frames);
-                drawHandle.DrawTexture(texture, new Vector2(tile.X, tile.Y));
+                drawHandle.DrawTexture(texture, new Vector2(tile.X, tile.Y), modulate);
             }
         }
     }

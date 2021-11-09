@@ -9,6 +9,9 @@
   tileBreakIntensity: [0, 5, 15]
   tileBreakRerollReduction: 10
   lightColor: Orange
+  texturePath: /Textures/Effects/fire.rsi 
+  fireStates: 3
+  
 
 - type: explosion
   id: Radioactive
@@ -19,5 +22,19 @@
       Blunt: 3
       Piercing: 3
   lightColor: Green
-  # somday: texturePath: /Textures/Effects/green_fire.rsi 
-  # that or just a white fire texture that can be modulated and reused for cryo & other explosion types
+  fireColor: Green
+  texturePath: /Textures/Effects/fire_greyscale.rsi 
+  fireStates: 3
+  
+- type: explosion
+  id: Cryo
+  damagePerIntensity:
+    types:
+      Cold: 5
+      Blunt: 2  
+  tileBreakChance: [0]
+  tileBreakIntensity: [0]
+  lightColor: Blue
+  fireColor: Blue
+  texturePath: /Textures/Effects/fire_greyscale.rsi 
+  fireStates: 3

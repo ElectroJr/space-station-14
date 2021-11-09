@@ -113,12 +113,9 @@ namespace Content.Client.Explosion
         ///     The textures used for the explosion fire effect. Each fire-state is associated with an explosion
         ///     intensity range, and each stat itself has several textures.
         /// </summary>
-        public List<Texture[]> Frames = new();
+        public List<Texture[]> FireFrames = new();
 
-        /// <summary>
-        ///     We want the first three states in Fire.rsi, and not the last two.
-        /// </summary>
-        private const int TotalFireStates = 3;
+        public Color? FireColor;
 
         internal Explosion(ExplosionEvent args, IEntity light)
         {
@@ -134,12 +131,13 @@ namespace Content.Client.Explosion
             lightComp.Radius = args.Tiles.Count;
             lightComp.Energy = lightComp.Radius;
             lightComp.Color = type.LightColor;
+            FireColor = type.FireColor;
 
             var fireRsi = IoCManager.Resolve<IResourceCache>().GetResource<RSIResource>(type.TexturePath).RSI;
             foreach (var state in fireRsi)
             {
-                Frames.Add(state.GetFrames(RSI.State.Direction.South));
-                if (Frames.Count == TotalFireStates)
+                FireFrames.Add(state.GetFrames(RSI.State.Direction.South));
+                if (FireFrames.Count == type.FireStates)
                     break;
             }
         }
