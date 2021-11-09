@@ -263,7 +263,10 @@ namespace Content.Server.Explosion
                 return;
             }
 
-            _explosionQueue.Enqueue(() => SpawnExplosion(gridId, epicenter, initialTiles, type, totalIntensity,
+            if (!_mapManager.TryGetGrid(gridId, out var grid))
+                return;
+
+            _explosionQueue.Enqueue(() => SpawnExplosion(grid, epicenter, initialTiles, type, totalIntensity,
                 slope, maxTileIntensity));
         }
 
@@ -272,7 +275,7 @@ namespace Content.Server.Explosion
         ///     information about the affected tiles for the explosion system to process. It will also trigger the
         ///     camera shake and sound effect.
         /// </summary>
-        private Explosion SpawnExplosion(GridId gridId,
+        private Explosion SpawnExplosion(IMapGrid grid,
             MapCoordinates epicenter,
             HashSet<Vector2i> initialTiles,
             ExplosionPrototype type,
@@ -280,16 +283,15 @@ namespace Content.Server.Explosion
             float slope,
             float maxTileIntensity)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(gridId, initialTiles, type.ID, totalIntensity,
+            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, initialTiles, type.ID, totalIntensity,
                 slope, maxTileIntensity);
 
-            RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, gridId));
+            RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, grid.Index));
 
             // camera shake
             CameraShake(tileSetList.Count * 2.5f, epicenter, totalIntensity);
 
             // play sound. For whatever bloody reason, sound system requires ENTITY coordinates.
-            var grid = _mapManager.GetGrid(gridId);
             var gridCoords = grid.MapToGrid(epicenter);
             var audioRange = tileSetList.Count * 5;
             var filter = Filter.Empty().AddInRange(epicenter, audioRange);
