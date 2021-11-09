@@ -59,7 +59,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         private void DrawScreen(OverlayDrawArgs args)
         {
             var handle = args.ScreenHandle;
-            var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
+            var gridXform = _entityManager.GetComponent<TransformComponent>(Grid!.GridEntityId);
             var worldBounds = _eyeManager.GetWorldViewbounds();
             var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
 
@@ -96,7 +96,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         private void DrawWorld(in OverlayDrawArgs args)
         {
             var handle = args.WorldHandle;
-            var gridXform = _entityManager.GetComponent<ITransformComponent>(Grid!.GridEntityId);
+            var gridXform = _entityManager.GetComponent<TransformComponent>(Grid!.GridEntityId);
             var worldBounds = _eyeManager.GetWorldViewbounds();
             var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
 

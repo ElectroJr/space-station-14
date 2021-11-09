@@ -90,7 +90,7 @@ namespace Content.Server.Explosion
             // do we need to update our explosion blocking map?
             if (!airtight.AirBlocked)
                 return;
-            if (!EntityManager.TryGetComponent(uid, out ITransformComponent transform) || !transform.Anchored)
+            if (!EntityManager.TryGetComponent(uid, out TransformComponent transform) || !transform.Anchored)
                 return;
             if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
                 return;

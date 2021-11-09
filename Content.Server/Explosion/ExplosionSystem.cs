@@ -216,7 +216,7 @@ namespace Content.Server.Explosion
             float slope,
             float maxTileIntensity)
         {
-            if (!EntityManager.TryGetComponent(uid, out ITransformComponent? transform))
+            if (!EntityManager.TryGetComponent(uid, out TransformComponent? transform))
                 return;
 
             QueueExplosion(transform.MapPosition, typeId, intensity, slope, maxTileIntensity);
@@ -471,7 +471,7 @@ namespace Content.Server.Explosion
             // throw
             if (throwForce != null && EnablePhysicsThrow &&
                 EntityManager.HasComponent<ExplosionLaunchedComponent>(uid) &&
-                EntityManager.TryGetComponent(uid, out ITransformComponent transform))
+                EntityManager.TryGetComponent(uid, out TransformComponent transform))
             {
                 EntityManager.GetEntity(uid).TryThrow(transform.WorldPosition - epicenter.Position, throwForce.Value);
             }
