@@ -2,6 +2,7 @@ using Content.Server.Construction;
 using Content.Server.Destructible.Thresholds;
 using Content.Server.Destructible.Thresholds.Behaviors;
 using Content.Server.Destructible.Thresholds.Triggers;
+using Content.Server.Explosion;
 using Content.Shared.Acts;
 using Content.Shared.Damage;
 using Content.Shared.FixedPoint;
@@ -23,6 +24,7 @@ namespace Content.Server.Destructible
         [Dependency] public readonly ActSystem ActSystem = default!;
         [Dependency] public readonly AudioSystem AudioSystem = default!;
         [Dependency] public readonly ConstructionSystem ConstructionSystem = default!;
+        [Dependency] public readonly ExplosionSystem ExplosionSystem = default!;
 
         public override void Initialize()
         {

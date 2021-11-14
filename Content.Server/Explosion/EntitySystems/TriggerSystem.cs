@@ -35,8 +35,7 @@ namespace Content.Server.Explosion.EntitySystems
     {
         [Dependency] private readonly ExplosionSystem _explosions = default!;
         [Dependency] private readonly FlashSystem _flashSystem = default!;
-        [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
-
+        
         public override void Initialize()
         {
             base.Initialize();
@@ -51,7 +50,7 @@ namespace Content.Server.Explosion.EntitySystems
 
         private void HandleExplodeTrigger(EntityUid uid, ExplodeOnTriggerComponent component, TriggerEvent args)
         {
-            _explosionSystem.TriggerExplosive(uid);
+            _explosions.TriggerExplosive(uid);
         }
 
         #region Flash

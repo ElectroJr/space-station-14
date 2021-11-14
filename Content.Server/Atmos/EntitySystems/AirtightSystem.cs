@@ -66,10 +66,10 @@ namespace Content.Server.Atmos.EntitySystems
 
         private void OnAirtightRotated(EntityUid uid, AirtightComponent airtight, ref RotateEvent ev)
         {
-            if (!airtight.RotateAirBlocked || airtight.InitialAirBlockedDirection == (int) AtmosDirection.Invalid)
+            if (!airtight.RotateAirBlocked || airtight.InitialAirBlockedDirection == (int)AtmosDirection.Invalid)
                 return;
 
-            airtight.CurrentAirBlockedDirection = (int) Rotate((AtmosDirection) airtight.InitialAirBlockedDirection, ev.NewRotation);
+            airtight.CurrentAirBlockedDirection = (int) Rotate((AtmosDirection)airtight.InitialAirBlockedDirection, ev.NewRotation);
             UpdatePosition(airtight);
         }
 

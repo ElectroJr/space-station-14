@@ -71,7 +71,7 @@ namespace Content.Server.PowerCell.Components
         {
             var radius = MathF.Min( 5, MathF.Ceiling(MathF.Sqrt(CurrentCharge) / 30));
             CurrentCharge = 0;
-            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(Owner.Uid,radius: radius);
+            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(OwnerUid, radius: radius);
         }
 
         private void UpdateVisuals()
