@@ -131,10 +131,10 @@ namespace Content.Server.Explosion
                     var blockedDirections = AtmosDirection.Invalid;
                     float sealIntegrity = 0;
 
-                    if (airtightMap.TryGetValue(newTile, out var tuple))
+                    if (airtightMap.TryGetValue(newTile, out var tileData))
                     {
-                        blockedDirections = tuple.Item2;
-                        if (!tuple.Item1.TryGetValue(typeID, out sealIntegrity))
+                        blockedDirections = tileData.BlockedDirections;
+                        if (!tileData.ExplosionTolerance.TryGetValue(typeID, out sealIntegrity))
                             sealIntegrity = float.MaxValue; // indestructible airtight entity
                     }
 
@@ -262,11 +262,11 @@ namespace Content.Server.Explosion
                     float sealIntegrity = 0;
 
                     // Note that if (grid, tile) is not a valid key, then airtight.BlockedDirections will default to 0 (no blocked directions)
-                    if (airtightMap.TryGetValue(tile, out var tuple))
+                    if (airtightMap.TryGetValue(tile, out var tileData))
                     {
-                        blockedDirections = tuple.Item2;
-                        if (!tuple.Item1.TryGetValue(typeID, out sealIntegrity))
-                            sealIntegrity = float.MaxValue;
+                        blockedDirections = tileData.BlockedDirections;
+                        if (!tileData.ExplosionTolerance.TryGetValue(typeID, out sealIntegrity))
+                            sealIntegrity = float.MaxValue; // indestructible airtight entity
                     }
 
                     // First, yield any neighboring tiles that are not blocked by airtight entities on this tile
@@ -327,13 +327,13 @@ namespace Content.Server.Explosion
                     var airtight = airtightMap.GetValueOrDefault(tile);
                     var freeDirections = ignoreTileBlockers
                         ? AtmosDirection.All
-                        : ~airtight.Item2;
+                        : ~airtight.BlockedDirections;
 
                     // Get the free directions of the directly adjacent tiles
-                    var freeDirectionsN = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.North)).Item2;
-                    var freeDirectionsE = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.East)).Item2;
-                    var freeDirectionsS = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.South)).Item2;
-                    var freeDirectionsW = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).Item2;
+                    var freeDirectionsN = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.North)).BlockedDirections;
+                    var freeDirectionsE = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.East)).BlockedDirections;
+                    var freeDirectionsS = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.South)).BlockedDirections;
+                    var freeDirectionsW = ~airtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).BlockedDirections;
 
                     // North East
                     if (freeDirections.IsFlagSet(AtmosDirection.NorthEast))

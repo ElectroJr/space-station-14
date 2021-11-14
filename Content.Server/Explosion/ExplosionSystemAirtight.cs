@@ -23,17 +23,16 @@ namespace Content.Server.Explosion
         //
         // Hence, each tile has a (Dictionary<string, float>, AtmosDirection) value. This specifies what directions are
         // blocked, and how intense a given explosion type needs to be in order to destroy ALL airtight entities on that
-        // tile.
+        // tile. This is the TileData struct.
         //
-        // We then need this data for every tile on a grid. So this mess of a variable maps the Grid ID and Vector2i grid
+        // We then need this data for every tile on a grid. So this mess of a variable maps the Grid ID and Vector2i
+        // grid
         // indices to this tile-data.
         //
-        // Plz help. I hate this.
-        public Dictionary<GridId, Dictionary<Vector2i, (Dictionary<string, float>, AtmosDirection)>> AirtightMap = new();
-        // I assume indexing a Dictionary<Vector2i, tile-data> is faster than indexing a Dictionary<TileRef, tile-data>?
-        // If it doesn't really matter, I could get rid of the grid ID dictionary. But then I would need to use TileRef
-        // everywhere in place of Vector2i, and I'm not sure how make that work fast with the neighbor-finding code. I
-        // still need to experiment with this.
+        // Indexing a Dictionary with Vector2ikeys is faster than using a TileRef or (GridId, Vector2i) tuple key. So
+        // given that we process one grid at a time, AFAIK a nested dictionary is just the best option here performance
+        // wise?
+        internal Dictionary<GridId, Dictionary<Vector2i, TileData>> AirtightMap = new();
         // EXPLOSION TODO fix shit code
 
         public void UpdateAirtightMap(GridId gridId, Vector2i tile)
@@ -75,7 +74,7 @@ namespace Content.Server.Explosion
             }
 
             if (blockedDirections != AtmosDirection.Invalid)
-                AirtightMap[grid.Index][tile] = (tolerance, blockedDirections);
+                AirtightMap[grid.Index][tile] = new(tolerance, blockedDirections);
             else
                 AirtightMap[grid.Index].Remove(tile);
         }
@@ -121,5 +120,20 @@ namespace Content.Server.Explosion
 
             return explosionTolerance;
         }
+    }
+
+    /// <summary>
+    ///     Internal data struct that describes the explosion-blocking airtight entities on a tile.
+    /// </summary>
+    internal struct TileData
+    {
+        public TileData(Dictionary<string, float> explosionTolerance, AtmosDirection blockedDirections)
+        {
+            ExplosionTolerance = explosionTolerance;
+            BlockedDirections = blockedDirections;
+        }
+
+        public Dictionary<string, float> ExplosionTolerance;
+        public AtmosDirection BlockedDirections = AtmosDirection.Invalid;
     }
 }
