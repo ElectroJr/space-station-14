@@ -1,7 +1,6 @@
 using System;
-using Content.Server.Chemistry.Components;
 using Content.Server.Chemistry.Components.SolutionManager;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Chemistry.Components;
 using Content.Shared.Chemistry.Reaction;
 using Content.Shared.Explosion;
@@ -33,6 +32,7 @@ namespace Content.Server.Chemistry.ReactionEffects
         [DataField("intensitySlope")]
         public float IntensitySlope = 1;
 
+<<<<<<< HEAD
         /// <summary>
         ///     The maximum total intensity that this chemical reaction can achieve. Basically here to prevent people
         ///     from creating a nuke by collecting enough potassium and water.
@@ -42,6 +42,14 @@ namespace Content.Server.Chemistry.ReactionEffects
         /// </remarks>
         [DataField("maxTotalIntensity")]
         public float MaxTotalIntensity = 100;
+=======
+        public void React(Solution solution, EntityUid solutionEntity, double intensity, IEntityManager entityManager)
+        {
+            var floatIntensity = (float) intensity;
+
+            if (!entityManager.HasComponent<SolutionContainerManagerComponent>(solutionEntity))
+                return;
+>>>>>>> master
 
         /// <summary>
         ///     The intensity of the explosion per unit reaction.
@@ -53,12 +61,22 @@ namespace Content.Server.Chemistry.ReactionEffects
         {
             var intensity = (float) Math.Min(quantity * IntensityPerUnit, MaxTotalIntensity);
 
+<<<<<<< HEAD
             EntitySystem.Get<ExplosionSystem>().QueueExplosion(
                 solutionEntity.Uid,
                 ExplosionType,
                 intensity,
                 IntensitySlope,
                 MaxIntensity);
+=======
+            //Calculate intensities
+            var finalDevastationRange = (int)MathF.Round(_devastationRange * floatIntensity);
+            var finalHeavyImpactRange = (int)MathF.Round(_heavyImpactRange * floatIntensity);
+            var finalLightImpactRange = (int)MathF.Round(_lightImpactRange * floatIntensity);
+            var finalFlashRange = (int)MathF.Round(_flashRange * floatIntensity);
+            EntitySystem.Get<ExplosionSystem>().SpawnExplosion(solutionEntity, finalDevastationRange,
+                finalHeavyImpactRange, finalLightImpactRange, finalFlashRange);
+>>>>>>> master
         }
     }
 }

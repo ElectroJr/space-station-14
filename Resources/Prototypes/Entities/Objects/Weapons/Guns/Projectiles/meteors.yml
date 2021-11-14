@@ -15,6 +15,7 @@
   - type: DeleteOnTrigger
   - type: TriggerOnCollide
   - type: Projectile
+    damage: {}
     deleteOnCollide: false
     damage:
       types:

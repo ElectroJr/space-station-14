@@ -1,3 +1,4 @@
+using Content.Server.Construction;
 using Content.Server.Destructible.Thresholds;
 using Content.Server.Destructible.Thresholds.Behaviors;
 using Content.Server.Destructible.Thresholds.Triggers;
@@ -17,8 +18,11 @@ namespace Content.Server.Destructible
     public class DestructibleSystem : EntitySystem
     {
         [Dependency] public readonly IRobustRandom Random = default!;
-        [Dependency] public readonly AudioSystem AudioSystem = default!;
+        public new IEntityManager EntityManager => base.EntityManager;
+
         [Dependency] public readonly ActSystem ActSystem = default!;
+        [Dependency] public readonly AudioSystem AudioSystem = default!;
+        [Dependency] public readonly ConstructionSystem ConstructionSystem = default!;
 
         public override void Initialize()
         {
@@ -37,7 +41,7 @@ namespace Content.Server.Destructible
                 {
                     RaiseLocalEvent(uid, new DamageThresholdReached(component, threshold));
 
-                    threshold.Execute(component.Owner, this);
+                    threshold.Execute(uid, this, EntityManager);
                 }
             }
         }

@@ -1,5 +1,5 @@
 ﻿using System.Linq;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Server.Pointing.Components;
 using Content.Shared.MobState.Components;
 using Content.Shared.Pointing.Components;
@@ -22,6 +22,8 @@ namespace Content.Server.Pointing.EntitySystems
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IRobustRandom _random = default!;
         [Dependency] private readonly ExplosionSystem _explosion = default!;
+
+        [Dependency] private readonly ExplosionSystem _explosions = default!;
 
         public override void Initialize()
         {
@@ -106,7 +108,6 @@ namespace Content.Server.Pointing.EntitySystems
                 {
                     return;
                 }
-
                 _explosion.QueueExplosion(uid, "Default", 50, 3, 10);
                 EntityManager.QueueDeleteEntity(uid);
             }

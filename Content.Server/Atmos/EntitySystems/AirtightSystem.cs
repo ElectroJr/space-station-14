@@ -44,10 +44,7 @@ namespace Content.Server.Atmos.EntitySystems
         {
             SetAirblocked(airtight, false);
 
-            if (airtight.FixVacuum)
-            {
-                _atmosphereSystem.FixVacuum(airtight.LastPosition.Item1, airtight.LastPosition.Item2);
-            }
+            InvalidatePosition(airtight.LastPosition.Item1, airtight.LastPosition.Item2, airtight.FixVacuum);
         }
 
         private void OnMapInit(EntityUid uid, AirtightComponent airtight, MapInitEvent args)
@@ -89,10 +86,10 @@ namespace Content.Server.Atmos.EntitySystems
 
             var grid = _mapManager.GetGrid(airtight.Owner.Transform.GridID);
             airtight.LastPosition = (airtight.Owner.Transform.GridID, grid.TileIndicesFor(airtight.Owner.Transform.Coordinates));
-            InvalidatePosition(airtight.LastPosition.Item1, airtight.LastPosition.Item2);
+            InvalidatePosition(airtight.LastPosition.Item1, airtight.LastPosition.Item2, airtight.FixVacuum && !airtight.AirBlocked);
         }
 
-        public void InvalidatePosition(GridId gridId, Vector2i pos)
+        public void InvalidatePosition(GridId gridId, Vector2i pos, bool fixVacuum = false)
         {
             if (!gridId.IsValid())
                 return;
@@ -100,6 +97,9 @@ namespace Content.Server.Atmos.EntitySystems
             _explosionSystem.UpdateAirtightMap(gridId, pos);
             _atmosphereSystem.UpdateAdjacent(gridId, pos);
             _atmosphereSystem.InvalidateTile(gridId, pos);
+
+            if(fixVacuum)
+                _atmosphereSystem.FixVacuum(gridId, pos);
         }
 
         private AtmosDirection Rotate(AtmosDirection myDirection, Angle myAngle)

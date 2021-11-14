@@ -8,7 +8,7 @@ using Content.Server.Chemistry.EntitySystems;
 using Content.Server.Configurable;
 using Content.Server.Disposal.Tube.Components;
 using Content.Server.EUI;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Server.Ghost.Roles;
 using Content.Server.Inventory.Components;
 using Content.Server.Mind.Commands;
@@ -41,6 +41,7 @@ namespace Content.Server.Administration
         [Dependency] private readonly IGameTiming _gameTiming = default!;
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
         [Dependency] private readonly EuiManager _euiManager = default!;
+        [Dependency] private readonly ExplosionSystem _explosions = default!;
         [Dependency] private readonly GhostRoleSystem _ghostRoleSystem = default!;
 
         private readonly Dictionary<IPlayerSession, EditSolutionsEui> _openSolutionUis = new();
@@ -107,7 +108,7 @@ namespace Content.Server.Administration
                 verb.Text = Loc.GetString("make-sentient-verb-get-data-text");
                 verb.Category = VerbCategory.Debug;
                 verb.IconTexture = "/Textures/Interface/VerbIcons/sentient.svg.192dpi.png";
-                verb.Act = () => MakeSentientCommand.MakeSentient(args.Target);
+                verb.Act = () => MakeSentientCommand.MakeSentient(args.Target.Uid, EntityManager);
                 args.Verbs.Add(verb);
             }
 

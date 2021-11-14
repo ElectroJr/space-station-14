@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Content.Server.AME.Components;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Server.NodeContainer.NodeGroups;
 using Content.Server.NodeContainer.Nodes;
 using Robust.Shared.GameObjects;
@@ -175,10 +175,7 @@ namespace Content.Server.AME
             }
             radius *= 2;
             radius = Math.Min(radius, 8);
-
-            var sys = EntitySystem.Get<ExplosionSystem>();
-
-            sys.TriggerExplosive(MasterController.Owner.Uid, radius: radius, delete: false);
+            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(MasterController.Owner.Uid, radius: radius, delete: false);
         }
     }
 }

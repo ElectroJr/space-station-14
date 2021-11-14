@@ -128,8 +128,7 @@ namespace Content.Server.Chemistry.EntitySystems
             // Process reactions
             if (needsReactionsProcessing && solutionHolder.CanReact)
             {
-                _chemistrySystem
-                    .FullyReactSolution(solutionHolder, EntityManager.GetEntity(uid), solutionHolder.MaxVolume);
+                _chemistrySystem.FullyReactSolution(solutionHolder, uid, solutionHolder.MaxVolume);
             }
 
             UpdateAppearance(uid, solutionHolder);
@@ -216,7 +215,7 @@ namespace Content.Server.Chemistry.EntitySystems
             [NotNullWhen(true)] out Solution? solution,
             SolutionContainerManagerComponent? solutionsMgr = null)
         {
-            if (!Resolve(uid, ref solutionsMgr))
+            if (!Resolve(uid, ref solutionsMgr, false))
             {
                 solution = null;
                 return false;
