@@ -1,3 +1,4 @@
+using Content.Server.Explosion;
 using Content.Server.Explosion.Components;
 using JetBrains.Annotations;
 using Robust.Shared.GameObjects;
@@ -14,7 +15,7 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
     {
         public void Execute(EntityUid owner, DestructibleSystem system)
         {
-            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(owner.Uid);  
+            EntitySystem.Get<ExplosionSystem>().TriggerExplosive(owner);  
         }
     }
 }

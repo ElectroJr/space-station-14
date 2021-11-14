@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Content.Server.AME.Components;
-using Content.Server.Explosion.EntitySystems;
+using Content.Server.Explosion;
 using Content.Server.NodeContainer.NodeGroups;
 using Content.Server.NodeContainer.Nodes;
 using Robust.Shared.GameObjects;

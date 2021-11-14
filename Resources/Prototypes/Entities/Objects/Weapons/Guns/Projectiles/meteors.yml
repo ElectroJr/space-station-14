@@ -17,9 +17,6 @@
   - type: Projectile
     damage: {}
     deleteOnCollide: false
-    damage:
-      types:
-        Blunt: 1
   - type: Explosive
     explosionType: Default
     totalIntensity: 2000.0

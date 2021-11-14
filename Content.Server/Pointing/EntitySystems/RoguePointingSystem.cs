@@ -1,16 +1,14 @@
-﻿using System.Linq;
-using Content.Server.Explosion.EntitySystems;
+using System.Linq;
+using Content.Server.Explosion;
 using Content.Server.Pointing.Components;
 using Content.Shared.MobState.Components;
 using Content.Shared.Pointing.Components;
 using JetBrains.Annotations;
 using Robust.Server.GameObjects;
 using Robust.Server.Player;
-using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Maths;
-using Robust.Shared.Player;
 using Robust.Shared.Random;
 using DrawDepth = Content.Shared.DrawDepth.DrawDepth;
 
@@ -22,8 +20,6 @@ namespace Content.Server.Pointing.EntitySystems
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IRobustRandom _random = default!;
         [Dependency] private readonly ExplosionSystem _explosion = default!;
-
-        [Dependency] private readonly ExplosionSystem _explosions = default!;
 
         public override void Initialize()
         {
