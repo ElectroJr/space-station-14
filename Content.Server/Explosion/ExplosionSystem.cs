@@ -266,16 +266,6 @@ namespace Content.Server.Explosion
             if (!_mapManager.TryGetGrid(gridId, out var grid))
                 return;
 
-            // we dont need the entity lookups right now.
-            // but apparently sometimes maps/grids don't have them????
-            var map = _mapManager.GetMapEntityId(grid.ParentMapId);
-            if (map == EntityUid.Invalid ||
-                !EntityManager.HasComponent<EntityLookupComponent>(grid.GridEntityId) ||
-                !EntityManager.HasComponent<EntityLookupComponent>(map))
-            {
-                return;
-            }
-
             _explosionQueue.Enqueue(() => SpawnExplosion(grid, epicenter, initialTiles, type, totalIntensity,
                 slope, maxTileIntensity));
         }
