@@ -12,11 +12,15 @@ namespace Content.Shared.Explosion
     [Serializable, NetSerializable]
     public class GridEdgeUpdateEvent : EntityEventArgs
     {
+        public GridId Reference;
         public Dictionary<GridId, HashSet<Vector2i>> GridEdges;
+        public Dictionary<GridId, HashSet<Vector2i>> DiagonalEdges;
 
-        public GridEdgeUpdateEvent(Dictionary<GridId, HashSet<Vector2i>> gridEdges)
+        public GridEdgeUpdateEvent(GridId reference, Dictionary<GridId, HashSet<Vector2i>> gridEdges, Dictionary<GridId, HashSet<Vector2i>> diagonalEdges)
         {
+            Reference = reference;
             GridEdges = gridEdges;
+            DiagonalEdges = diagonalEdges;
         }
     }
 
