@@ -124,6 +124,7 @@ namespace Content.Server.Explosion
         private void OnGridRemoved(MapId mapId, GridId gridId)
         {
             AirtightMap.Remove(gridId);
+            _gridEdges.Remove(gridId);
         }
     }
 
