@@ -3,13 +3,44 @@ using System.Collections.Generic;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Timing;
 
 namespace Content.Server.Explosion
 {
     // This partial part of the explosion system has all of the functions used to facilitate explosions moving across grids.
+    // A good portion of it is focused around keeping track of what tile-indices on a grid correspond to tiles that border space.
+    // AFAIK no other system needs to track these "edge-tiles". If they do, this should probably be a property of the grid itself?
     public sealed partial class ExplosionSystem : EntitySystem
     {
         private Dictionary<GridId, HashSet<Vector2i>> _gridEdges = new();
+
+        /// <summary>
+        ///     On grid startup, prepare a map of grid edges.
+        /// </summary>
+        /// <param name="ev"></param>
+        private void OnGridStartup(GridStartupEvent ev)
+        {
+            if (!_mapManager.TryGetGrid(ev.GridId, out var grid))
+                return;
+
+            HashSet<Vector2i> edges = new();
+            _gridEdges.Add(ev.GridId, edges);
+
+            foreach (var tileRef in grid.GetAllTiles())
+            {
+                if (tileRef.Tile.IsEmpty)
+                    continue;
+
+                if (IsEdge(grid, tileRef.GridIndices))
+                    edges.Add(tileRef.GridIndices);
+            }
+        }
+
+        private void OnGridRemoved(GridRemovalEvent ev)
+        {
+            _airtightMap.Remove(ev.GridId);
+            _gridEdges.Remove(ev.GridId);
+        }
 
         /// <summary>
         ///     When a tile is updated, we might need to update the grid edge maps.

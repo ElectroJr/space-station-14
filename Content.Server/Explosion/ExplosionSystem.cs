@@ -80,10 +80,13 @@ namespace Content.Server.Explosion
         {
             base.Initialize();
 
-            SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnAirtightDamaged);
-
+            // handled in ExplosionSystemGridMap.cs
+            SubscribeLocalEvent<GridRemovalEvent>(OnGridRemoved);
+            SubscribeLocalEvent<GridStartupEvent>(OnGridStartup);
             _mapManager.TileChanged += MapManagerOnTileChanged;
-            _mapManager.OnGridRemoved += OnGridRemoved;
+
+            // handled in ExplosionSystemAirtight.cs
+            SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnAirtightDamaged);
 
             _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, value => TilesPerTick = value, true);
             _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => EnablePhysicsThrow = value, true);
@@ -94,7 +97,6 @@ namespace Content.Server.Explosion
         {
             base.Shutdown();
             _mapManager.TileChanged -= MapManagerOnTileChanged;
-            _mapManager.OnGridRemoved -= OnGridRemoved;
         }
 
         /// <summary>
