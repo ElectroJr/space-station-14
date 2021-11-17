@@ -117,7 +117,7 @@ namespace Content.Server.Explosion
                 tilesRemaining -= processed;
 
                 // has the explosion finished processing?
-                if (_activeExplosion.CurrentIteration >= _activeExplosion.Iterations)
+                if (_activeExplosion.FinishedProcessing)
                     _activeExplosion = null;
             }
 
@@ -347,11 +347,20 @@ namespace Content.Server.Explosion
             var processedTiles = 0;
             List<(Vector2i, Tile)> damagedTiles = new();
 
+            var mapUid = _mapManager.GetMapEntityId(explosion.Grid.ParentMapId);
+            if (!mapUid.IsValid() || !EntityManager.TryGetComponent(mapUid, out EntityLookupComponent mapLookup) ||
+                !EntityManager.TryGetComponent(explosion.Grid.GridEntityId, out EntityLookupComponent gridLookup))
+            {
+                // This should never happen. But Content integration tests are a magical realm where apparently anything goes.
+                explosion.FinishedProcessing = true;
+                return 0;
+            }
+
             foreach (var (tileIndices, intensity, damage) in explosion)
             {
                 if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef) && !tileRef.Tile.IsEmpty)
                 {
-                    ExplodeTile(explosion.GridLookup,
+                    ExplodeTile(gridLookup,
                         explosion.Grid,
                         tileIndices,
                         intensity,
@@ -362,7 +371,7 @@ namespace Content.Server.Explosion
                     DamageFloorTile(tileRef, intensity, damagedTiles, explosion.ExplosionType);
                 }
                 else
-                    ExplodeSpace(explosion.MapLookup,
+                    ExplodeSpace(mapLookup,
                         explosion.Grid,
                         tileIndices,
                         intensity,
@@ -546,19 +555,14 @@ namespace Content.Server.Explosion
         /// </summary>
         public int CurrentIteration = 0;
 
-        public int Iterations;
-
         public readonly ExplosionPrototype ExplosionType;
         public readonly MapCoordinates Epicenter;
         public readonly IMapGrid Grid;
         public readonly EntityUid MapUid;
-        public readonly EntityLookupComponent MapLookup;
-        public readonly EntityLookupComponent GridLookup;
-        public bool Processed;
+        public bool FinishedProcessing;
 
         private readonly List<HashSet<Vector2i>> _tileSetList;
         private readonly List<float> _tileSetIntensity;
-        private IEnumerator<Vector2i> _tileEnumerator;
 
         public Explosion(ExplosionPrototype explosionType,
             List<HashSet<Vector2i>> tileSetList,
@@ -571,35 +575,26 @@ namespace Content.Server.Explosion
             _tileSetIntensity = tileSetIntensity;
             Epicenter = epicenter;
             Grid = grid;
-
-            // Get the first tile enumerator set up
-            Iterations = _tileSetList.Count;
-            _tileEnumerator = _tileSetList[0].GetEnumerator();
-
-            GridLookup = IoCManager.Resolve<IEntityManager>().GetComponent<EntityLookupComponent>(grid.GridEntityId);
-            MapLookup = IoCManager.Resolve<IMapManager>().GetMapEntity(grid.ParentMapId)
-                .GetComponent<EntityLookupComponent>();
         }
 
         public IEnumerator<(Vector2i, float, DamageSpecifier)> GetEnumerator()
         {
-            while (CurrentIteration < Iterations)
+            // We're not just using a foreach loop as we need to keep track of the CurrentIteration 
+            while (CurrentIteration < _tileSetList.Count)
             {
-                // do we need to get the next tile index enumerator?
-                if (!_tileEnumerator.MoveNext())
+                var tileEnumerator = _tileSetList[CurrentIteration].GetEnumerator();
+
+                while (tileEnumerator.MoveNext())
                 {
-                    CurrentIteration++;
-                    if (CurrentIteration >= Iterations)
-                        break;
-
-                    _tileEnumerator = _tileSetList[CurrentIteration].GetEnumerator();
-                    continue;
-                }
-
-                yield return (_tileEnumerator.Current,
+                    yield return (tileEnumerator.Current,
                     _tileSetIntensity[CurrentIteration],
                     ExplosionType.DamagePerIntensity * _tileSetIntensity[CurrentIteration]);
+                }
+
+                CurrentIteration++;
             }
+
+            FinishedProcessing = true;
         }
     }
 }
