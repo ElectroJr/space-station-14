@@ -1,3 +1,5 @@
+# Alphabetical order is now apparently required.
+
 - type: Tag
   id: Baguette
 
@@ -89,6 +91,9 @@
   id: Egg
 
 - type: Tag
+  id: EmitterBolt
+
+- type: Tag
   id: FireAxe
 
 - type: Tag
@@ -104,6 +109,12 @@
   id: FootstepSound
 
 - type: Tag
+  id: ForceFixRotations # fixrotations command WILL target this
+
+- type: Tag
+  id: ForceNoFixRotations # fixrotations command WON'T target this
+
+- type: Tag
   id: Gauze
 
 - type: Tag
@@ -111,6 +122,9 @@
 
 - type: Tag
   id: Handcuffs
+  
+- type: Tag
+  id: HideContextMenu
 
 - type: Tag
   id: Hoe
@@ -140,6 +154,9 @@
   id: NoSpinOnThrow
 
 - type: Tag
+  id: NukeDisk
+
+- type: Tag
   id: Ointment
 
 - type: Tag
@@ -165,6 +182,9 @@
 
 - type: Tag
   id: Powerdrill
+
+- type: Tag
+  id: RCDDeconstructWhitelist
 
 - type: Tag
   id: RodMetal1
@@ -203,22 +223,11 @@
   id: Wirecutter
 
 - type: Tag
+  id: Wooden # just like our atmos
+
+- type: Tag
   id: Wrench
 
 - type: Tag
   id: Write
 
-- type: Tag
-  id: RCDDeconstructWhitelist
-
-- type: Tag
-  id: Wooden # just like our atmos
-
-- type: Tag
-  id: EmitterBolt
-  
-- type: Tag
-  id: HideContextMenu
-
-- type: Tag
-  id: NukeDisk
