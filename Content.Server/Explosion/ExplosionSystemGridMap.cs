@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
+using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
-using Robust.Shared.Timing;
 
 namespace Content.Server.Explosion
 {
@@ -13,6 +13,13 @@ namespace Content.Server.Explosion
     public sealed partial class ExplosionSystem : EntitySystem
     {
         private Dictionary<GridId, HashSet<Vector2i>> _gridEdges = new();
+
+        public void SendEdges()
+        {
+            // temporary for debugging.
+            // todo remove
+            RaiseNetworkEvent(new GridEdgeUpdateEvent(_gridEdges));
+        }
 
         /// <summary>
         ///     On grid startup, prepare a map of grid edges.

@@ -7,6 +7,19 @@ using System.Collections.Generic;
 
 namespace Content.Shared.Explosion
 {
+    // Temporary file for testing multi-grid explosions
+    // TODO EXPLOSIONS REMOVE
+    [Serializable, NetSerializable]
+    public class GridEdgeUpdateEvent : EntityEventArgs
+    {
+        public Dictionary<GridId, HashSet<Vector2i>> GridEdges;
+
+        public GridEdgeUpdateEvent(Dictionary<GridId, HashSet<Vector2i>> gridEdges)
+        {
+            GridEdges = gridEdges;
+        }
+    }
+
     /// <summary>
     ///     An explosion event. Used for client side rendering.
     /// </summary>
