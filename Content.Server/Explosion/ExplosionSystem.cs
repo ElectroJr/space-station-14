@@ -82,9 +82,17 @@ namespace Content.Server.Explosion
 
             SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnAirtightDamaged);
 
+            _mapManager.OnGridRemoved += OnGridRemoved;
+
             _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, value => TilesPerTick = value, true);
             _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => EnablePhysicsThrow = value, true);
             _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, value => SleepNodeSys = value, true);
+        }
+
+        public override void Shutdown()
+        {
+            base.Shutdown();
+            _mapManager.OnGridRemoved -= OnGridRemoved;
         }
 
         /// <summary>

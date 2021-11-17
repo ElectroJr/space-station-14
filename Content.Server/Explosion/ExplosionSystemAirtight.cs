@@ -120,6 +120,11 @@ namespace Content.Server.Explosion
 
             return explosionTolerance;
         }
+
+        private void OnGridRemoved(MapId mapId, GridId gridId)
+        {
+            AirtightMap.Remove(gridId);
+        }
     }
 
     /// <summary>
