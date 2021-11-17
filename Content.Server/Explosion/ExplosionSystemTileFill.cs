@@ -82,7 +82,7 @@ namespace Content.Server.Explosion
             int maxIntensityIndex = 1;
 
             bool exit = false;
-            if (!AirtightMap.TryGetValue(gridId, out var airtightMap))
+            if (!_airtightMap.TryGetValue(gridId, out var airtightMap))
             {
                 airtightMap = new();
             }

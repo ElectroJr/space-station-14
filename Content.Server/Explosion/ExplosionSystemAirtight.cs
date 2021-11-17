@@ -32,7 +32,7 @@ namespace Content.Server.Explosion
         // Indexing a Dictionary with Vector2ikeys is faster than using a TileRef or (GridId, Vector2i) tuple key. So
         // given that we process one grid at a time, AFAIK a nested dictionary is just the best option here performance
         // wise?
-        internal Dictionary<GridId, Dictionary<Vector2i, TileData>> AirtightMap = new();
+        private Dictionary<GridId, Dictionary<Vector2i, TileData>> _airtightMap = new();
         // EXPLOSION TODO fix shit code
 
         public void UpdateAirtightMap(GridId gridId, Vector2i tile)
@@ -56,8 +56,8 @@ namespace Content.Server.Explosion
             Dictionary<string, float>  tolerance = new();
             var blockedDirections = AtmosDirection.Invalid;
 
-            if (!AirtightMap.ContainsKey(grid.Index))
-                AirtightMap[grid.Index] = new();
+            if (!_airtightMap.ContainsKey(grid.Index))
+                _airtightMap[grid.Index] = new();
 
             foreach (var uid in grid.GetAnchoredEntities(tile))
             {
@@ -74,9 +74,9 @@ namespace Content.Server.Explosion
             }
 
             if (blockedDirections != AtmosDirection.Invalid)
-                AirtightMap[grid.Index][tile] = new(tolerance, blockedDirections);
+                _airtightMap[grid.Index][tile] = new(tolerance, blockedDirections);
             else
-                AirtightMap[grid.Index].Remove(tile);
+                _airtightMap[grid.Index].Remove(tile);
         }
 
         /// <summary>
@@ -123,7 +123,7 @@ namespace Content.Server.Explosion
 
         private void OnGridRemoved(MapId mapId, GridId gridId)
         {
-            AirtightMap.Remove(gridId);
+            _airtightMap.Remove(gridId);
             _gridEdges.Remove(gridId);
         }
     }
