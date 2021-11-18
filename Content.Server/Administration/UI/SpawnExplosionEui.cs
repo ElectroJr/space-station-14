@@ -57,6 +57,7 @@ namespace Content.Server.Administration.UI
             var explosion = new ExplosionEvent(request.Epicenter, request.TypeId, tileSetList, tileSetIntensity, grid.Index);
 
             SendMessage(new SpawnExplosionEuiMsg.PreviewData(explosion, request.IntensitySlope, request.TotalIntensity));
+            sys.SendEdges(grid.Index);
         }
     }
 }

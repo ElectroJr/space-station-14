@@ -13,25 +13,22 @@ namespace Content.Server.Explosion
     // AFAIK no other system needs to track these "edge-tiles". If they do, this should probably be a property of the grid itself?
     public sealed partial class ExplosionSystem : EntitySystem
     {
+        public static readonly Matrix3 Offset = new(
+            1, 0, 0.25f,
+            0, 1, 0.25f,
+            0, 0, 1
+        );
+
         /// <summary>
         ///     Set of tiles of each grid that are directly adjacent to space
         /// </summary>
         private Dictionary<GridId, HashSet<Vector2i>> _gridEdges = new();
 
-        /// <summary>
-        ///     Set of tiles of each grid that are diagonally adjacent to space.
-        /// </summary>
-        /// <remarks>
-        ///     We only need this to block explosion in space from propagating, not for allowing explosions to propagate
-        ///     in or out of a grid. If explosions were allowed to propagate under/over grids, this would not be neccesary.
-        /// </remarks>
-        private Dictionary<GridId, HashSet<Vector2i>> _diagonalGridEdges = new();
-
         public void SendEdges(GridId referenceGrid)
         {
             // temporary for debugging.
             // todo remove
-            RaiseNetworkEvent(new GridEdgeUpdateEvent(referenceGrid, _gridEdges, _diagonalGridEdges));
+            RaiseNetworkEvent(new GridEdgeUpdateEvent(referenceGrid, _gridEdges));
         }
 
         /// <summary>
@@ -46,9 +43,6 @@ namespace Content.Server.Explosion
             HashSet<Vector2i> edges = new();
             _gridEdges.Add(ev.GridId, edges);
 
-            HashSet<Vector2i> diagonalEdges = new();
-            _diagonalGridEdges.Add(ev.GridId, diagonalEdges);
-
             foreach (var tileRef in grid.GetAllTiles())
             {
                 if (tileRef.Tile.IsEmpty)
@@ -56,8 +50,6 @@ namespace Content.Server.Explosion
 
                 if (IsEdge(grid, tileRef.GridIndices))
                     edges.Add(tileRef.GridIndices);
-                else if (IsDiagonalEdge(grid, tileRef.GridIndices))
-                    diagonalEdges.Add(tileRef.GridIndices);
             }
         }
 
@@ -99,16 +91,21 @@ namespace Content.Server.Explosion
                 return targetEdges;
             }
 
-            var matrix = Matrix3.Identity;
-            matrix.R0C2 = 0.5f;
-            matrix.R1C2 = 0.5f;
-
-            matrix.Multiply(sourceTransform.WorldMatrix * targetTransform.InvWorldMatrix);
+            var angle = sourceTransform.WorldRotation - targetTransform.WorldRotation;
+            var matrix = Offset * sourceTransform.WorldMatrix * targetTransform.InvWorldMatrix;
+            var offset1 = angle.RotateVec((0, 0.5f));
+            var offset2 = angle.RotateVec((0.5f, 0));
 
             foreach (var tile in edges)
             {
-                var tansformed = matrix.Transform(tile);
-                targetEdges.Add( new((int) MathF.Floor(tansformed.X), (int) MathF.Floor(tansformed.Y)));
+                var transformed = matrix.Transform(tile);
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                transformed += offset1;
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                transformed += offset2;
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                transformed -= offset1;
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
             }
 
             return targetEdges;
@@ -135,36 +132,17 @@ namespace Content.Server.Explosion
                 _gridEdges[tileRef.GridIndex] = edges;
             }
 
-            if (!_diagonalGridEdges.TryGetValue(tileRef.GridIndex, out var diagonalEdges))
-            {
-                diagonalEdges = new();
-                _diagonalGridEdges[tileRef.GridIndex] = diagonalEdges;
-            }
-
             if (tileRef.Tile.IsEmpty)
             {
                 // add any valid neighbours to the list of edge-tiles
                 foreach (var neighborIndex in GetCardinalNeighbors(tileRef.GridIndices))
                 {
                     if (grid.TryGetTileRef(neighborIndex, out var neighborTile) && !neighborTile.Tile.IsEmpty)
-                    {
                         edges.Add(neighborIndex);
-                        diagonalEdges.Remove(neighborIndex);
-                    }
-                }
-
-                foreach (var neighborIndex in GetDiagonalNeighbors(tileRef.GridIndices))
-                {
-                    if (edges.Contains(neighborIndex))
-                        continue;
-
-                    if (grid.TryGetTileRef(neighborIndex, out var neighborTile) && !neighborTile.Tile.IsEmpty)
-                        diagonalEdges.Add(neighborIndex);
                 }
 
                 // if the tile is empty, it cannot itself be an edge tile.
                 edges.Remove(tileRef.GridIndices);
-                diagonalEdges.Remove(tileRef.GridIndices);
 
                 return;
             }
@@ -174,29 +152,12 @@ namespace Content.Server.Explosion
             foreach (var neighborIndex in GetCardinalNeighbors(tileRef.GridIndices))
             {
                 if (edges.Contains(neighborIndex) && !IsEdge(grid, neighborIndex, tileRef.GridIndices))
-                {
-                    // no longer a direct edge ...
                     edges.Remove(neighborIndex);
-
-                    // ... but it could now be a diagonal edge
-                    if (IsDiagonalEdge(grid, neighborIndex, tileRef.GridIndices))
-                        diagonalEdges.Add(neighborIndex);
-                }
-            }
-
-            // this tile is not empty space, but may previously have been. If any of its neighbours are edge tiles,
-            // check that they still border space in some other direction.
-            foreach (var neighborIndex in GetDiagonalNeighbors(tileRef.GridIndices))
-            {
-                if (diagonalEdges.Contains(neighborIndex) && !IsDiagonalEdge(grid, neighborIndex, tileRef.GridIndices))
-                    diagonalEdges.Remove(neighborIndex);
             }
 
             // finally check if the new tile is itself an edge tile
             if (IsEdge(grid, tileRef.GridIndices))
                 edges.Add(tileRef.GridIndices);
-            else if (IsDiagonalEdge(grid, tileRef.GridIndices))
-                diagonalEdges.Add(tileRef.GridIndices);
         }
 
         /// <summary>
@@ -220,21 +181,6 @@ namespace Content.Server.Explosion
             return false;
         }
 
-        private bool IsDiagonalEdge(IMapGrid grid, Vector2i index, Vector2i? ignore = null)
-        {
-            foreach (var neighbourIndex in GetDiagonalNeighbors(index))
-            {
-                if (neighbourIndex == ignore)
-                    continue;
-
-                if (!grid.TryGetTileRef(neighbourIndex, out var neighborTile) || neighborTile.Tile.IsEmpty)
-                    return true;
-            }
-
-            return false;
-        }
-
-
         // Is this really not an existing function somewhere?
         // I guess it doesn't belong in robust.math? but somewhere, surely?
         /// <summary>
@@ -246,22 +192,6 @@ namespace Content.Server.Explosion
             yield return pos + (0, 1);
             yield return pos + (-1, 0);
             yield return pos + (0, -1);
-        }
-
-        /// <summary>
-        ///     Enumerate over diagonally adjacent tiles.
-        /// </summary>
-        private static IEnumerable<Vector2i> GetDiagonalNeighbors(Vector2i pos)
-        {
-            yield return pos + (1, 1);
-            yield return pos + (-1, -1);
-            yield return pos + (1, -1);
-            yield return pos + (-1, 1);
-        }
-
-        private void UpdateTile(IMapGrid mapGrid, Vector2i gridIndices)
-        {
-            throw new NotImplementedException();
         }
     }
 }

@@ -14,13 +14,11 @@ namespace Content.Shared.Explosion
     {
         public GridId Reference;
         public Dictionary<GridId, HashSet<Vector2i>> GridEdges;
-        public Dictionary<GridId, HashSet<Vector2i>> DiagonalEdges;
 
-        public GridEdgeUpdateEvent(GridId reference, Dictionary<GridId, HashSet<Vector2i>> gridEdges, Dictionary<GridId, HashSet<Vector2i>> diagonalEdges)
+        public GridEdgeUpdateEvent(GridId reference, Dictionary<GridId, HashSet<Vector2i>> gridEdges)
         {
             Reference = reference;
             GridEdges = gridEdges;
-            DiagonalEdges = diagonalEdges;
         }
     }
 

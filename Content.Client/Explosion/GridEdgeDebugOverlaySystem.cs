@@ -39,7 +39,6 @@ namespace Content.Client.Explosion
         private void UpdateOverlay(GridEdgeUpdateEvent ev)
         {
             _overlay.GridEdges = ev.GridEdges;
-            _overlay.DiagonalEdges = ev.DiagonalEdges;
             _overlay.Reference = ev.Reference;
         }
     }

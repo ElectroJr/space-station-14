@@ -23,8 +23,13 @@ namespace Content.Client.Explosion
         public override OverlaySpace Space => OverlaySpace.WorldSpace;
 
         public Dictionary<GridId, HashSet<Vector2i>> GridEdges = new();
-        public Dictionary<GridId, HashSet<Vector2i>> DiagonalEdges = new ();
         public GridId Reference;
+
+        public static readonly Matrix3 Offset = new(
+            1, 0, 0.25f,
+            0, 1, 0.25f,
+            0, 0, 1
+        );
 
         public GridEdgeDebugOverlay()
         {
@@ -47,16 +52,21 @@ namespace Content.Client.Explosion
                 return targetEdges;
             }
 
-            var matrix = Matrix3.Identity;
-            matrix.R0C2 = 0.5f;
-            matrix.R1C2 = 0.5f;
-
-            matrix.Multiply(sourceTransform.WorldMatrix * targetTransform.InvWorldMatrix);
+            var angle = sourceTransform.WorldRotation - targetTransform.WorldRotation;
+            var matrix = Offset * sourceTransform.WorldMatrix * targetTransform.InvWorldMatrix;
+            var offset1 = angle.RotateVec((0, 0.5f));
+            var offset2 = angle.RotateVec((0.5f, 0));
 
             foreach (var tile in edges)
             {
-                var tansformed = matrix.Transform(tile);
-                targetEdges.Add(new((int) MathF.Floor(tansformed.X), (int) MathF.Floor(tansformed.Y)));
+                var transformed = matrix.Transform(tile);
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                transformed += offset1;
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                transformed += offset2;
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                transformed -= offset1;
+                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
             }
 
             return targetEdges;
@@ -79,19 +89,8 @@ namespace Content.Client.Explosion
                     continue;
 
                 DrawEdges(grid, edges, handle, worldBounds, Color.Yellow);
+                DrawNode(grid, edges, handle, worldBounds, Color.Yellow);
                 DrawEdges(referenceGrid, TransformGridEdge(edges, gridId, Reference), handle, worldBounds, Color.Red);
-            }
-
-            foreach (var (gridId, edges) in DiagonalEdges)
-            {
-                if (!_mapManager.TryGetGrid(gridId, out var grid))
-                    continue;
-
-                if (grid.ParentMapId != _eyeManager.CurrentMap)
-                    continue;
-
-                DrawEdges(grid, edges, handle, worldBounds, Color.Cyan);
-                DrawEdges(referenceGrid, TransformGridEdge(edges, gridId, Reference), handle, worldBounds, Color.Blue);
             }
         }
 
@@ -111,6 +110,30 @@ namespace Content.Client.Explosion
                 var rotatedBox = new Box2Rotated(worldBox, gridXform.WorldRotation, worldCenter);
 
                 handle.DrawRect(rotatedBox, color, false);
+            }
+        }
+
+        private void DrawNode(IMapGrid grid, HashSet<Vector2i> edges, DrawingHandleWorld handle, Box2Rotated worldBounds, Color color)
+        {
+            var gridXform = _entityManager.GetComponent<TransformComponent>(grid.GridEntityId);
+            var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
+            var matrix = gridXform.WorldMatrix;
+
+            foreach (var tile in edges)
+            {
+                // is the center of this tile visible to the user?
+                if (!gridBounds.Contains((Vector2) tile + 0.5f))
+                    continue;
+
+                var x1 = ((Vector2) tile) + 0.25f;
+                var x2 = ((Vector2) tile) + (0.75f, 0.25f);
+                var x3 = ((Vector2) tile) + (0.25f, 0.75f);
+                var x4 = ((Vector2) tile) + 0.75f;
+
+                handle.DrawCircle(matrix.Transform(x1), 0.02f, color, true);
+                handle.DrawCircle(matrix.Transform(x2), 0.02f, color, true);
+                handle.DrawCircle(matrix.Transform(x3), 0.02f, color, true);
+                handle.DrawCircle(matrix.Transform(x4), 0.02f, color, true);
             }
         }
     }
