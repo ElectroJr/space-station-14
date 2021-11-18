@@ -295,23 +295,22 @@ namespace Content.Server.Explosion
             float slope,
             float maxTileIntensity)
         {
-            var (tileSetList, tileSetIntensity) = GetExplosionTiles(grid.Index, initialTiles, type.ID, totalIntensity,
-                slope, maxTileIntensity);
+            var data = GetExplosionTiles(grid.Index, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity);
 
-            RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, tileSetList, tileSetIntensity, grid.Index));
+            RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, data.IterationIntensity, grid.Index));
 
             // camera shake
-            CameraShake(tileSetList.Count * 2.5f, epicenter, totalIntensity);
+            CameraShake(data.TileSets.Count * 2.5f, epicenter, totalIntensity);
 
             // play sound. For whatever bloody reason, sound system requires ENTITY coordinates.
             var gridCoords = grid.MapToGrid(epicenter);
-            var audioRange = tileSetList.Count * 5;
+            var audioRange = data.TileSets.Count * 5;
             var filter = Filter.Empty().AddInRange(epicenter, audioRange);
             SoundSystem.Play(filter, type.Sound.GetSound(), gridCoords, _audioParams.WithMaxDistance(audioRange));
 
             return new(type,
-                        tileSetList,
-                        tileSetIntensity!,
+                        data.TileSets,
+                        data.IterationIntensity,
                         grid,
                         epicenter);
         }
