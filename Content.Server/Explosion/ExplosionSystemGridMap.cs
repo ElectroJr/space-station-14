@@ -1,13 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
-using Robust.Shared.Physics;
 
 namespace Content.Server.Explosion
 {
@@ -56,8 +53,6 @@ namespace Content.Server.Explosion
     // AFAIK no other system needs to track these "edge-tiles". If they do, this should probably be a property of the grid itself?
     public sealed partial class ExplosionSystem : EntitySystem
     {
-        [Dependency] private readonly SharedPhysicsSystem _sharedPhysicsSystem = default!;
-
         /// <summary>
         ///     Set of tiles of each grid that are directly adjacent to space
         /// </summary>
@@ -154,26 +149,22 @@ namespace Content.Server.Explosion
 
             var angle = sourceTransform.WorldRotation - xform.WorldRotation;
             var matrix = offset * sourceTransform.WorldMatrix * xform.InvWorldMatrix;
-            var offset1 = angle.RotateVec((0, size/2));
-            var offset2 = offset1.Rotated90DegreesClockwiseWorld;
+            var (x, y) = angle.RotateVec((size / 4, size / 4));
 
             HashSet<Vector2i> transformedTiles = new();
             foreach (var tile in edges)
             {
                 transformedTiles.Clear();
-                var transformed = matrix.Transform(tile);
-                TryAddEdgeTile(tile, transformed);
-                transformed += offset1;
-                TryAddEdgeTile(tile, transformed);
-                transformed += offset2;
-                TryAddEdgeTile(tile, transformed);
-                transformed -= offset1;
-                TryAddEdgeTile(tile, transformed);
+                var center = matrix.Transform(tile);
+                TryAddEdgeTile(tile, center, x, y); // direction 1
+                TryAddEdgeTile(tile, center, -y, x); // rotated 90 degrees
+                TryAddEdgeTile(tile, center, -x, -y); // rotated 180 degrees
+                TryAddEdgeTile(tile, center, y, -x); // rotated 279 degrees
             }
 
-            void TryAddEdgeTile(Vector2i original, Vector2 transformed)
+            void TryAddEdgeTile(Vector2i original, Vector2 transformed, float x, float y)
             {
-                Vector2i newIndices = new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y));
+                Vector2i newIndices = new((int) MathF.Floor(transformed.X + x), (int) MathF.Floor(transformed.Y + y));
                 if (transformedTiles.Add(newIndices))
                 {
                     if (!transformedEdges.TryGetValue(newIndices, out var set))
@@ -201,7 +192,7 @@ namespace Content.Server.Explosion
             {
                 foreach (var datum in data)
                 {
-                    var tileCenter = (Vector2) tile + tileSize;
+                    var tileCenter = ((Vector2) tile + 0.5f) * tileSize;
                     if (datum.Box.Contains(tileCenter))
                     {
                         blockedNS.Add(tile);
@@ -211,34 +202,28 @@ namespace Content.Server.Explosion
                         break;
                     }
 
-                    // EXPLOSIONS TODO PERORMANCE
-                    // what is faster:
-                    // checking if blockedNS contains tile, and THEN checking for intersections?
-                    // OR just checking for intersections, and then adding it anyways?
-                    //
-                    // for the latter.... will still check if it contains it when it actually does the adding right?
-                    // but when it's NOT blocked (intersection fails), then it will never have to check? but I imagine 90% of the time it WILL be blocked.
+                    // its faster to just check Box.Contains, instead of first checking Hashset.Contains().
 
                     // check north
-                    if (!blockedNS.Contains(tile) && datum.Box.Contains(tileCenter + (0, tileSize / 2)))
+                    if (datum.Box.Contains(tileCenter + (0, tileSize / 2)))
                     {
                         blockedNS.Add(tile);
                     }
 
                     // check south
-                    if (!blockedNS.Contains(tile + (0, -1)) && datum.Box.Contains(tileCenter + (0, -tileSize / 2)))
+                    if (datum.Box.Contains(tileCenter + (0, -tileSize / 2)))
                     {
                         blockedNS.Add(tile + (0, -1));
                     }
 
                     // check east
-                    if (!blockedEW.Contains(tile) && datum.Box.Contains(tileCenter + (tileSize / 2, 0)))
+                    if (datum.Box.Contains(tileCenter + (tileSize / 2, 0)))
                     {
                         blockedEW.Add(tile);
                     }
 
                     // check south
-                    if (!blockedEW.Contains(tile + (-1, 0)) && datum.Box.Contains(tileCenter + (-tileSize / 2, 0)))
+                    if (datum.Box.Contains(tileCenter + (-tileSize / 2, 0)))
                     {
                         blockedEW.Add(tile + (-1, 0));
                     }
