@@ -1,23 +1,62 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
+using Robust.Shared.IoC;
 using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Physics;
 
 namespace Content.Server.Explosion
 {
+    // in order to check if tiles are unblocked
+    // just check if the rotated box contains the center and the half way point
+
+    // actually if the center is ever inside another grid.
+    // can mark that as a "true block"
+    // then only ever need to test halfway point
+
+
+    /// <summary>
+    ///     AAAAAAAAAAA
+    /// </summary>
+    public struct GridEdgeData : IEquatable<GridEdgeData>
+    {
+        public Vector2i Tile;
+        public GridId Grid;
+        public Box2Rotated Box;
+
+        public GridEdgeData(Vector2i tile, GridId grid, Vector2 center, Angle angle, float size)
+        {
+            Tile = tile;
+            Grid = grid;
+            Box = new(Box2.CenteredAround(center, (size, size)), angle, center);
+        }
+
+        /// <inheritdoc />
+        public bool Equals(GridEdgeData other)
+        {
+            return Tile.Equals(other.Tile) && Grid.Equals(other.Grid);
+        }
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (Tile.GetHashCode() * 397) ^ Grid.GetHashCode();
+            }
+        }
+    }
+
     // This partial part of the explosion system has all of the functions used to facilitate explosions moving across grids.
     // A good portion of it is focused around keeping track of what tile-indices on a grid correspond to tiles that border space.
     // AFAIK no other system needs to track these "edge-tiles". If they do, this should probably be a property of the grid itself?
     public sealed partial class ExplosionSystem : EntitySystem
     {
-        public static readonly Matrix3 Offset = new(
-            1, 0, 0.25f,
-            0, 1, 0.25f,
-            0, 0, 1
-        );
+        [Dependency] private readonly SharedPhysicsSystem _sharedPhysicsSystem = default!;
 
         /// <summary>
         ///     Set of tiles of each grid that are directly adjacent to space
@@ -28,6 +67,7 @@ namespace Content.Server.Explosion
         {
             // temporary for debugging.
             // todo remove
+
             RaiseNetworkEvent(new GridEdgeUpdateEvent(referenceGrid, _gridEdges));
         }
 
@@ -60,55 +100,151 @@ namespace Content.Server.Explosion
         }
 
         /// <summary>
-        ///     Take the set of edges for some grid, and map them into Vector2i indices for some other grid. This
-        ///     ASSUMES that the two grids have the same grid size.
+        ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
+        ///     edges all onto one grids reference frame.
         /// </summary>
-        /// <remarks>
-        ///     IF both grids have the same grid size, then grid-indices map 1:1, regardless of how the grids are
-        ///     translated or rotated. Additionally, the non-empty spaces of the grids should never overlap.
-        /// </remarks>
-        private HashSet<Vector2i> TransformGridEdge(GridId source, GridId target)
+        private Dictionary<Vector2i, HashSet<GridEdgeData>> TransformAllGridEdges(GridId target)
         {
-            if (!_gridEdges.TryGetValue(source, out var edges))
-                return new();
+            Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges = new();
 
-            if (source == target)
-                return edges;
+            if (!_mapManager.TryGetGrid(target, out var targetGrid))
+                return transformedEdges;
 
-            HashSet<Vector2i> targetEdges = new();
+            if (!EntityManager.TryGetComponent(targetGrid.GridEntityId, out TransformComponent xform))
+                return transformedEdges;
 
-            if (!_mapManager.TryGetGrid(source, out var sourceGrid) ||
-                !_mapManager.TryGetGrid(target, out var targetGrid) ||
-                !EntityManager.TryGetComponent(sourceGrid.GridEntityId, out TransformComponent sourceTransform) ||
-                !EntityManager.TryGetComponent(targetGrid.GridEntityId, out TransformComponent targetTransform))
+            foreach (var (grid, edges) in _gridEdges)
             {
-                return targetEdges;
+                // explosion todo
+                // obviously dont include the target here.
+                // but for comparing performance with saltern & old code, keeping this here.
+
+                // if (grid == target)
+                //    continue;
+
+                TransformGridEdges(grid, edges, targetGrid, xform, transformedEdges);
             }
 
-            if (sourceGrid.TileSize != targetGrid.TileSize)
+            return transformedEdges;
+        }
+
+        /// <summary>
+        ///     This is function maps the edges of a single grid onto some other grid. Used by <see
+        ///     cref="TransformAllGridEdges"/>
+        /// </summary>
+        private void TransformGridEdges(GridId source, HashSet<Vector2i> edges, IMapGrid target, TransformComponent xform, Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
+        {
+            if (!_mapManager.TryGetGrid(source, out var sourceGrid) ||
+                sourceGrid.ParentMapId != target.ParentMapId ||
+                !EntityManager.TryGetComponent(sourceGrid.GridEntityId, out TransformComponent sourceTransform))
+            {
+                return;
+            }
+
+            if (sourceGrid.TileSize != target.TileSize)
             {
                 Logger.Error($"Explosions do not support grids with different grid sizes. GridIds: {source} and {target}");
-                return targetEdges;
+                return;
             }
+            var size = (float) sourceGrid.TileSize;
 
-            var angle = sourceTransform.WorldRotation - targetTransform.WorldRotation;
-            var matrix = Offset * sourceTransform.WorldMatrix * targetTransform.InvWorldMatrix;
-            var offset1 = angle.RotateVec((0, 0.5f));
-            var offset2 = angle.RotateVec((0.5f, 0));
+            var offset = Matrix3.Identity;
+            offset.R0C2 = size / 2;
+            offset.R1C2 = size / 2;
 
+            var angle = sourceTransform.WorldRotation - xform.WorldRotation;
+            var matrix = offset * sourceTransform.WorldMatrix * xform.InvWorldMatrix;
+            var offset1 = angle.RotateVec((0, size/2));
+            var offset2 = offset1.Rotated90DegreesClockwiseWorld;
+
+            HashSet<Vector2i> transformedTiles = new();
             foreach (var tile in edges)
             {
+                transformedTiles.Clear();
                 var transformed = matrix.Transform(tile);
-                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                TryAddEdgeTile(tile, transformed);
                 transformed += offset1;
-                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                TryAddEdgeTile(tile, transformed);
                 transformed += offset2;
-                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                TryAddEdgeTile(tile, transformed);
                 transformed -= offset1;
-                targetEdges.Add(new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y)));
+                TryAddEdgeTile(tile, transformed);
             }
 
-            return targetEdges;
+            void TryAddEdgeTile(Vector2i original, Vector2 transformed)
+            {
+                Vector2i newIndices = new((int) MathF.Floor(transformed.X), (int) MathF.Floor(transformed.Y));
+                if (transformedTiles.Add(newIndices))
+                {
+                    if (!transformedEdges.TryGetValue(newIndices, out var set))
+                    {
+                        set = new();
+                        transformedEdges[newIndices] = set;
+                    }
+                    set.Add(new(original, source, transformed, angle, size));
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Given an grid-edge blocking map, check if the blockers are allowed to propagate to each other through gaps.
+        /// </summary>
+        /// <remarks>
+        ///     After grid edges were transformed into the reference frame of some other grid, this function figures out
+        ///     which of those edges are actually blocking explosion propagation.
+        /// </remarks>
+        private (HashSet<Vector2i>, HashSet<Vector2i>) GetUnblockedDirections(Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges, float tileSize)
+        {
+            HashSet<Vector2i> blockedNS = new(), blockedEW = new();
+
+            foreach (var (tile, data) in transformedEdges)
+            {
+                foreach (var datum in data)
+                {
+                    var tileCenter = (Vector2) tile + tileSize;
+                    if (datum.Box.Contains(tileCenter))
+                    {
+                        blockedNS.Add(tile);
+                        blockedEW.Add(tile);
+                        blockedNS.Add(tile + (0, -1));
+                        blockedEW.Add(tile + (-1, 0));
+                        break;
+                    }
+
+                    // EXPLOSIONS TODO PERORMANCE
+                    // what is faster:
+                    // checking if blockedNS contains tile, and THEN checking for intersections?
+                    // OR just checking for intersections, and then adding it anyways?
+                    //
+                    // for the latter.... will still check if it contains it when it actually does the adding right?
+                    // but when it's NOT blocked (intersection fails), then it will never have to check? but I imagine 90% of the time it WILL be blocked.
+
+                    // check north
+                    if (!blockedNS.Contains(tile) && datum.Box.Contains(tileCenter + (0, tileSize / 2)))
+                    {
+                        blockedNS.Add(tile);
+                    }
+
+                    // check south
+                    if (!blockedNS.Contains(tile + (0, -1)) && datum.Box.Contains(tileCenter + (0, -tileSize / 2)))
+                    {
+                        blockedNS.Add(tile + (0, -1));
+                    }
+
+                    // check east
+                    if (!blockedEW.Contains(tile) && datum.Box.Contains(tileCenter + (tileSize / 2, 0)))
+                    {
+                        blockedEW.Add(tile);
+                    }
+
+                    // check south
+                    if (!blockedEW.Contains(tile + (-1, 0)) && datum.Box.Contains(tileCenter + (-tileSize / 2, 0)))
+                    {
+                        blockedEW.Add(tile + (-1, 0));
+                    }
+                }
+            }
+            return (blockedNS, blockedEW);
         }
 
         /// <summary>
@@ -165,7 +301,7 @@ namespace Content.Server.Explosion
         /// </summary>
         /// <remarks>
         ///     Optionally ignore a specific Vector2i. Used by <see cref="OnTileChanged"/> when we already know that a
-        ///     given tile is not space. This avoids uneccesary TryGetTileRef calls.
+        ///     given tile is not space. This avoids unnecessary TryGetTileRef calls.
         /// </remarks>
         private bool IsEdge(IMapGrid grid, Vector2i index, Vector2i? ignore = null)
         {
