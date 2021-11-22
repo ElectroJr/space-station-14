@@ -96,6 +96,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         private void DrawWorld(in OverlayDrawArgs args)
         {
             var handle = args.WorldHandle;
+            handle.SetTransform(Matrix3.Identity);
             var gridXform = _entityManager.GetComponent<TransformComponent>(Grid!.GridEntityId);
             var worldBounds = _eyeManager.GetWorldViewbounds();
             var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
