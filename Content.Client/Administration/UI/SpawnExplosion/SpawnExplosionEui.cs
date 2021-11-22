@@ -1,4 +1,5 @@
 using Content.Client.Eui;
+using Content.Client.Explosion;
 using Content.Shared.Administration;
 using Content.Shared.Eui;
 using JetBrains.Annotations;
@@ -43,6 +44,9 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             if (_overlayManager.HasOverlay<ExplosionDebugOverlay>())
                 _overlayManager.RemoveOverlay<ExplosionDebugOverlay>();
             _debugOverlay = null;
+
+            if (_overlayManager.HasOverlay<GridEdgeDebugOverlay>())
+                _overlayManager.RemoveOverlay<GridEdgeDebugOverlay>();
         }
 
         public void RequestPreviewData(MapCoordinates epicenter, string typeId, float totalIntensity, float intensitySlope, float maxIntensity)

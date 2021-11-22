@@ -68,6 +68,8 @@ namespace Content.Client.Explosion
 
         Dictionary<Vector2i, HashSet<GridEdgeData>> _transformedEdges = new();
 
+        public const bool DrawLocalEdges = false;
+
         public GridEdgeDebugOverlay()
         {
             IoCManager.InjectDependencies(this);
@@ -229,18 +231,20 @@ namespace Content.Client.Explosion
             if (!_mapManager.TryGetGrid(Reference, out var referenceGrid))
                 return;
 
-            foreach (var (gridId, edges) in GridEdges)
+            if (DrawLocalEdges)
             {
-                if (!_mapManager.TryGetGrid(gridId, out var grid))
-                    continue;
+                foreach (var (gridId, edges) in GridEdges)
+                {
+                    if (!_mapManager.TryGetGrid(gridId, out var grid))
+                        continue;
 
-                if (grid.ParentMapId != _eyeManager.CurrentMap)
-                    continue;
+                    if (grid.ParentMapId != _eyeManager.CurrentMap)
+                        continue;
 
-                DrawEdges(grid, edges, handle, worldBounds, Color.Yellow);
-                DrawNode(grid, edges, handle, worldBounds, Color.Yellow);
+                    DrawEdges(grid, edges, handle, worldBounds, Color.Yellow);
+                    DrawNode(grid, edges, handle, worldBounds, Color.Yellow);
+                }
             }
-
 
             Update();
             DrawBlockingEdges(referenceGrid, handle, worldBounds);
