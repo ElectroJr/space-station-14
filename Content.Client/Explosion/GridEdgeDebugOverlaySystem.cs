@@ -28,6 +28,7 @@ namespace Content.Client.Explosion
             if (!_overlayManager.HasOverlay<GridEdgeDebugOverlay>())
                 _overlayManager.AddOverlay(_overlay);
             _overlay.GridEdges = ev.GridEdges;
+            _overlay.DiagGridEdges = ev.DiagGridEdges;
             _overlay.Reference = ev.Reference;
         }
     }

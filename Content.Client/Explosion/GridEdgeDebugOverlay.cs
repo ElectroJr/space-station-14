@@ -62,6 +62,7 @@ namespace Content.Client.Explosion
         public override OverlaySpace Space => OverlaySpace.WorldSpace;
 
         public Dictionary<GridId, HashSet<Vector2i>> GridEdges = new();
+        public Dictionary<GridId, HashSet<Vector2i>> DiagGridEdges = new();
         public GridId Reference;
 
         private HashSet<Vector2i> _blockedNS = new(), _blockedEW = new();
@@ -77,7 +78,8 @@ namespace Content.Client.Explosion
 
         public void Update()
         {
-            _transformedEdges = TransformAllGridEdges();
+            _transformedEdges.Clear();
+            TransformAllGridEdges();
 
             float x = _mapManager.GetGrid(Reference).TileSize;
 
@@ -91,15 +93,14 @@ namespace Content.Client.Explosion
         ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
         ///     edges all onto one grids reference frame.
         /// </summary>
-        private Dictionary<Vector2i, HashSet<GridEdgeData>> TransformAllGridEdges()
+        private void TransformAllGridEdges()
         {
-            Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges = new();
 
             if (!_mapManager.TryGetGrid(Reference, out var targetGrid))
-                return transformedEdges;
+                return;
 
             if (!_entityManager.TryGetComponent(targetGrid.GridEntityId, out TransformComponent xform))
-                return transformedEdges;
+                return;
 
             foreach (var (grid, edges) in GridEdges)
             {
@@ -110,17 +111,27 @@ namespace Content.Client.Explosion
                 // if (grid == target)
                 //    continue;
 
-                TransformGridEdges(grid, edges, targetGrid, xform, transformedEdges);
+                TransformGridEdges(grid, edges, targetGrid, xform);
             }
 
-            return transformedEdges;
+            foreach (var (grid, edges) in DiagGridEdges)
+            {
+                // explosion todo
+                // obviously dont include the target here.
+                // but for comparing performance with saltern & old code, keeping this here.
+
+                // if (grid == target)
+                //    continue;
+
+                TransformDiagGridEdges(grid, edges, targetGrid, xform);
+            }
         }
 
         /// <summary>
         ///     This is function maps the edges of a single grid onto some other grid. Used by <see
         ///     cref="TransformAllGridEdges"/>
         /// </summary>
-        private void TransformGridEdges(GridId source, HashSet<Vector2i> edges, IMapGrid target, TransformComponent xform, Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
+        private void TransformGridEdges(GridId source, HashSet<Vector2i> edges, IMapGrid target, TransformComponent xform)
         {
             if (!_mapManager.TryGetGrid(source, out var sourceGrid) ||
                 sourceGrid.ParentMapId != target.ParentMapId ||
@@ -155,19 +166,61 @@ namespace Content.Client.Explosion
                 TryAddEdgeTile(tile, center, y, -x); // rotated 279 degrees
             }
 
-            void TryAddEdgeTile(Vector2i original, Vector2 transformed, float x, float y)
+            void TryAddEdgeTile(Vector2i original, Vector2 center, float x, float y)
             {
-                Vector2i newIndices = new((int) MathF.Floor(transformed.X + x), (int) MathF.Floor(transformed.Y + y));
+                Vector2i newIndices = new((int) MathF.Floor(center.X + x), (int) MathF.Floor(center.Y + y));
                 if (transformedTiles.Add(newIndices))
                 {
-                    if (!transformedEdges.TryGetValue(newIndices, out var set))
+                    if (!_transformedEdges.TryGetValue(newIndices, out var set))
                     {
                         set = new();
-                        transformedEdges[newIndices] = set;
+                        _transformedEdges[newIndices] = set;
                     }
-                    set.Add(new(original, source, transformed, angle, size));
+                    set.Add(new(original, source, center, angle, size));
                 }
             }
+        }
+
+        /// <summary>
+        ///     This is a variation of <see cref="TransformGridEdges"/> and is used by <see
+        ///     cref="TransformAllGridEdges"/>. This variation simply transforms the center of a tile, rather than 4
+        ///     nodes.
+        /// </summary>
+        private void TransformDiagGridEdges(GridId source, HashSet<Vector2i> edges, IMapGrid target, TransformComponent xform)
+        {
+            if (!_mapManager.TryGetGrid(source, out var sourceGrid) ||
+                sourceGrid.ParentMapId != target.ParentMapId ||
+                !_entityManager.TryGetComponent(sourceGrid.GridEntityId, out TransformComponent sourceTransform))
+            {
+                return;
+            }
+
+            if (sourceGrid.TileSize != target.TileSize)
+            {
+                Logger.Error($"Explosions do not support grids with different grid sizes. GridIds: {source} and {target}");
+                return;
+            }
+
+
+            var size = (float) sourceGrid.TileSize;
+            var offset = Matrix3.Identity;
+            offset.R0C2 = size / 2;
+            offset.R1C2 = size / 2;
+            var angle = sourceTransform.WorldRotation - xform.WorldRotation;
+            var matrix = offset * sourceTransform.WorldMatrix * xform.InvWorldMatrix;
+
+            foreach (var tile in edges)
+            {
+                var center = matrix.Transform(tile);
+                Vector2i newIndices = new((int) MathF.Floor(center.X), (int) MathF.Floor(center.Y));
+                if (!_transformedEdges.TryGetValue(newIndices, out var set))
+                {
+                    set = new();
+                    _transformedEdges[newIndices] = set;
+                }
+                set.Add(new(tile, source, center, angle, size));
+            }
+
         }
 
         /// <summary>
