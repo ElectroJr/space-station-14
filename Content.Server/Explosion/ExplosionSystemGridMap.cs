@@ -7,13 +7,6 @@ using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
 namespace Content.Server.Explosion;
-// in order to check if tiles are unblocked
-// just check if the rotated box contains the center and the half way point
-
-// actually if the center is ever inside another grid.
-// can mark that as a "true block"
-// then only ever need to test halfway point
-
 
 /// <summary>
 ///     AAAAAAAAAAA
@@ -73,7 +66,6 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     On grid startup, prepare a map of grid edges.
     /// </summary>
-    /// <param name="ev"></param>
     private void OnGridStartup(GridStartupEvent ev)
     {
         if (!_mapManager.TryGetGrid(ev.GridId, out var grid))
