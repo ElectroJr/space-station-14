@@ -72,9 +72,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     private int _previousTileIteration;
 
-    private AudioParams _audioParams = AudioParams.Default
-        .WithAttenuation(Attenuation.InverseDistanceClamped)
-        .WithRolloffFactor(0.25f);
+    private AudioParams _audioParams = AudioParams.Default.WithVolume(-5f);
 
     public override void Initialize()
     {
@@ -295,9 +293,11 @@ public sealed partial class ExplosionSystem : EntitySystem
         float slope,
         float maxTileIntensity)
     {
-        var data = GetExplosionTiles(grid.Index, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity);
+        var (iterationIntensity, dataaaa) = GetExplosionTiles(grid.Index, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity);
 
-        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, data.IterationIntensity, grid.Index));
+        var data = dataaaa.First();
+
+        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, iterationIntensity, grid.Index));
 
         // camera shake
         CameraShake(data.TileSets.Count * 2.5f, epicenter, totalIntensity);
@@ -306,11 +306,11 @@ public sealed partial class ExplosionSystem : EntitySystem
         var gridCoords = grid.MapToGrid(epicenter);
         var audioRange = data.TileSets.Count * 5;
         var filter = Filter.Empty().AddInRange(epicenter, audioRange);
-        SoundSystem.Play(filter, type.Sound.GetSound(), gridCoords, _audioParams.WithMaxDistance(audioRange));
+        SoundSystem.Play(filter, type.Sound.GetSound(), gridCoords, _audioParams);
 
         return new(type,
                     data.TileSets,
-                    data.IterationIntensity,
+                    iterationIntensity,
                     grid,
                     epicenter);
     }
@@ -562,11 +562,12 @@ class Explosion
     public readonly EntityUid MapUid;
     public bool FinishedProcessing;
 
-    private readonly List<HashSet<Vector2i>> _tileSetList;
+    private readonly Dictionary<int, HashSet<Vector2i>> _tileSetList;
     private readonly List<float> _tileSetIntensity;
+    private HashSet<Vector2i>.Enumerator _currentEnumerator;
 
     public Explosion(ExplosionPrototype explosionType,
-        List<HashSet<Vector2i>> tileSetList,
+        Dictionary<int, HashSet<Vector2i>> tileSetList,
         List<float> tileSetIntensity,
         IMapGrid grid,
         MapCoordinates epicenter)
@@ -576,23 +577,27 @@ class Explosion
         _tileSetIntensity = tileSetIntensity;
         Epicenter = epicenter;
         Grid = grid;
+        _currentEnumerator = _tileSetList[0].GetEnumerator();
     }
 
     public IEnumerator<(Vector2i, float, DamageSpecifier)> GetEnumerator()
     {
-        // We're not just using a foreach loop as we need to keep track of the CurrentIteration 
-        while (CurrentIteration < _tileSetList.Count)
+        // We're not just using a for-each loop as CurrentIteration needs to be publicly accessible.
+        while (CurrentIteration < _tileSetIntensity.Count)
         {
-            var tileEnumerator = _tileSetList[CurrentIteration].GetEnumerator();
-
-            while (tileEnumerator.MoveNext())
+            if (!_currentEnumerator.MoveNext())
             {
-                yield return (tileEnumerator.Current,
-                _tileSetIntensity[CurrentIteration],
-                ExplosionType.DamagePerIntensity * _tileSetIntensity[CurrentIteration]);
-            }
+                CurrentIteration++;
 
-            CurrentIteration++;
+                if (!_tileSetList.TryGetValue(CurrentIteration, out var tiles))
+                    continue;
+
+                _currentEnumerator = tiles.GetEnumerator();
+            }
+            
+            yield return (_currentEnumerator.Current,
+            _tileSetIntensity[CurrentIteration],
+            ExplosionType.DamagePerIntensity * _tileSetIntensity[CurrentIteration]);
         }
 
         FinishedProcessing = true;

@@ -45,7 +45,7 @@ namespace Content.Server.Administration.UI
             var sys = EntitySystem.Get<ExplosionSystem>();
             HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(request.Epicenter) };
 
-            var data = sys.GetExplosionTiles(
+            var (iterationIntensity, data) = sys.GetExplosionTiles(
                 grid.Index,
                 initialTiles,
                 request.TypeId,
@@ -54,7 +54,7 @@ namespace Content.Server.Administration.UI
                 request.MaxIntensity);
 
             // the explosion event that **would** be sent to all clients, if it were a real explosion.
-            var explosion = new ExplosionEvent(request.Epicenter, request.TypeId, data.TileSets, data.IterationIntensity, grid.Index);
+            var explosion = new ExplosionEvent(request.Epicenter, request.TypeId, data.First().TileSets, iterationIntensity, grid.Index);
 
             SendMessage(new SpawnExplosionEuiMsg.PreviewData(explosion, request.IntensitySlope, request.TotalIntensity));
             sys.SendEdges(grid.Index);

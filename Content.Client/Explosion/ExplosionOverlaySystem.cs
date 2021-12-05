@@ -100,7 +100,7 @@ public sealed class ExplosionOverlaySystem : EntitySystem
 internal class Explosion
 {
     public IMapGrid Grid;
-    public List<HashSet<Vector2i>> Tiles;
+    public Dictionary<int, HashSet<Vector2i>> Tiles;
     public List<float> Intensity;
     public EntityUid LightEntity;
 

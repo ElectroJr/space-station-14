@@ -16,7 +16,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IEyeManager _eyeManager = default!;
 
-        public List<HashSet<Vector2i>> Tiles = new();
+        public Dictionary<int, HashSet<Vector2i>> Tiles = new();
         public List<float> Intensity = new();
         public IMapGrid? Grid;
         public float TotalIntensity;
@@ -42,7 +42,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             if (Grid.ParentMapId != _eyeManager.CurrentMap)
                 return;
 
-            if (Tiles.Count < 2 || Tiles[1].Count != 1)
+            if (Tiles.Count == 0)
                 return;
 
             switch (args.Space)
@@ -63,9 +63,10 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             var worldBounds = _eyeManager.GetWorldViewbounds();
             var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
 
-            for (int i = 2; i < Tiles.Count; i++)
+            for (int i = 1; i < Intensity.Count; i++)
             {
-                foreach (var tile in Tiles[i])
+                if (!Tiles.TryGetValue(i, out var tiles)) continue;
+                foreach (var tile in tiles)
                 {
                     // is the center of this tile visible to the user?
                     if (!gridBounds.Contains((Vector2) tile + 0.5f))
@@ -83,11 +84,11 @@ namespace Content.Client.Administration.UI.SpawnExplosion
                 }
             }
 
-            foreach (var epicenter in Tiles[1])
+            foreach (var epicenter in Tiles[0])
             {
                 var worldCenter = gridXform.WorldMatrix.Transform((Vector2) epicenter + 0.5f);
                 var screenCenter = _eyeManager.WorldToScreen(worldCenter) + (-24, -24);
-                string text = $"{Intensity![1]:F2}\nΣ={TotalIntensity:F1}\nΔ={Slope:F1}";
+                string text = $"{Intensity![0]:F2}\nΣ={TotalIntensity:F1}\nΔ={Slope:F1}";
 
                 handle.DrawString(_font, screenCenter, text);
             }
@@ -101,13 +102,15 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             var worldBounds = _eyeManager.GetWorldViewbounds();
             var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);
 
-            for (int i = 0; i < Tiles.Count; i++)
+            for (int i = 0; i < Intensity.Count; i++)
             {
                 var color = ColorMap(Intensity![i]);
                 var colorTransparent = color;
                 colorTransparent.A = 0.4f;
 
-                foreach (var tile in Tiles[i])
+
+                if (!Tiles.TryGetValue(i, out var tiles)) continue;
+                foreach (var tile in tiles)
                 {
                     // is the center of this tile visible to the user?
                     if (!gridBounds.Contains((Vector2) tile + 0.5f))
@@ -125,7 +128,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
 
         private Color ColorMap(float intensity)
         {
-            var frac = 1 - intensity / Intensity![1];
+            var frac = 1 - intensity / Intensity![0];
             Color result;
             if (frac < 0.5f)
                 result = Color.InterpolateBetween(Color.Red, Color.Orange, frac * 2);

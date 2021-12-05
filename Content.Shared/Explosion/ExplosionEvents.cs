@@ -1,3 +1,4 @@
+using Content.Shared.Atmos;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
@@ -13,10 +14,12 @@ namespace Content.Shared.Explosion;
 public class GridEdgeUpdateEvent : EntityEventArgs
 {
     public GridId Reference;
-    public Dictionary<GridId, HashSet<Vector2i>> GridEdges;
+    public Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> GridEdges;
     public Dictionary<GridId, HashSet<Vector2i>> DiagGridEdges;
 
-    public GridEdgeUpdateEvent(GridId reference, Dictionary<GridId, HashSet<Vector2i>> gridEdges, Dictionary<GridId, HashSet<Vector2i>> diagGridEdges)
+    public GridEdgeUpdateEvent(GridId reference,
+        Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> gridEdges,
+        Dictionary<GridId, HashSet<Vector2i>> diagGridEdges)
     {
         Reference = reference;
         GridEdges = gridEdges;
@@ -32,7 +35,7 @@ public class ExplosionEvent : EntityEventArgs
 {
     public MapCoordinates Epicenter;
 
-    public List<HashSet<Vector2i>> Tiles;
+    public Dictionary<int, HashSet<Vector2i>> Tiles;
 
     public List<float> Intensity;
 
@@ -40,7 +43,7 @@ public class ExplosionEvent : EntityEventArgs
 
     public string TypeID;
 
-    public ExplosionEvent(MapCoordinates epicenter, string typeID, List<HashSet<Vector2i>> tiles, List<float> intensity, GridId gridId)
+    public ExplosionEvent(MapCoordinates epicenter, string typeID, Dictionary<int, HashSet<Vector2i>> tiles, List<float> intensity, GridId gridId)
     {
         Epicenter = epicenter;
         Tiles = tiles;

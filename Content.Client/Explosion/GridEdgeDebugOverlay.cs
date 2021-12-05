@@ -61,7 +61,7 @@ public sealed class GridEdgeDebugOverlay : Overlay
 
     public override OverlaySpace Space => OverlaySpace.WorldSpace;
 
-    public Dictionary<GridId, HashSet<Vector2i>> GridEdges = new();
+    public Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> GridEdges = new();
     public Dictionary<GridId, HashSet<Vector2i>> DiagGridEdges = new();
     public GridId Reference;
 
@@ -131,7 +131,7 @@ public sealed class GridEdgeDebugOverlay : Overlay
     ///     This is function maps the edges of a single grid onto some other grid. Used by <see
     ///     cref="TransformAllGridEdges"/>
     /// </summary>
-    private void TransformGridEdges(GridId source, HashSet<Vector2i> edges, IMapGrid target, TransformComponent xform)
+    private void TransformGridEdges(GridId source, Dictionary<Vector2i, AtmosDirection> edges, IMapGrid target, TransformComponent xform)
     {
         if (!_mapManager.TryGetGrid(source, out var sourceGrid) ||
             sourceGrid.ParentMapId != target.ParentMapId ||
@@ -156,14 +156,14 @@ public sealed class GridEdgeDebugOverlay : Overlay
         var (x, y) = angle.RotateVec((size / 4, size / 4));
 
         HashSet<Vector2i> transformedTiles = new();
-        foreach (var tile in edges)
+        foreach (var tile in edges.Keys)
         {
             transformedTiles.Clear();
             var center = matrix.Transform(tile);
             TryAddEdgeTile(tile, center, x, y); // direction 1
             TryAddEdgeTile(tile, center, -y, x); // rotated 90 degrees
             TryAddEdgeTile(tile, center, -x, -y); // rotated 180 degrees
-            TryAddEdgeTile(tile, center, y, -x); // rotated 279 degrees
+            TryAddEdgeTile(tile, center, y, -x); // rotated 280 degrees
         }
 
         void TryAddEdgeTile(Vector2i original, Vector2 center, float x, float y)
@@ -200,7 +200,6 @@ public sealed class GridEdgeDebugOverlay : Overlay
             Logger.Error($"Explosions do not support grids with different grid sizes. GridIds: {source} and {target}");
             return;
         }
-
 
         var size = (float) sourceGrid.TileSize;
         var offset = Matrix3.Identity;
@@ -294,8 +293,8 @@ public sealed class GridEdgeDebugOverlay : Overlay
                 if (grid.ParentMapId != _eyeManager.CurrentMap)
                     continue;
 
-                DrawEdges(grid, edges, handle, worldBounds, Color.Yellow);
-                DrawNode(grid, edges, handle, worldBounds, Color.Yellow);
+                DrawEdges(grid, edges.Keys, handle, worldBounds, Color.Yellow);
+                DrawNode(grid, edges.Keys, handle, worldBounds, Color.Yellow);
             }
         }
 
@@ -355,7 +354,7 @@ public sealed class GridEdgeDebugOverlay : Overlay
         }
     }
 
-    private void DrawNode(IMapGrid grid, HashSet<Vector2i> edges, DrawingHandleWorld handle, Box2Rotated worldBounds, Color color)
+    private void DrawNode(IMapGrid grid, IEnumerable<Vector2i> edges, DrawingHandleWorld handle, Box2Rotated worldBounds, Color color)
     {
         var gridXform = _entityManager.GetComponent<TransformComponent>(grid.GridEntityId);
         var gridBounds = gridXform.InvWorldMatrix.TransformBox(worldBounds);

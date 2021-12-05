@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Content.Shared.Atmos;
 using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Log;
@@ -48,7 +49,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     Set of tiles of each grid that are directly adjacent to space
     /// </summary>
-    private Dictionary<GridId, HashSet<Vector2i>> _gridEdges = new();
+    private Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> _gridEdges = new();
 
     /// <summary>
     ///     Set of tiles of each grid that are diagonally adjacent to space
@@ -71,7 +72,8 @@ public sealed partial class ExplosionSystem : EntitySystem
         if (!_mapManager.TryGetGrid(ev.GridId, out var grid))
             return;
 
-        HashSet<Vector2i> edges = new(), diagEdges = new();
+        Dictionary<Vector2i, AtmosDirection> edges = new();
+        HashSet<Vector2i> diagEdges = new();
         _gridEdges[ev.GridId] = edges;
         _diagGridEdges[ev.GridId] = diagEdges;
 
@@ -80,8 +82,8 @@ public sealed partial class ExplosionSystem : EntitySystem
             if (tileRef.Tile.IsEmpty)
                 continue;
 
-            if (IsEdge(grid, tileRef.GridIndices))
-                edges.Add(tileRef.GridIndices);
+            if (IsEdge(grid, tileRef.GridIndices, out var dir))
+                edges.Add(tileRef.GridIndices, dir);
             else if (IsDiagonalEdge(grid, tileRef.GridIndices))
                 diagEdges.Add(tileRef.GridIndices);
         }
@@ -111,13 +113,13 @@ public sealed partial class ExplosionSystem : EntitySystem
         foreach (var (grid, edges) in _gridEdges)
         {
             // explosion todo
-            // obviously dont include the target here.
+            // obviously don't include the target here.
             // but for comparing performance with saltern & old code, keeping this here.
 
             // if (grid == target)
             //    continue;
 
-            TransformGridEdges(grid, edges, targetGrid, xform, transformedEdges);
+            TransformGridEdges(grid, edges.Keys, targetGrid, xform, transformedEdges);
         }
 
         foreach (var (grid, edges) in _diagGridEdges)
@@ -139,7 +141,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     This is function maps the edges of a single grid onto some other grid. Used by <see
     ///     cref="TransformAllGridEdges"/>
     /// </summary>
-    private void TransformGridEdges(GridId source, HashSet<Vector2i> edges, IMapGrid target, TransformComponent xform, Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
+    private void TransformGridEdges(GridId source, IEnumerable<Vector2i> edges, IMapGrid target, TransformComponent xform, Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
     {
         if (!_mapManager.TryGetGrid(source, out var sourceGrid) ||
             sourceGrid.ParentMapId != target.ParentMapId ||
@@ -171,7 +173,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             TryAddEdgeTile(tile, center, x, y); // direction 1
             TryAddEdgeTile(tile, center, -y, x); // rotated 90 degrees
             TryAddEdgeTile(tile, center, -x, -y); // rotated 180 degrees
-            TryAddEdgeTile(tile, center, y, -x); // rotated 279 degrees
+            TryAddEdgeTile(tile, center, y, -x); // rotated 280 degrees
         }
 
         void TryAddEdgeTile(Vector2i original, Vector2 center, float x, float y)
@@ -293,7 +295,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     private void MapManagerOnTileChanged(object? sender, TileChangedEventArgs e)
     {
         // only need to update the grid-edge map if the tile changed from space to not-space.
-        if (e.NewTile.Tile.TypeId != e.OldTile.TypeId)
+        if (e.NewTile.Tile.IsEmpty || e.OldTile.IsEmpty)
             OnTileChanged(e.NewTile);
     }
 
@@ -321,39 +323,53 @@ public sealed partial class ExplosionSystem : EntitySystem
             diagEdges.Remove(tileRef.GridIndices);
 
             // add any valid neighbours to the list of edge-tiles
-            foreach (var neighborIndex in GetCardinalNeighbors(tileRef.GridIndices))
+            for (var i = 0; i < Atmospherics.Directions; i++)
             {
-                if (grid.TryGetTileRef(neighborIndex, out var neighborTile) && !neighborTile.Tile.IsEmpty)
+                var direction = (AtmosDirection) (1 << i);
+
+                var neighbourIndex = tileRef.GridIndices.Offset(direction);
+
+                if (grid.TryGetTileRef(neighbourIndex, out var neighbourTile) && !neighbourTile.Tile.IsEmpty)
                 {
-                    edges.Add(neighborIndex);
-                    diagEdges.Remove(neighborIndex);
+                    edges[neighbourIndex] = edges.GetValueOrDefault(neighbourIndex) |  direction.GetOpposite();
+                    diagEdges.Remove(neighbourIndex);
                 }
             }
 
-            foreach (var neighborIndex in GetDiagonalNeighbors(tileRef.GridIndices))
+            foreach (var diagNeighbourIndex in GetDiagonalNeighbors(tileRef.GridIndices))
             {
-                if (edges.Contains(neighborIndex))
+                if (edges.ContainsKey(diagNeighbourIndex))
                     continue;
 
-                if (grid.TryGetTileRef(neighborIndex, out var neighborTile) && !neighborTile.Tile.IsEmpty)
-                    diagEdges.Add(neighborIndex);
+                if (grid.TryGetTileRef(diagNeighbourIndex, out var neighbourIndex) && !neighbourIndex.Tile.IsEmpty)
+                    diagEdges.Add(diagNeighbourIndex);
             }
 
             return;
         }
 
-        // this tile is not empty space, but may previously have been. If any of its neighbours are edge tiles,
-        // check that they still border space in some other direction.
-        foreach (var neighborIndex in GetCardinalNeighbors(tileRef.GridIndices))
+        // the tile is not empty space, but was previously. So update directly adjacent neighbours, which may no longer
+        // be edge tiles.
+        AtmosDirection spaceDir;
+        for (var i = 0; i < Atmospherics.Directions; i++)
         {
-            if (edges.Contains(neighborIndex) && !IsEdge(grid, neighborIndex, tileRef.GridIndices))
-            {
-                // no longer a direct edge ...
-                edges.Remove(neighborIndex);
+            var direction = (AtmosDirection) (1 << i);
+            var neighbourIndex = tileRef.GridIndices.Offset(direction);
 
-                // ... but it could now be a diagonal edge
-                if (IsDiagonalEdge(grid, neighborIndex, tileRef.GridIndices))
-                    diagEdges.Add(neighborIndex);
+            if (edges.TryGetValue(neighbourIndex, out spaceDir))
+            {
+                spaceDir = spaceDir & ~direction.GetOpposite();
+                if (spaceDir != AtmosDirection.Invalid)
+                    edges[neighbourIndex] = spaceDir;
+                else
+                {
+                    // no longer a direct edge ...
+                    edges.Remove(neighbourIndex);
+
+                    // ... but it could now be a diagonal edge
+                    if (IsDiagonalEdge(grid, neighbourIndex, tileRef.GridIndices))
+                        diagEdges.Add(neighbourIndex);
+                }
             }
         }
 
@@ -365,8 +381,8 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
 
         // finally check if the new tile is itself an edge tile
-        if (IsEdge(grid, tileRef.GridIndices))
-            edges.Add(tileRef.GridIndices);
+        if (IsEdge(grid, tileRef.GridIndices, out spaceDir))
+            edges.Add(tileRef.GridIndices, spaceDir);
         else if (IsDiagonalEdge(grid, tileRef.GridIndices))
             diagEdges.Add(tileRef.GridIndices);
     }
@@ -378,18 +394,18 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Optionally ignore a specific Vector2i. Used by <see cref="OnTileChanged"/> when we already know that a
     ///     given tile is not space. This avoids unnecessary TryGetTileRef calls.
     /// </remarks>
-    private bool IsEdge(IMapGrid grid, Vector2i index, Vector2i? ignore = null)
+    private bool IsEdge(IMapGrid grid, Vector2i index, out AtmosDirection spaceDirections)
     {
-        foreach (var neighbourIndex in GetCardinalNeighbors(index))
+        spaceDirections = AtmosDirection.Invalid;
+        for (var i = 0; i < Atmospherics.Directions; i++)
         {
-            if (neighbourIndex == ignore)
-                continue;
+            var direction = (AtmosDirection) (1 << i);
 
-            if (!grid.TryGetTileRef(neighbourIndex, out var neighborTile) || neighborTile.Tile.IsEmpty)
-                return true;
+            if (!grid.TryGetTileRef(index.Offset(direction), out var neighborTile) || neighborTile.Tile.IsEmpty)
+                spaceDirections |= direction;
         }
 
-        return false;
+        return spaceDirections != AtmosDirection.Invalid;
     }
 
     private bool IsDiagonalEdge(IMapGrid grid, Vector2i index, Vector2i? ignore = null)
@@ -406,23 +422,11 @@ public sealed partial class ExplosionSystem : EntitySystem
         return false;
     }
 
-    // Is this really not an existing function somewhere?
-    // I guess it doesn't belong in robust.math? but somewhere, surely?
-    /// <summary>
-    ///     Enumerate over directly adjacent tiles.
-    /// </summary>
-    private static IEnumerable<Vector2i> GetCardinalNeighbors(Vector2i pos)
-    {
-        yield return pos + (1, 0);
-        yield return pos + (0, 1);
-        yield return pos + (-1, 0);
-        yield return pos + (0, -1);
-    }
-
+    // TODO EXPLOSION move this elsewhere
     /// <summary>
     ///     Enumerate over diagonally adjacent tiles.
     /// </summary>
-    private static IEnumerable<Vector2i> GetDiagonalNeighbors(Vector2i pos)
+    public static IEnumerable<Vector2i> GetDiagonalNeighbors(Vector2i pos)
     {
         yield return pos + (1, 1);
         yield return pos + (-1, -1);

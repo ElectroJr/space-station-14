@@ -59,7 +59,7 @@ public sealed class ExplosionOverlay : Overlay
         foreach (var exp in CompletedExplosions)
         {
             var gridBounds = exp.Grid.InvWorldMatrix.TransformBox(worldBounds);
-            DrawExplosion(drawHandle, gridBounds, exp, exp.Tiles.Count);
+            DrawExplosion(drawHandle, gridBounds, exp, exp.Intensity.Count);
         }
 
         drawHandle.SetTransform(Matrix3.Identity);
@@ -74,9 +74,11 @@ public sealed class ExplosionOverlay : Overlay
 
         for (var j = 0; j < index; j++)
         {
+            if (!exp.Tiles.TryGetValue(j, out var tiles)) continue;
+
             var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.FireFrames.Count - 1);
             var frames = exp.FireFrames[frameIndex];
-            DrawExplodingTiles(drawHandle, exp.Grid, exp.Tiles[j], gridBounds, frames, exp.FireColor);
+            DrawExplodingTiles(drawHandle, exp.Grid, tiles, gridBounds, frames, exp.FireColor);
         }
     }
 
