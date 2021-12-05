@@ -3,33 +3,32 @@ using Robust.Client.Graphics;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 
-namespace Content.Client.Explosion
+namespace Content.Client.Explosion;
+
+// Temporary file for testing multi-grid explosions
+// TODO EXPLOSIONS REMOVE
+
+public sealed class GridEdgeDebugOverlaySystem : EntitySystem
 {
-    // Temporary file for testing multi-grid explosions
-    // TODO EXPLOSIONS REMOVE
+    private GridEdgeDebugOverlay _overlay = default!;
 
-    public sealed class GridEdgeDebugOverlaySystem : EntitySystem
+    [Dependency] private readonly IOverlayManager _overlayManager = default!;
+
+    public override void Initialize()
     {
-        private GridEdgeDebugOverlay _overlay = default!;
+        base.Initialize();
 
-        [Dependency] private readonly IOverlayManager _overlayManager = default!;
+        SubscribeNetworkEvent<GridEdgeUpdateEvent>(UpdateOverlay);
+        _overlay = new GridEdgeDebugOverlay();
+    }
 
-        public override void Initialize()
-        {
-            base.Initialize();
+    private void UpdateOverlay(GridEdgeUpdateEvent ev)
+    {
 
-            SubscribeNetworkEvent<GridEdgeUpdateEvent>(UpdateOverlay);
-            _overlay = new GridEdgeDebugOverlay();
-        }
-
-        private void UpdateOverlay(GridEdgeUpdateEvent ev)
-        {
-
-            if (!_overlayManager.HasOverlay<GridEdgeDebugOverlay>())
-                _overlayManager.AddOverlay(_overlay);
-            _overlay.GridEdges = ev.GridEdges;
-            _overlay.DiagGridEdges = ev.DiagGridEdges;
-            _overlay.Reference = ev.Reference;
-        }
+        if (!_overlayManager.HasOverlay<GridEdgeDebugOverlay>())
+            _overlayManager.AddOverlay(_overlay);
+        _overlay.GridEdges = ev.GridEdges;
+        _overlay.DiagGridEdges = ev.DiagGridEdges;
+        _overlay.Reference = ev.Reference;
     }
 }
