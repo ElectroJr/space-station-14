@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Content.Shared.Atmos;
 using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
@@ -125,7 +126,11 @@ public sealed partial class ExplosionSystem : EntitySystem
         foreach (var sourceGrid in _gridEdges.Keys)
         {
             if (sourceGrid == targetGridId)
-                continue;
+            {
+                // the space map and the grid edges are using the same coordinate system
+                // but we still need the edge map for propagation in space. so we create a simplified one
+                TransformSimpleEdges(sourceGrid, tileSize, targetAngle, transformedEdges);
+            }
 
             if (!_mapManager.TryGetGrid(sourceGrid, out var grid) ||
                 grid.ParentMapId == targetMap)
@@ -146,6 +151,43 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
 
         return transformedEdges;
+    }
+
+    private void TransformSimpleEdges(GridId grid, float tileSize, Angle angle, Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
+    {
+        if (_diagGridEdges.TryGetValue(grid, out var diagEdges))
+        {
+            foreach (var tile in diagEdges)
+            {
+                if (!transformedEdges.TryGetValue(tile, out var set))
+                {
+                    set = new();
+                    transformedEdges[tile] = set;
+                }
+
+                var center = ((Vector2) tile + 0.5f) * tileSize;
+                // explosions are not allowed to propagate diagonally ONTO grids.
+                // so we use an invalid grid id.
+                set.Add(new(tile, GridId.Invalid, center, angle, tileSize));
+            }
+        }
+
+        if (_gridEdges.TryGetValue(grid, out var edges))
+        {
+            foreach (var (tile, _) in edges)
+            {
+                if (!transformedEdges.TryGetValue(tile, out var set))
+                {
+                    set = new();
+                    transformedEdges[tile] = set;
+                }
+
+                var center = ((Vector2) tile + 0.5f) * tileSize;
+                // explosions are not allowed to propagate diagonally ONTO grids.
+                // so we use an invalid grid id.
+                set.Add(new(tile, grid, center, angle, tileSize));
+            }
+        }
     }
 
     /// <summary>

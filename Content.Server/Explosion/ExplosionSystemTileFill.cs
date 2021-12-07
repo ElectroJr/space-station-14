@@ -48,12 +48,6 @@ public class ExplosionGridData
     public string TypeID;
 
     /// <summary>
-    ///     When an explosion in space reaches this grid and propagates onto some tiles, those tiles are added to this
-    ///     list.
-    /// </summary>
-    public HashSet<Vector2i> SpaceInterfaceInput = new();
-
-    /// <summary>
     ///     Tiles on this grid that are not actually on this grid.... uhh ... yeah.
     /// </summary>
     public HashSet<Vector2i> SpaceTiles = new();
@@ -109,34 +103,19 @@ public class ExplosionGridData
         Offset = Angle.RotateVec((size / 4, size / 4));
     }
 
-    public HashSet<Vector2i> Initialize(HashSet<Vector2i> initialTiles)
-    {
-        // TODO EXPLOSION DOES INITIAL TTILES REQUIRE ITERATION INDEX INFORMATION
-
-        Processed.UnionWith(initialTiles);
-        TileSets[0] = initialTiles;
-        HashSet<Vector2i> spaceTilesOutput = new();
-        foreach (var tile in initialTiles)
-        {
-            ProcessSpace(tile, spaceTilesOutput);
-        }
-
-        return spaceTilesOutput;
-    }
-
-    public int AddNewTiles(int iteration, HashSet<Vector2i> spaceTilesOutput)
+    public int AddNewTiles(int iteration, HashSet<GridEdgeData> inputGridTiles, HashSet<Vector2i> outputSpaceTiles)
     {
         HashSet<Vector2i> newTiles = new();
         var newTileCount = 0;
 
         // Use GetNewTiles to enumerate over neighbors of tiles that were recently added to tileSetList.
-        foreach (var (newTile, direction) in GetNewTiles(iteration))
+        foreach (var (newTile, direction) in GetNewTiles(iteration, inputGridTiles))
         {
             var blockedDirections = AtmosDirection.Invalid;
             float sealIntegrity = 0;
 
             // is this a space tile?
-            if (ProcessSpace(newTile, spaceTilesOutput))
+            if (ProcessSpace(newTile, outputSpaceTiles))
                 continue;
 
             if (AirtightMap.TryGetValue(newTile, out var tileData))
@@ -148,8 +127,8 @@ public class ExplosionGridData
 
             // If the explosion is entering this new tile from an unblocked direction, we add it directly
             if (blockedDirections == AtmosDirection.Invalid || // no blocked directions
-                (direction == AtmosDirection.Invalid && (blockedDirections & EdgeTiles[newTile]) == 0) || // coming from space
-                !blockedDirections.IsFlagSet(direction.GetOpposite())) // just unblocked
+               direction == AtmosDirection.Invalid && (blockedDirections & EdgeTiles[newTile]) == 0 || // coming from space
+               (direction != AtmosDirection.Invalid && !blockedDirections.IsFlagSet(direction.GetOpposite())) ) // just unblocked
             {
                 Processed.Add(newTile);
                 newTiles.Add(newTile);
@@ -190,7 +169,7 @@ public class ExplosionGridData
         return newTileCount;
     }
 
-    private bool ProcessSpace(Vector2i newTile, HashSet<Vector2i> spaceTilesOutput)
+    private bool ProcessSpace(Vector2i newTile, HashSet<Vector2i> outputSpaceTiles)
     {
         // is this a space tile?
         if (!SpaceTiles.Contains(newTile))
@@ -199,21 +178,21 @@ public class ExplosionGridData
         Processed.Add(newTile);
 
         if (!NeedToTransform)
-            spaceTilesOutput.Add(newTile);
+            outputSpaceTiles.Add(newTile);
         else
         {
             var center = Matrix.Transform(newTile);
-            spaceTilesOutput.Add(new((int) MathF.Floor(center.X + Offset.X), (int) MathF.Floor(center.Y + Offset.Y)));
-            spaceTilesOutput.Add(new((int) MathF.Floor(center.X - Offset.Y), (int) MathF.Floor(center.Y + Offset.X)));
-            spaceTilesOutput.Add(new((int) MathF.Floor(center.X - Offset.X), (int) MathF.Floor(center.Y - Offset.Y)));
-            spaceTilesOutput.Add(new((int) MathF.Floor(center.X + Offset.Y), (int) MathF.Floor(center.Y - Offset.X)));
+            outputSpaceTiles.Add(new((int) MathF.Floor(center.X + Offset.X), (int) MathF.Floor(center.Y + Offset.Y)));
+            outputSpaceTiles.Add(new((int) MathF.Floor(center.X - Offset.Y), (int) MathF.Floor(center.Y + Offset.X)));
+            outputSpaceTiles.Add(new((int) MathF.Floor(center.X - Offset.X), (int) MathF.Floor(center.Y - Offset.Y)));
+            outputSpaceTiles.Add(new((int) MathF.Floor(center.X + Offset.Y), (int) MathF.Floor(center.Y - Offset.X)));
         }
 
         return true;
     }
 
     // Get all of the new tiles that the explosion will cover in this new iteration.
-    public IEnumerable<(Vector2i, AtmosDirection)> GetNewTiles(int iteration)
+    public IEnumerable<(Vector2i, AtmosDirection)> GetNewTiles(int iteration, HashSet<GridEdgeData> inputGridTiles)
     {
         // firstly, if any delayed spreaders were cleared, add them to processed tiles to avoid unnecessary
         // calculations
@@ -237,17 +216,19 @@ public class ExplosionGridData
 
         enumerable = enumerable.Concat(GetDelayedNeighbors(iteration));
 
-        return enumerable.Concat(IterateSpaceInterface());
+        return enumerable.Concat(IterateSpaceInterface(inputGridTiles));
     }
 
-    public IEnumerable<(Vector2i, AtmosDirection)> IterateSpaceInterface()
+    public IEnumerable<(Vector2i, AtmosDirection)> IterateSpaceInterface(HashSet<GridEdgeData> inputGridTiles)
     {
-        foreach (var tile in SpaceInterfaceInput)
+        foreach (var edgeTile in inputGridTiles)
         {
-            if (!Processed.Contains(tile))
-                yield return (tile, AtmosDirection.Invalid);
+            if (edgeTile.Grid != GridId)
+                continue;
+
+            if (!Processed.Contains(edgeTile.Tile))
+                yield return (edgeTile.Tile, AtmosDirection.Invalid);
         }
-        SpaceInterfaceInput.Clear();
     }
 
     IEnumerable<(Vector2i, AtmosDirection)> GetDelayedNeighbors(int iteration)
@@ -452,11 +433,6 @@ public class ExplosionSpaceData
 
     public Dictionary<Vector2i, AtmosDirection> GridBlockMap;
 
-    /// <summary>
-    ///     When an explosion on a grid reaches space those tiles are added to this list.
-    /// </summary>
-    public HashSet<Vector2i> SpaceInterfaceInput = new();
-
     public float IntensityStepSize;
 
     public ExplosionSpaceData(ExplosionSystem system, float tileSize, float intensityStepSize, MapId targetMap, GridId? targetGridId)
@@ -483,20 +459,20 @@ public class ExplosionSpaceData
         Matrix *= xform.WorldMatrix;
     }
 
-    public int AddNewTiles(int iteration, HashSet<GridEdgeData> gridTiles)
+    public int AddNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles, HashSet<GridEdgeData> outputGridTiles)
     {
         HashSet<Vector2i> newTiles = new();
         var newTileCount = 0;
 
         // Use GetNewTiles to enumerate over neighbors of tiles that were recently added to tileSetList.
-        foreach (var newTile in GetNewTiles(iteration))
+        foreach (var newTile in GetNewTiles(iteration, inputSpaceTiles))
         {
             newTiles.Add(newTile);
             newTileCount++;
 
             // is this a grid tile?
             if (EdgeData.TryGetValue(newTile, out var edge))
-                gridTiles.UnionWith(edge);
+                outputGridTiles.UnionWith(edge);
         }
 
         // might be empty, but we will fill this during Cleanup()
@@ -507,7 +483,7 @@ public class ExplosionSpaceData
     }
 
     // Get all of the new tiles that the explosion will cover in this new iteration.
-    public IEnumerable<Vector2i> GetNewTiles(int iteration)
+    public IEnumerable<Vector2i> GetNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles)
     {
         // construct our enumerable from several other iterators
         var enumerable = Enumerable.Empty<Vector2i>();
@@ -518,17 +494,16 @@ public class ExplosionSpaceData
         if (TileSets.TryGetValue(iteration - 3, out var diagonal))
             enumerable = enumerable.Concat(GetNewDiagonalTiles(diagonal));
         
-        return enumerable.Concat(IterateSpaceInterface());
+        return enumerable.Concat(IterateSpaceInterface(inputSpaceTiles));
     }
 
-    public IEnumerable<Vector2i> IterateSpaceInterface()
+    public IEnumerable<Vector2i> IterateSpaceInterface(HashSet<Vector2i> inputSpaceTiles)
     {
-        foreach (var tile in SpaceInterfaceInput)
+        foreach (var tile in inputSpaceTiles)
         {
             if (Processed.Add(tile))
                 yield return tile;
         }
-        SpaceInterfaceInput.Clear();
     }
 
     IEnumerable<Vector2i> GetNewAdjacentTiles(IEnumerable<Vector2i> tiles)
@@ -653,7 +628,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     This is the main explosion generating function. 
     /// </summary>
     /// <param name="gridId">The grid where the epicenter tile is located</param>
-    /// <param name="initialTiles"> The initial set of tiles, the "epicenter" tiles.</param>
+    /// <param name="initialTile"> The initial "epicenter" tile.</param>
     /// <param name="typeID">The explosion type. this determines the explosion damage</param>
     /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
     /// explosion</param>
@@ -664,7 +639,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     public (List<float>, ExplosionSpaceData?, List<ExplosionGridData>) GetExplosionTiles(
         MapId map,
         GridId gridId,
-        HashSet<Vector2i> initialTiles,
+        Vector2i initialTile,
         string typeID,
         float totalIntensity,
         float slope,
@@ -689,28 +664,30 @@ public sealed partial class ExplosionSystem : EntitySystem
         {
             ExplosionGridData initialGrid = new(gridId, airtightMap, maxIntensity, intensityStepSize, typeID, _gridEdges[gridId], null);
             gridData.Add(initialGrid);
-            var initialSpaceTiles = initialGrid.Initialize(initialTiles);
-            uhhh... fuck.
-                some of these might not ACTUALLY be space tiles
-                l..... for now just drop initial tiles????
+            initialGrid.Processed.Add(initialTile);
+            initialGrid.TileSets[0] = new() { initialTile };
         }
         else
-            spaceData = new(this, DefaultTileSize, intensityStepSize, map, null, initialTiles);
+        {
+            spaceData = new(this, DefaultTileSize, intensityStepSize, map, null);
+            spaceData.Processed.Add(initialTile);
+            spaceData.TileSets[0] = new() { initialTile };
+        }
 
         // is this even a multi-tile explosion?
-        if (totalIntensity < intensityStepSize * initialTiles.Count)
-            return (new List<float> { totalIntensity / initialTiles.Count }, spaceData, gridData);
+        if (totalIntensity < intensityStepSize)
+            return (new List<float> { totalIntensity }, spaceData, gridData);
         
-
         // these variables keep track of the total intensity we have distributed
-        List<int> tilesInIteration = new() {initialTiles.Count};
+        List<int> tilesInIteration = new() { 1 };
         List<float> iterationIntensity = new() {intensityStepSize};
         var totalTiles = 0;
-        var remainingIntensity = totalIntensity - intensityStepSize * initialTiles.Count;
+        var remainingIntensity = totalIntensity - intensityStepSize;
 
         var iteration = 1;
         var maxIntensityIndex = 0;
         HashSet<Vector2i> spaceTiles = new();
+        HashSet<GridEdgeData> gridTiles = new();
         var intensityUnchangedLastLoop = false;
 
         // Main flood-fill loop
@@ -745,10 +722,22 @@ public sealed partial class ExplosionSystem : EntitySystem
             // Next, we will add a new iteration of tiles
 
             int newTileCount = 0;
+
             spaceTiles.Clear();
             foreach (var grid in gridData)
             {
-                newTileCount += grid.AddNewTiles(iteration, spaceTiles);
+                newTileCount += grid.AddNewTiles(iteration, gridTiles, spaceTiles);
+            }
+
+            if (spaceData != null)
+            {
+                gridTiles.Clear();
+                newTileCount += spaceData.AddNewTiles(iteration, spaceTiles, gridTiles);
+            }
+            else if (spaceTiles.Count != 0)
+            {
+                spaceData = new(this, _mapManager.GetGrid(gridId).TileSize, intensityStepSize, map, gridId);
+                newTileCount += spaceData.AddNewTiles(iteration, spaceTiles, gridTiles);
             }
 
             // newTilesCount += AddSpaceTiles(spaceTiles)
@@ -783,7 +772,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             grid.CleanUp();
         }
 
-        return (iterationIntensity, gridData);
+        return (iterationIntensity, spaceData, gridData);
     }
 }
 

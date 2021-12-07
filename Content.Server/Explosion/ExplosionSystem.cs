@@ -233,32 +233,9 @@ public sealed partial class ExplosionSystem : EntitySystem
     }
 
     /// <summary>
-    ///     Queue an explosions, with a center specified by some map coordinates.
-    /// </summary>
-    public void QueueExplosion(MapCoordinates coords,
-        string typeId,
-        float intensity,
-        float slope,
-        float maxTileIntensity)
-    {
-        if (!_mapManager.TryFindGridAt(coords, out var grid))
-        {
-            // TODO EXPLOSIONS get proper multi-grid explosions working. For now, default to first grid.
-            grid = _mapManager.GetAllMapGrids(coords.MapId).FirstOrDefault();
-            if (grid == null)
-                return;
-        }
-
-        HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(coords) };
-        QueueExplosion(grid.Index, coords, initialTiles, typeId, intensity, slope, maxTileIntensity);
-    }
-
-    /// <summary>
     ///     Queue an explosion, with a specified epicenter and set of starting tiles.
     /// </summary>
-    public void QueueExplosion(GridId gridId,
-        MapCoordinates epicenter,
-        HashSet<Vector2i> initialTiles,
+    public void QueueExplosion(MapCoordinates epicenter,
         string typeId,
         float totalIntensity,
         float slope,
@@ -273,10 +250,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             return;
         }
 
-        if (!_mapManager.TryGetGrid(gridId, out var grid))
-            return;
-
-        _explosionQueue.Enqueue(() => SpawnExplosion(grid, epicenter, initialTiles, type, totalIntensity,
+        _explosionQueue.Enqueue(() => SpawnExplosion(epicenter, type, totalIntensity,
             slope, maxTileIntensity));
     }
 
@@ -285,28 +259,45 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     information about the affected tiles for the explosion system to process. It will also trigger the
     ///     camera shake and sound effect.
     /// </summary>
-    private Explosion SpawnExplosion(IMapGrid grid,
-        MapCoordinates epicenter,
-        HashSet<Vector2i> initialTiles,
+    private Explosion SpawnExplosion(MapCoordinates epicenter,
         ExplosionPrototype type,
         float totalIntensity,
         float slope,
         float maxTileIntensity)
     {
-        var (iterationIntensity, dataaaa) = GetExplosionTiles(grid.Index, initialTiles, type.ID, totalIntensity, slope, maxTileIntensity);
+        Vector2i initialTile;
+        GridId gridId; 
+        if (_mapManager.TryFindGridAt(epicenter, out var grid) &&
+            grid.TryGetTileRef(grid.WorldToTile(epicenter.Position), out var tileRef) &&
+            !tileRef.Tile.IsEmpty)
+        {
+            gridId = grid.Index;
+            initialTile = tileRef.GridIndices;
+        }
+        else
+        {
+            gridId = GridId.Invalid; // implies space
+            initialTile = new Vector2i(
+                (int) Math.Floor(epicenter.Position.X / DefaultTileSize),
+                (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));
+        }
+
+        var (iterationIntensity, spaaaaaceData, dataaaa) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, type.ID, totalIntensity, slope, maxTileIntensity);
 
         var data = dataaaa.First();
 
-        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, iterationIntensity, grid.Index));
+        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, iterationIntensity, gridId));
 
         // camera shake
-        CameraShake(data.TileSets.Count * 2.5f, epicenter, totalIntensity);
+        CameraShake(iterationIntensity.Count * 2.5f, epicenter, totalIntensity);
 
-        // play sound. For whatever bloody reason, sound system requires ENTITY coordinates.
-        var gridCoords = grid.MapToGrid(epicenter);
+        //For whatever bloody reason, sound system requires ENTITY coordinates.
+        var mapEntityCoords = EntityCoordinates.FromMap(EntityManager, _mapManager.GetMapEntityId(epicenter.MapId), epicenter);
+
+        // play sound. 
         var audioRange = data.TileSets.Count * 5;
         var filter = Filter.Empty().AddInRange(epicenter, audioRange);
-        SoundSystem.Play(filter, type.Sound.GetSound(), gridCoords, _audioParams);
+        SoundSystem.Play(filter, type.Sound.GetSound(), mapEntityCoords, _audioParams);
 
         return new(type,
                     data.TileSets,
@@ -347,6 +338,12 @@ public sealed partial class ExplosionSystem : EntitySystem
     {
         var processedTiles = 0;
         List<(Vector2i, Tile)> damagedTiles = new();
+
+        if (explosion.Grid == null)
+        {
+            explosion.FinishedProcessing = true;
+            return 0; // TODO EXPLOSION fix properly
+        }
 
         var mapUid = _mapManager.GetMapEntityId(explosion.Grid.ParentMapId);
         if (!mapUid.IsValid() || !EntityManager.TryGetComponent(mapUid, out EntityLookupComponent mapLookup) ||
@@ -558,7 +555,7 @@ class Explosion
 
     public readonly ExplosionPrototype ExplosionType;
     public readonly MapCoordinates Epicenter;
-    public readonly IMapGrid Grid;
+    public readonly IMapGrid? Grid;
     public readonly EntityUid MapUid;
     public bool FinishedProcessing;
 
@@ -569,7 +566,7 @@ class Explosion
     public Explosion(ExplosionPrototype explosionType,
         Dictionary<int, HashSet<Vector2i>> tileSetList,
         List<float> tileSetIntensity,
-        IMapGrid grid,
+        IMapGrid? grid,
         MapCoordinates epicenter)
     {
         ExplosionType = explosionType;

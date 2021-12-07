@@ -43,11 +43,11 @@ namespace Content.Server.Administration.UI
             }
 
             var sys = EntitySystem.Get<ExplosionSystem>();
-            HashSet<Vector2i> initialTiles = new() { grid.TileIndicesFor(request.Epicenter) };
 
-            var (iterationIntensity, data) = sys.GetExplosionTiles(
+            var (iterationIntensity, spaceData, data) = sys.GetExplosionTiles(
+                grid.ParentMapId,
                 grid.Index,
-                initialTiles,
+                grid.TileIndicesFor(request.Epicenter),
                 request.TypeId,
                 request.TotalIntensity,
                 request.IntensitySlope,
