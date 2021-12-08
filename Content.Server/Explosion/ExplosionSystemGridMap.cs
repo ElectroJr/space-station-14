@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Content.Shared.Atmos;
 using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
@@ -101,7 +100,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
     ///     edges all onto one grids reference frame.
     /// </summary>
-    public Dictionary<Vector2i, HashSet<GridEdgeData>> TransformAllGridEdges(MapId targetMap, GridId? targetGridId)
+    public Dictionary<Vector2i, HashSet<GridEdgeData>> TransformAllGridEdges(MapId targetMap, GridId targetGridId)
     {
         Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges = new();
 
@@ -110,9 +109,9 @@ public sealed partial class ExplosionSystem : EntitySystem
         float tileSize = DefaultTileSize;
 
         // if the explosion is centered on some grid (and not just space), get the transforms.
-        if (targetGridId != null)
+        if (targetGridId.IsValid())
         {
-            var targetGrid = _mapManager.GetGrid(targetGridId.Value);
+            var targetGrid = _mapManager.GetGrid(targetGridId);
             var xform = EntityManager.GetComponent<TransformComponent>(targetGrid.GridEntityId);
             targetAngle = xform.WorldRotation;
             targetMatrix = xform.InvWorldMatrix;
@@ -133,7 +132,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             }
 
             if (!_mapManager.TryGetGrid(sourceGrid, out var grid) ||
-                grid.ParentMapId == targetMap)
+                grid.ParentMapId != targetMap)
                 continue;
 
             if (grid.TileSize != tileSize)

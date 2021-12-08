@@ -2,14 +2,12 @@ using Content.Server.EUI;
 using Content.Server.Explosion;
 using Content.Shared.Administration;
 using Content.Shared.Eui;
-using Content.Shared.Explosion;
 using JetBrains.Annotations;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
-using System.Collections.Generic;
-using System.Linq;
+using System;
 
 namespace Content.Server.Administration.UI
 {
@@ -34,30 +32,40 @@ namespace Content.Server.Administration.UI
                 return;
 
             var mapManager = IoCManager.Resolve<IMapManager>();
-            if (!mapManager.TryFindGridAt(request.Epicenter, out var grid))
+
+            Vector2i initialTile;
+            GridId gridId;
+            if (mapManager.TryFindGridAt(request.Epicenter, out var grid) &&
+                grid.TryGetTileRef(grid.WorldToTile(request.Epicenter.Position), out var tileRef) &&
+                !tileRef.Tile.IsEmpty)
             {
-                // TODO EXPLOSIONS get proper multi-grid explosions working. For now, default to first grid.
-                grid = mapManager.GetAllMapGrids(request.Epicenter.MapId).FirstOrDefault();
-                if (grid == null)
-                    return;
+                gridId = grid.Index;
+                initialTile = tileRef.GridIndices;
+            }
+            else
+            {
+                gridId = GridId.Invalid; // implies space
+                initialTile = new Vector2i(
+                    (int) Math.Floor(request.Epicenter.Position.X / ExplosionSystem.DefaultTileSize),
+                    (int) Math.Floor(request.Epicenter.Position.Y / ExplosionSystem.DefaultTileSize));
             }
 
             var sys = EntitySystem.Get<ExplosionSystem>();
 
-            var (iterationIntensity, spaceData, data) = sys.GetExplosionTiles(
-                grid.ParentMapId,
-                grid.Index,
-                grid.TileIndicesFor(request.Epicenter),
+            var (tileSetIntensity, spaceData, gridData) = sys.GetExplosionTiles(
+                request.Epicenter.MapId,
+                gridId,
+                initialTile,
                 request.TypeId,
                 request.TotalIntensity,
                 request.IntensitySlope,
                 request.MaxIntensity);
 
             // the explosion event that **would** be sent to all clients, if it were a real explosion.
-            var explosion = new ExplosionEvent(request.Epicenter, request.TypeId, data.First().TileSets, iterationIntensity, grid.Index);
+            var explosion = sys.GetExplosionEvent(request.Epicenter, request.TypeId, spaceData, gridData, tileSetIntensity);
 
             SendMessage(new SpawnExplosionEuiMsg.PreviewData(explosion, request.IntensitySlope, request.TotalIntensity));
-            sys.SendEdges(grid.Index);
+            sys.SendEdges(gridId);
         }
     }
 }

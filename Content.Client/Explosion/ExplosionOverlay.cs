@@ -32,6 +32,7 @@ public sealed class ExplosionOverlay : Overlay
 
     [Dependency] private readonly IEyeManager _eyeManager = default!;
     [Dependency] private readonly IRobustRandom _robustRandom = default!;
+    [Dependency] private readonly IMapManager _mapManager = default!;
 
     public override OverlaySpace Space => OverlaySpace.WorldSpaceBelowFOV;
 
@@ -48,49 +49,64 @@ public sealed class ExplosionOverlay : Overlay
     protected override void Draw(in OverlayDrawArgs args)
     {
         var drawHandle = args.WorldHandle;
-        var worldBounds = _eyeManager.GetWorldViewbounds();
 
         if (ActiveExplosion != null)
         {
-            var gridBounds = ActiveExplosion.Grid.InvWorldMatrix.TransformBox(worldBounds);
-            DrawExplosion(drawHandle, gridBounds, ActiveExplosion, Index);
+            DrawExplosion(drawHandle, args.WorldBounds, ActiveExplosion, Index);
         }
 
         foreach (var exp in CompletedExplosions)
         {
-            var gridBounds = exp.Grid.InvWorldMatrix.TransformBox(worldBounds);
-            DrawExplosion(drawHandle, gridBounds, exp, exp.Intensity.Count);
+            DrawExplosion(drawHandle, args.WorldBounds, exp, exp.Intensity.Count);
         }
 
         drawHandle.SetTransform(Matrix3.Identity);
     }
 
-    private void DrawExplosion(DrawingHandleWorld drawHandle, Box2 gridBounds, Explosion exp, int index)
+    private void DrawExplosion(DrawingHandleWorld drawHandle, Box2Rotated worldBounds, Explosion exp, int index)
     {
-        if (exp.Grid.ParentMapId != _eyeManager.CurrentMap)
+        if (exp.Map != _eyeManager.CurrentMap)
             return;
 
-        drawHandle.SetTransform(exp.Grid.WorldMatrix);
-
-        for (var j = 0; j < index; j++)
+        Box2 gridBounds;
+        Matrix3 worldMatrix;
+        foreach (var (gridId, tileSetList) in exp.Tiles)
         {
-            if (!exp.Tiles.TryGetValue(j, out var tiles)) continue;
+            if (gridId.IsValid())
+            {
+                if (!_mapManager.TryGetGrid(gridId, out var grid))
+                    continue;
 
-            var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.FireFrames.Count - 1);
-            var frames = exp.FireFrames[frameIndex];
-            DrawExplodingTiles(drawHandle, exp.Grid, tiles, gridBounds, frames, exp.FireColor);
-        }
-    }
+                gridBounds = grid.InvWorldMatrix.TransformBox(worldBounds);
+                worldMatrix = grid.WorldMatrix;
+            }
+            else
+            {
+                gridBounds = Matrix3.Invert(exp.SpaceMatrix).TransformBox(worldBounds);
+                worldMatrix = exp.SpaceMatrix;
+            }
+            
+            drawHandle.SetTransform(worldMatrix);
 
-    private void DrawExplodingTiles(DrawingHandleWorld drawHandle, IMapGrid grid, HashSet<Vector2i> tiles, Box2 bounds, Texture[] frames, Color? modulate)
-    {
-        foreach (var tile in tiles)
-        {
-            if (!bounds.Contains(grid.GridTileToLocal(tile).Position))
-                continue;
+            for (var j = 0; j < index; j++)
+            {
+                if (!tileSetList.TryGetValue(j, out var tiles)) continue;
 
-            var texture = _robustRandom.Pick(frames);
-            drawHandle.DrawTexture(texture, new Vector2(tile.X, tile.Y), modulate);
+                var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.FireFrames.Count - 1);
+                var frames = exp.FireFrames[frameIndex];
+
+
+                foreach (var tile in tiles)
+                {
+                    Vector2 bottomLeft = (tile.X, tile.Y);
+
+                    if (!gridBounds.Contains((bottomLeft + 0.5f)*1f))
+                        continue;
+
+                    var texture = _robustRandom.Pick(frames);
+                    drawHandle.DrawTexture(texture, bottomLeft, exp.FireColor);
+                }
+            }
         }
     }
 }

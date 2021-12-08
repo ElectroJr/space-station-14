@@ -99,10 +99,12 @@ public sealed class ExplosionOverlaySystem : EntitySystem
 
 internal class Explosion
 {
-    public IMapGrid Grid;
-    public Dictionary<int, HashSet<Vector2i>> Tiles;
+    public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles;
     public List<float> Intensity;
     public EntityUid LightEntity;
+    public MapId Map;
+
+    public Matrix3 SpaceMatrix;
 
     /// <summary>
     ///     How long have we been drawing this explosion, starting from the time the explosion was fully drawn.
@@ -119,9 +121,10 @@ internal class Explosion
 
     internal Explosion(ExplosionEvent args, IEntity light)
     {
+        SpaceMatrix = args.SpaceMatrix;
+        Map = args.Epicenter.MapId;
         Tiles = args.Tiles;
         Intensity = args.Intensity;
-        Grid = IoCManager.Resolve<IMapManager>().GetGrid(args.GridId);
 
         if (!IoCManager.Resolve<IPrototypeManager>().TryIndex(args.TypeID, out ExplosionPrototype? type))
             return;

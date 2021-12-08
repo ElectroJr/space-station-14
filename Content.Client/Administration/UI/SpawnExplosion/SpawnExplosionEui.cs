@@ -74,7 +74,8 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             _debugOverlay.Intensity = data.Explosion.Intensity;
             _debugOverlay.Slope = data.Slope;
             _debugOverlay.TotalIntensity = data.TotalIntensity;
-            _mapManager.TryGetGrid(data.Explosion.GridId, out _debugOverlay.Grid);
+            _debugOverlay.Map = data.Explosion.Epicenter.MapId;
+            _debugOverlay.SpaceMatrix = data.Explosion.SpaceMatrix;
         }
     }
 }

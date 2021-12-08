@@ -6,6 +6,7 @@ using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Utility;
 
 namespace Content.Server.Explosion;
 
@@ -16,7 +17,7 @@ public class ExplosionGridData
     public bool NeedToTransform = false;
 
     public Angle Angle;
-    public Matrix3 Matrix;
+    public Matrix3 Matrix = Matrix3.Identity;
     public Vector2 Offset;
 
     public Dictionary<int, HashSet<Vector2i>> TileSets = new();
@@ -55,7 +56,7 @@ public class ExplosionGridData
     public Dictionary<Vector2i, AtmosDirection> EdgeTiles;
 
     public ExplosionGridData(GridId gridId, Dictionary<Vector2i, TileData> airtightMap,
-        float maxIntensity, float intensityStepSize, string typeID, Dictionary<Vector2i, AtmosDirection> edgeTiles, TransformComponent? targetXform)
+        float maxIntensity, float intensityStepSize, string typeID, Dictionary<Vector2i, AtmosDirection> edgeTiles)
     {
         GridId = gridId;
         AirtightMap = airtightMap;
@@ -88,18 +89,17 @@ public class ExplosionGridData
                     SpaceTiles.Add(diagTile);
             }
         }
+    }
 
-        if (targetXform == null)
-            return;
-
+    public void SetSpaceTransform(Angle spaceAngle, Matrix3 spaceMatrix)
+    {
         NeedToTransform = true;
         var transform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(Grid.GridEntityId);
         var size = (float) Grid.TileSize;
-        var offset = Matrix3.Identity;
-        offset.R0C2 = size / 2;
-        offset.R1C2 = size / 2;
-        Angle = transform.WorldRotation - targetXform.WorldRotation;
-        Matrix = offset * transform.WorldMatrix * targetXform.InvWorldMatrix;
+        Matrix.R0C2 = size / 2;
+        Matrix.R1C2 = size / 2;
+        Matrix *= transform.WorldMatrix * Matrix3.Invert(spaceMatrix);
+        Angle = transform.WorldRotation - spaceAngle;
         Offset = Angle.RotateVec((size / 4, size / 4));
     }
 
@@ -128,7 +128,7 @@ public class ExplosionGridData
             // If the explosion is entering this new tile from an unblocked direction, we add it directly
             if (blockedDirections == AtmosDirection.Invalid || // no blocked directions
                direction == AtmosDirection.Invalid && (blockedDirections & EdgeTiles[newTile]) == 0 || // coming from space
-               (direction != AtmosDirection.Invalid && !blockedDirections.IsFlagSet(direction.GetOpposite())) ) // just unblocked
+               direction != AtmosDirection.Invalid && !blockedDirections.IsFlagSet(direction.GetOpposite()) ) // just unblocked
             {
                 Processed.Add(newTile);
                 newTiles.Add(newTile);
@@ -413,19 +413,14 @@ public class ExplosionGridData
     }
 }
 
-
 // EXPLOSION TODO FIX JANK
 /// <summary>
 ///     This class exists to uhhh ensure there is lots of code duplication...
 /// </summary>
 public class ExplosionSpaceData
 {
-    public TransformComponent? Transform;
-
-    public Angle Angle;
-    public Matrix3 Matrix;
-    public Matrix3 WorldMatrix;
-    public Vector2 Offset;
+    public Angle Angle = new();
+    public Matrix3 Matrix = Matrix3.Identity;
 
     public Dictionary<int, HashSet<Vector2i>> TileSets = new();
     public HashSet<Vector2i> Processed = new();
@@ -436,7 +431,7 @@ public class ExplosionSpaceData
 
     public float IntensityStepSize;
 
-    public ExplosionSpaceData(ExplosionSystem system, float tileSize, float intensityStepSize, MapId targetMap, GridId? targetGridId)
+    public ExplosionSpaceData(ExplosionSystem system, float tileSize, float intensityStepSize, MapId targetMap, GridId targetGridId)
     {
         // TODO transform only in-range grids
         // TODO for source-grid... don't transform, just add to map
@@ -446,19 +441,15 @@ public class ExplosionSpaceData
         EdgeData = system.TransformAllGridEdges(targetMap, targetGridId);
         GridBlockMap = system.GetUnblockedDirectionsBoogaloo(EdgeData, tileSize);
 
-        Matrix = Matrix3.Identity;
-        Matrix.R0C2 = tileSize / 2;
-        Matrix.R1C2 = tileSize / 2;
         IntensityStepSize = intensityStepSize;
 
-        if (targetGridId == null)
+        if (!targetGridId.IsValid())
             return;
 
-        var targetGrid = IoCManager.Resolve<IMapManager>().GetGrid(targetGridId.Value);
+        var targetGrid = IoCManager.Resolve<IMapManager>().GetGrid(targetGridId);
         var xform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(targetGrid.GridEntityId);
+        Matrix = xform.WorldMatrix;
         Angle = xform.WorldRotation;
-        Matrix *= xform.WorldMatrix;
-        WorldMatrix = xform.WorldMatrix;
     }
 
     public int AddNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles, HashSet<GridEdgeData> outputGridTiles)
@@ -655,26 +646,50 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         var intensityStepSize = slope / 2;
 
-        if (!_airtightMap.TryGetValue(gridId, out var airtightMap))
-            airtightMap = new();
+        HashSet<Vector2i> spaceTiles = new();
+        HashSet<GridEdgeData> gridTiles = new();
 
         // EXPLOSION TODO
         // intelligent space-orientation determination.
 
+        HashSet<GridId> encounteredGrids = new();
+
         // is the explosion starting on a grid
         if (gridId.IsValid())
         {
-            ExplosionGridData initialGrid = new(gridId, airtightMap, maxIntensity, intensityStepSize, typeID, _gridEdges[gridId], null);
+            if (!_airtightMap.TryGetValue(gridId, out var airtightMap))
+                airtightMap = new();
+
+            ExplosionGridData initialGrid = new(gridId, airtightMap, maxIntensity, intensityStepSize, typeID, _gridEdges[gridId]);
             gridData.Add(initialGrid);
             initialGrid.Processed.Add(initialTile);
             initialGrid.TileSets[0] = new() { initialTile };
+            encounteredGrids.Add(gridId);
         }
         else
         {
-            spaceData = new(this, DefaultTileSize, intensityStepSize, map, null);
+            spaceData = new(this, DefaultTileSize, intensityStepSize, map, GridId.Invalid);
             spaceData.Processed.Add(initialTile);
             spaceData.TileSets[0] = new() { initialTile };
+
+            // is this also a grid tile?
+            if (spaceData.EdgeData.TryGetValue(initialTile, out var edge))
+                gridTiles.UnionWith(edge);
         }
+
+
+
+
+
+        // EXPLOSION TODO
+        // THIS IS ONLY NEEDED because diagonal edges are in the GridEdges dict
+        // they are ONYL neeeded for the blocker map.
+        // having them in grid edges makes everything slower. they really shouldnt be there.
+        encounteredGrids.Add(GridId.Invalid);
+
+
+
+
 
         // is this even a multi-tile explosion?
         if (totalIntensity < intensityStepSize)
@@ -688,8 +703,6 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         var iteration = 1;
         var maxIntensityIndex = 0;
-        HashSet<Vector2i> spaceTiles = new();
-        HashSet<GridEdgeData> gridTiles = new();
         var intensityUnchangedLastLoop = false;
 
         // Main flood-fill loop
@@ -726,6 +739,23 @@ public sealed partial class ExplosionSystem : EntitySystem
             int newTileCount = 0;
 
             spaceTiles.Clear();
+
+            // EXPLOSION TODO this is REALLY inefficient and just generally shitty code.
+            // FIX THIS
+            foreach (var x in gridTiles)
+            {
+                if (!encounteredGrids.Add(x.Grid))
+                    continue;
+
+                if (!_airtightMap.TryGetValue(x.Grid, out var airtightMap))
+                    airtightMap = new();
+
+                DebugTools.Assert(spaceData != null);
+                var newGrid = new ExplosionGridData(x.Grid, airtightMap, maxIntensity, intensityStepSize, typeID, _gridEdges[x.Grid]);
+                newGrid.SetSpaceTransform(spaceData!.Angle, spaceData!.Matrix);
+                gridData.Add(newGrid);
+            }
+
             foreach (var grid in gridData)
             {
                 newTileCount += grid.AddNewTiles(iteration, gridTiles, spaceTiles);

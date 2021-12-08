@@ -35,21 +35,21 @@ public class ExplosionEvent : EntityEventArgs
 {
     public MapCoordinates Epicenter;
 
-    public Dictionary<int, HashSet<Vector2i>> Tiles;
+    public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles;
 
     public List<float> Intensity;
 
-    public GridId GridId;
-
     public string TypeID;
 
-    public ExplosionEvent(MapCoordinates epicenter, string typeID, Dictionary<int, HashSet<Vector2i>> tiles, List<float> intensity, GridId gridId)
+    public Matrix3 SpaceMatrix;
+
+    public ExplosionEvent(MapCoordinates epicenter, string typeID, List<float> intensity, Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles, Matrix3 spaceMatrix)
     {
         Epicenter = epicenter;
         Tiles = tiles;
-        GridId = gridId;
         Intensity = intensity;
         TypeID = typeID;
+        SpaceMatrix = spaceMatrix;
     }
 }
 

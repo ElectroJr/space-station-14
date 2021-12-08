@@ -285,9 +285,7 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, type.ID, totalIntensity, slope, maxTileIntensity);
 
-        var data = gridData.First();
-
-        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, tileSetIntensity, gridId));
+        RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceData, gridData, tileSetIntensity));
 
         // camera shake
         CameraShake(tileSetIntensity.Count * 2.5f, epicenter, totalIntensity);
@@ -296,8 +294,8 @@ public sealed partial class ExplosionSystem : EntitySystem
         var mapEntityCoords = EntityCoordinates.FromMap(EntityManager, _mapManager.GetMapEntityId(epicenter.MapId), epicenter);
 
         // play sound. 
-        var audioRange = data.TileSets.Count * 5;
-        var filter = Filter.Empty().AddInRange(epicenter, audioRange);
+        var audioRange = tileSetIntensity.Count * 5;
+        var filter = Filter.Pvs(epicenter).AddInRange(epicenter, audioRange);
         SoundSystem.Play(filter, type.Sound.GetSound(), mapEntityCoords, _audioParams);
 
         return new(this,
@@ -306,6 +304,26 @@ public sealed partial class ExplosionSystem : EntitySystem
             gridData,
             tileSetIntensity,
             epicenter);
+    }
+
+    public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, ExplosionSpaceData? spaceData, List<ExplosionGridData> gridData, List<float> tileSetIntensity)
+    {
+        Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles = new();
+
+        Matrix3 spaceMatrix = Matrix3.Identity;
+
+        if (spaceData != null)
+        {
+            spaceMatrix = spaceData.Matrix;
+            tiles.Add(GridId.Invalid, spaceData.TileSets);
+        }
+
+        foreach (var grid in gridData)
+        {
+            tiles.Add(grid.GridId, grid.TileSets);
+        }
+
+        return new ExplosionEvent(epicenter, id, tileSetIntensity, tiles, spaceMatrix);
     }
 
     private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)
@@ -553,8 +571,8 @@ class Explosion
                 MapGrid = null
             });
             
-            _spaceMatrix = spaceData.WorldMatrix;
-            _invSpaceMatrix = Matrix3.Invert(spaceData.WorldMatrix);
+            _spaceMatrix = spaceData.Matrix;
+            _invSpaceMatrix = Matrix3.Invert(spaceData.Matrix);
         }
 
         foreach (var grid in gridData)
@@ -567,7 +585,6 @@ class Explosion
             });
         }
 
-        
         TryGetNextTileEnumerator();
     }
 
