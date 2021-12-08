@@ -424,6 +424,7 @@ public class ExplosionSpaceData
 
     public Angle Angle;
     public Matrix3 Matrix;
+    public Matrix3 WorldMatrix;
     public Vector2 Offset;
 
     public Dictionary<int, HashSet<Vector2i>> TileSets = new();
@@ -457,6 +458,7 @@ public class ExplosionSpaceData
         var xform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(targetGrid.GridEntityId);
         Angle = xform.WorldRotation;
         Matrix *= xform.WorldMatrix;
+        WorldMatrix = xform.WorldMatrix;
     }
 
     public int AddNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles, HashSet<GridEdgeData> outputGridTiles)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Content.Server.Atmos.Components;
@@ -123,7 +124,7 @@ public sealed partial class ExplosionSystem : EntitySystem
                     _nodeGroupSystem.Snoozing = true;
             }
 
-            var processed = ProcessExplosion(_activeExplosion, tilesRemaining);
+            var processed = _activeExplosion.Proccess(tilesRemaining);
             tilesRemaining -= processed;
 
             // has the explosion finished processing?
@@ -282,14 +283,14 @@ public sealed partial class ExplosionSystem : EntitySystem
                 (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));
         }
 
-        var (iterationIntensity, spaaaaaceData, dataaaa) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, type.ID, totalIntensity, slope, maxTileIntensity);
+        var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, type.ID, totalIntensity, slope, maxTileIntensity);
 
-        var data = dataaaa.First();
+        var data = gridData.First();
 
-        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, iterationIntensity, gridId));
+        RaiseNetworkEvent(new ExplosionEvent(epicenter, type.ID, data.TileSets, tileSetIntensity, gridId));
 
         // camera shake
-        CameraShake(iterationIntensity.Count * 2.5f, epicenter, totalIntensity);
+        CameraShake(tileSetIntensity.Count * 2.5f, epicenter, totalIntensity);
 
         //For whatever bloody reason, sound system requires ENTITY coordinates.
         var mapEntityCoords = EntityCoordinates.FromMap(EntityManager, _mapManager.GetMapEntityId(epicenter.MapId), epicenter);
@@ -299,11 +300,12 @@ public sealed partial class ExplosionSystem : EntitySystem
         var filter = Filter.Empty().AddInRange(epicenter, audioRange);
         SoundSystem.Play(filter, type.Sound.GetSound(), mapEntityCoords, _audioParams);
 
-        return new(type,
-                    data.TileSets,
-                    iterationIntensity,
-                    grid,
-                    epicenter);
+        return new(this,
+            type,
+            spaceData,
+            gridData,
+            tileSetIntensity,
+            epicenter);
     }
 
     private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)
@@ -332,65 +334,9 @@ public sealed partial class ExplosionSystem : EntitySystem
 
     #region Processing
     /// <summary>
-    ///     Deal damage, throw entities, and break tiles. Returns the number tiles that were processed.
-    /// </summary>
-    private int ProcessExplosion(Explosion explosion, int tilesToProcess)
-    {
-        var processedTiles = 0;
-        List<(Vector2i, Tile)> damagedTiles = new();
-
-        if (explosion.Grid == null)
-        {
-            explosion.FinishedProcessing = true;
-            return 0; // TODO EXPLOSION fix properly
-        }
-
-        var mapUid = _mapManager.GetMapEntityId(explosion.Grid.ParentMapId);
-        if (!mapUid.IsValid() || !EntityManager.TryGetComponent(mapUid, out EntityLookupComponent mapLookup) ||
-            !EntityManager.TryGetComponent(explosion.Grid.GridEntityId, out EntityLookupComponent gridLookup))
-        {
-            // This should never happen. But Content integration tests are a magical realm where apparently anything goes.
-            explosion.FinishedProcessing = true;
-            return 0;
-        }
-
-        foreach (var (tileIndices, intensity, damage) in explosion)
-        {
-            if (explosion.Grid.TryGetTileRef(tileIndices, out var tileRef) && !tileRef.Tile.IsEmpty)
-            {
-                ExplodeTile(gridLookup,
-                    explosion.Grid,
-                    tileIndices,
-                    intensity,
-                    damage,
-                    explosion.Epicenter,
-                    explosion.ProcessedEntities);
-
-                DamageFloorTile(tileRef, intensity, damagedTiles, explosion.ExplosionType);
-            }
-            else
-                ExplodeSpace(mapLookup,
-                    explosion.Grid,
-                    tileIndices,
-                    intensity,
-                    damage,
-                    explosion.Epicenter,
-                    explosion.ProcessedEntities);
-
-            processedTiles++;
-            if (processedTiles == tilesToProcess)
-                break;
-        }
-
-        explosion.Grid.SetTiles(damagedTiles);
-
-        return processedTiles;
-    }
-
-    /// <summary>
     ///     Find entities on a grid tile using the EntityLookupComponent and apply explosion effects. 
     /// </summary>
-    public void ExplodeTile(EntityLookupComponent lookup,
+    internal void ExplodeTile(EntityLookupComponent lookup,
         IMapGrid grid,
         Vector2i tile,
         float intensity,
@@ -398,7 +344,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         MapCoordinates epicenter,
         HashSet<EntityUid> processed)
     {
-        var gridBox = Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
+        var gridBox = new Box2(tile * grid.TileSize, (grid.TileSize, grid.TileSize));
         var throwForce = 10 * MathF.Sqrt(intensity);
 
         // get the entities on a tile. Note that we cannot process them directly, or we get
@@ -435,22 +381,22 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Same as <see cref="ExplodeTile"/>, but for SPAAAAAAACE.
     /// </summary>
     internal void ExplodeSpace(EntityLookupComponent lookup,
-        IMapGrid grid,
+        Matrix3 spaceMatrix,
+        Matrix3 invSpaceMatrix,
         Vector2i tile,
         float intensity,
         DamageSpecifier damage,
         MapCoordinates epicenter,
         HashSet<EntityUid> processed)
     {
-        var gridBox = Box2.UnitCentered.Translated((Vector2) tile + 0.5f * grid.TileSize);
+        var gridBox = new Box2(tile * DefaultTileSize, (DefaultTileSize, DefaultTileSize));
         var throwForce = 10 * MathF.Sqrt(intensity);
-        var worldBox = grid.WorldMatrix.TransformBox(gridBox);
-        var matrix = grid.InvWorldMatrix;
+        var worldBox = spaceMatrix.TransformBox(gridBox);
         List<EntityUid> list = new();
 
         EntityQueryCallback callback = (entity) =>
         {
-            if (gridBox.Contains(matrix.Transform(entity.Transform.WorldPosition)))
+            if (gridBox.Contains(invSpaceMatrix.Transform(entity.Transform.WorldPosition)))
                 list.Add(entity.Uid);
         };
 
@@ -542,6 +488,13 @@ public sealed partial class ExplosionSystem : EntitySystem
 /// </summary>
 class Explosion
 {
+    struct ExplosionData
+    {
+        public EntityLookupComponent Lookup;
+        public Dictionary<int, HashSet<Vector2i>> TileSets;
+        public IMapGrid? MapGrid;
+    }
+
     /// <summary>
     ///     Used to avoid applying explosion effects repeatedly to the same entity. Particularly important if the
     ///     explosion throws this entity, as then it will be moving while the explosion is happening.
@@ -551,53 +504,170 @@ class Explosion
     /// <summary>
     ///     This integer tracks how much of this explosion has been processed.
     /// </summary>
-    public int CurrentIteration = 0;
+    public int CurrentIteration { get; private set; } = 0;
 
     public readonly ExplosionPrototype ExplosionType;
     public readonly MapCoordinates Epicenter;
-    public readonly IMapGrid? Grid;
-    public readonly EntityUid MapUid;
+    private readonly Matrix3 _spaceMatrix;
+    private readonly Matrix3 _invSpaceMatrix;
+
+    private readonly List<ExplosionData> _explosionData = new();
+    private readonly List<float> _tileSetIntensity;
+
     public bool FinishedProcessing;
 
-    private readonly Dictionary<int, HashSet<Vector2i>> _tileSetList;
-    private readonly List<float> _tileSetIntensity;
+    // shitty enumerator implementation
+    private DamageSpecifier _currentDamage = default!;
+    private EntityLookupComponent _currentLookup = default!;
+    private IMapGrid? _currentGrid;
+    private float _currentIntensity;
     private HashSet<Vector2i>.Enumerator _currentEnumerator;
+    private int _currentDataIndex;
+    private List<(Vector2i, Tile)> _floorTilesToUpdate = new();
 
-    public Explosion(ExplosionPrototype explosionType,
-        Dictionary<int, HashSet<Vector2i>> tileSetList,
+    private readonly ExplosionSystem _system;
+
+    public Explosion(ExplosionSystem system,
+        ExplosionPrototype explosionType,
+        ExplosionSpaceData? spaceData,
+        List<ExplosionGridData> gridData,
         List<float> tileSetIntensity,
-        IMapGrid? grid,
         MapCoordinates epicenter)
     {
+        _system = system;
         ExplosionType = explosionType;
-        _tileSetList = tileSetList;
         _tileSetIntensity = tileSetIntensity;
         Epicenter = epicenter;
-        Grid = grid;
-        _currentEnumerator = _tileSetList[0].GetEnumerator();
-    }
 
-    public IEnumerator<(Vector2i, float, DamageSpecifier)> GetEnumerator()
-    {
-        // We're not just using a for-each loop as CurrentIteration needs to be publicly accessible.
-        while (CurrentIteration < _tileSetIntensity.Count)
+        var entityMan = IoCManager.Resolve<IEntityManager>();
+        var mapMan = IoCManager.Resolve<IMapManager>();
+
+        if (spaceData != null)
         {
-            if (!_currentEnumerator.MoveNext())
+            var mapUid = mapMan.GetMapEntityId(epicenter.MapId);
+
+            _explosionData.Add(new()
             {
-                CurrentIteration++;
-
-                if (!_tileSetList.TryGetValue(CurrentIteration, out var tiles))
-                    continue;
-
-                _currentEnumerator = tiles.GetEnumerator();
-            }
+                TileSets = spaceData.TileSets,
+                Lookup = entityMan.GetComponent<EntityLookupComponent>(mapUid),
+                MapGrid = null
+            });
             
-            yield return (_currentEnumerator.Current,
-            _tileSetIntensity[CurrentIteration],
-            ExplosionType.DamagePerIntensity * _tileSetIntensity[CurrentIteration]);
+            _spaceMatrix = spaceData.WorldMatrix;
+            _invSpaceMatrix = Matrix3.Invert(spaceData.WorldMatrix);
         }
 
+        foreach (var grid in gridData)
+        {
+            _explosionData.Add(new()
+            {
+                TileSets = grid.TileSets,
+                Lookup = entityMan.GetComponent<EntityLookupComponent>(grid.Grid.GridEntityId),
+                MapGrid = grid.Grid
+            });
+        }
+
+        
+        TryGetNextTileEnumerator();
+    }
+
+    private bool TryGetNextTileEnumerator()
+    {
+        while (CurrentIteration < _tileSetIntensity.Count)
+        {
+            _currentIntensity = _tileSetIntensity[CurrentIteration];
+            _currentDamage = ExplosionType.DamagePerIntensity * _currentIntensity;
+
+            // for each grid/space tile set
+            while (_currentDataIndex < _explosionData.Count)
+            {
+                // try get any tile hash-set corresponding to this intensity
+                var tileSets = _explosionData[_currentDataIndex].TileSets;
+                if (tileSets.TryGetValue(CurrentIteration, out var tileSet))
+                {
+                    _currentEnumerator = tileSet.GetEnumerator();
+                    _currentLookup = _explosionData[_currentDataIndex].Lookup;
+                    if (_floorTilesToUpdate.Count > 0)
+                    {
+                        _currentGrid?.SetTiles(_floorTilesToUpdate);
+                        _floorTilesToUpdate.Clear();
+                    }
+                    _currentGrid = _explosionData[_currentDataIndex].MapGrid;
+                    return true;
+                }
+                // go to the next grid/space tile sets
+                _currentDataIndex++;
+            }
+
+            // this explosion intensity has been fully processed, move to the next one
+            CurrentIteration++;
+            _currentDataIndex = 0;
+        }
+
+        // no more explosion data to process
         FinishedProcessing = true;
+        return false;
+    }
+
+    private bool MoveNext()
+    {
+        if (FinishedProcessing)
+            return false;
+
+        while (!FinishedProcessing)
+        {
+            if (_currentEnumerator.MoveNext())
+                return true;
+            else
+                TryGetNextTileEnumerator();
+        }
+
+        return false;
+    }
+
+    public int Proccess(int processingTarget)
+    {
+        int processed;
+        
+        for (processed = 0; processed < processingTarget; processed++)
+        {
+            if (_currentGrid != null &&
+                _currentGrid.TryGetTileRef(_currentEnumerator.Current, out var tileRef) &&
+                !tileRef.Tile.IsEmpty)
+            {
+                _system.ExplodeTile(_currentLookup,
+                        _currentGrid,
+                        _currentEnumerator.Current,
+                        _currentIntensity,
+                        _currentDamage,
+                        Epicenter,
+                        ProcessedEntities);
+
+                _system.DamageFloorTile(tileRef, _currentIntensity, _floorTilesToUpdate, ExplosionType);
+            }
+            else
+            {
+                _system.ExplodeSpace(_currentLookup,
+                    _spaceMatrix,
+                    _invSpaceMatrix,
+                    _currentEnumerator.Current,
+                    _currentIntensity,
+                    _currentDamage,
+                    Epicenter,
+                    ProcessedEntities);
+            }
+
+            if (!MoveNext())
+                break;
+        }
+
+        if (_floorTilesToUpdate.Count > 0)
+        {
+            _currentGrid?.SetTiles(_floorTilesToUpdate);
+            _floorTilesToUpdate.Clear();
+        }
+
+        return processed;
     }
 }
 
