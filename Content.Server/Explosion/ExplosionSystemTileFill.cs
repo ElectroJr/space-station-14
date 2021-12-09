@@ -648,6 +648,8 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         HashSet<Vector2i> spaceTiles = new();
         HashSet<GridEdgeData> gridTiles = new();
+        HashSet<Vector2i> previousSpaceTiles = new();
+        HashSet<GridEdgeData> previousGridTiles = new();
 
         // EXPLOSION TODO
         // intelligent space-orientation determination.
@@ -738,11 +740,15 @@ public sealed partial class ExplosionSystem : EntitySystem
 
             int newTileCount = 0;
 
-            spaceTiles.Clear();
+            // In order to put the "iteration delay" of going off a grid on the same level as going ON a grid, both space-> grid and grid -> space have to be delayed by one iteration
+            previousSpaceTiles = spaceTiles;
+            previousGridTiles = gridTiles;
+            spaceTiles = new();
+            gridTiles = new();
 
             // EXPLOSION TODO this is REALLY inefficient and just generally shitty code.
             // FIX THIS
-            foreach (var x in gridTiles)
+            foreach (var x in previousGridTiles)
             {
                 if (!encounteredGrids.Add(x.Grid))
                     continue;
@@ -758,19 +764,20 @@ public sealed partial class ExplosionSystem : EntitySystem
 
             foreach (var grid in gridData)
             {
-                newTileCount += grid.AddNewTiles(iteration, gridTiles, spaceTiles);
+                newTileCount += grid.AddNewTiles(iteration, previousGridTiles, spaceTiles);
             }
 
             if (spaceData != null)
             {
-                gridTiles.Clear();
-                newTileCount += spaceData.AddNewTiles(iteration, spaceTiles, gridTiles);
+                newTileCount += spaceData.AddNewTiles(iteration, previousSpaceTiles, gridTiles);
             }
-            else if (spaceTiles.Count != 0)
+            else if (previousSpaceTiles.Count != 0)
             {
                 spaceData = new(this, _mapManager.GetGrid(gridId).TileSize, intensityStepSize, map, gridId);
-                newTileCount += spaceData.AddNewTiles(iteration, spaceTiles, gridTiles);
+                newTileCount += spaceData.AddNewTiles(iteration, previousSpaceTiles, gridTiles);
             }
+
+            
 
             // newTilesCount += AddSpaceTiles(spaceTiles)
             // make AddSpaceTiles return a list of grid tiles to jump to.

@@ -47,7 +47,7 @@ public struct GridEdgeData : IEquatable<GridEdgeData>
 public sealed partial class ExplosionSystem : EntitySystem
 {
     /// <summary>
-    ///     Set of tiles of each grid that are directly adjacent to space
+    ///     Set of tiles of each grid that are directly adjacent to space, along with the directions that face space.
     /// </summary>
     private Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> _gridEdges = new();
 
