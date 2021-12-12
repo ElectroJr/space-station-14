@@ -415,7 +415,7 @@ public class ExplosionGridData
 
 // EXPLOSION TODO FIX JANK
 /// <summary>
-///     This class exists to uhhh ensure there is lots of code duplication...
+///     This class exists to uhhh ensure there is sufficient code duplication... yeah...
 /// </summary>
 public class ExplosionSpaceData
 {
@@ -425,9 +425,7 @@ public class ExplosionSpaceData
     public Dictionary<int, HashSet<Vector2i>> TileSets = new();
     public HashSet<Vector2i> Processed = new();
 
-    public Dictionary<Vector2i, HashSet<GridEdgeData>> EdgeData;
-
-    public Dictionary<Vector2i, AtmosDirection> GridBlockMap;
+    public Dictionary<Vector2i, GridBlockData> EdgeData;
 
     public float IntensityStepSize;
 
@@ -439,7 +437,7 @@ public class ExplosionSpaceData
         // TODO merge EdgeData and GridBlockMap
 
         EdgeData = system.TransformAllGridEdges(targetMap, targetGridId);
-        GridBlockMap = system.GetUnblockedDirectionsBoogaloo(EdgeData, tileSize);
+        system.GetUnblockedDirections(EdgeData, tileSize);
 
         IntensityStepSize = intensityStepSize;
 

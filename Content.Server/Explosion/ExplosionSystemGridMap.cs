@@ -41,6 +41,24 @@ public struct GridEdgeData : IEquatable<GridEdgeData>
     }
 }
 
+
+/// <summary>
+///     BBBBBBBBBB
+/// </summary>
+public record GridBlockData
+{
+    /// <summary>
+    ///     What directions of this tile are blocked by some other grid?
+    /// </summary>
+    public AtmosDirection BlockedDirections;
+
+    /// <summary>
+    ///     Hashset contains information about the edge-tiles, which belong to some other grid(s), that are blocking
+    ///     this tile.
+    /// </summary>
+    public HashSet<GridEdgeData> BlockingGridEdges = new();
+}
+
 // This partial part of the explosion system has all of the functions used to facilitate explosions moving across grids.
 // A good portion of it is focused around keeping track of what tile-indices on a grid correspond to tiles that border space.
 // AFAIK no other system needs to track these "edge-tiles". If they do, this should probably be a property of the grid itself?
@@ -100,18 +118,18 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
     ///     edges all onto one grids reference frame.
     /// </summary>
-    public Dictionary<Vector2i, HashSet<GridEdgeData>> TransformAllGridEdges(MapId targetMap, GridId targetGridId)
+    public Dictionary<Vector2i, GridBlockData> TransformAllGridEdges(MapId targetMap, GridId referenceGrid)
     {
-        Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges = new();
+        Dictionary<Vector2i, GridBlockData> transformedEdges = new();
 
         var targetMatrix = Matrix3.Identity;
         Angle targetAngle = new();
         float tileSize = DefaultTileSize;
 
         // if the explosion is centered on some grid (and not just space), get the transforms.
-        if (targetGridId.IsValid())
+        if (referenceGrid.IsValid())
         {
-            var targetGrid = _mapManager.GetGrid(targetGridId);
+            var targetGrid = _mapManager.GetGrid(referenceGrid);
             var xform = EntityManager.GetComponent<TransformComponent>(targetGrid.GridEntityId);
             targetAngle = xform.WorldRotation;
             targetMatrix = xform.InvWorldMatrix;
@@ -122,22 +140,25 @@ public sealed partial class ExplosionSystem : EntitySystem
         offsetMatrix.R0C2 = tileSize / 2;
         offsetMatrix.R1C2 = tileSize / 2;
 
-        foreach (var sourceGrid in _gridEdges.Keys)
-        {
-            if (sourceGrid == targetGridId)
-            {
-                // the space map and the grid edges are using the same coordinate system
-                // but we still need the edge map for propagation in space. so we create a simplified one
-                TransformSimpleEdges(sourceGrid, tileSize, targetAngle, transformedEdges);
-            }
+        // here we will get a triple nested for loop:
+        // foreach other grid
+        //   foreach edge tile in that grid
+        //     foreach tile in our grid that touches that tile
 
-            if (!_mapManager.TryGetGrid(sourceGrid, out var grid) ||
+        HashSet<Vector2i> transformedTiles = new();
+        foreach (var (gridToTransform, edges) in _gridEdges)
+        {
+            // we treat the target grid separately
+            if (gridToTransform == referenceGrid)
+                continue;
+
+            if (!_mapManager.TryGetGrid(gridToTransform, out var grid) ||
                 grid.ParentMapId != targetMap)
                 continue;
 
             if (grid.TileSize != tileSize)
             {
-                Logger.Error($"Explosions do not support grids with different grid sizes. GridIds: {sourceGrid} and {targetGridId}");
+                Logger.Error($"Explosions do not support grids with different grid sizes. GridIds: {gridToTransform} and {referenceGrid}");
                 continue;
             }
 
@@ -145,112 +166,89 @@ public sealed partial class ExplosionSystem : EntitySystem
             var matrix = offsetMatrix * xform.WorldMatrix * targetMatrix;
             var angle = xform.WorldRotation - targetAngle;
 
-            TransformGridEdges(sourceGrid, tileSize, angle, matrix, transformedEdges);
-            TransformDiagGridEdges(sourceGrid, tileSize, angle, matrix, transformedEdges);
+            var (x, y) = angle.RotateVec((tileSize / 4, tileSize / 4));
+
+            foreach (var (tile, dir) in edges)
+            {
+                var center = matrix.Transform(tile);
+
+                // this tile might touch several other tiles, or maybe just one tile. Here we use a Vector2i HashSet to
+                // remove duplicates.
+                transformedTiles.Clear();
+                transformedTiles.Add(new((int) MathF.Floor(center.X + x), (int) MathF.Floor(center.Y + y)));  // initial direction
+                transformedTiles.Add(new((int) MathF.Floor(center.X - y), (int) MathF.Floor(center.Y + x)));  // rotated 90 degrees
+                transformedTiles.Add(new((int) MathF.Floor(center.X - x), (int) MathF.Floor(center.Y - y)));  // rotated 180 degrees
+                transformedTiles.Add(new((int) MathF.Floor(center.X + y), (int) MathF.Floor(center.Y - x)));  // rotated 270 degrees
+
+                foreach (var newIndices in transformedTiles)
+                {
+                    if (!transformedEdges.TryGetValue(newIndices, out var data))
+                    {
+                        data = new();
+                        transformedEdges[newIndices] = data;
+                    }
+                    data.BlockingGridEdges.Add(new(tile, gridToTransform, center, angle, tileSize));
+                }
+            }
+        }
+
+        // Next we transform any diagonal edges.
+        Vector2i newIndex;
+        foreach (var (gridToTransform, diagEdges) in _diagGridEdges)
+        {
+            if (!_mapManager.TryGetGrid(gridToTransform, out var grid) ||
+                grid.ParentMapId != targetMap)
+                continue;
+
+            if (grid.TileSize != tileSize)
+            {
+                Logger.Error($"Explosions do not support grids with different grid sizes. GridIds: {gridToTransform} and {referenceGrid}");
+                continue;
+            }
+
+            var xform = EntityManager.GetComponent<TransformComponent>(grid.GridEntityId);
+            var matrix = offsetMatrix * xform.WorldMatrix * targetMatrix;
+            var angle = xform.WorldRotation - targetAngle;
+
+            foreach (var tile in diagEdges)
+            {
+                var center = matrix.Transform(tile);
+                newIndex = new((int) MathF.Floor(center.X), (int) MathF.Floor(center.Y));
+                if (!transformedEdges.TryGetValue(newIndex, out var data))
+                {
+                    data = new();
+                    transformedEdges[newIndex] = data;
+                }
+
+                // explosions are not allowed to propagate diagonally ONTO grids. so we just use defaults for some fields.
+                data.BlockingGridEdges.Add(new(default, default, center, angle, tileSize));
+                if (gridToTransform == referenceGrid)
+                    data.BlockedDirections = AtmosDirection.All;
+            }
+        }
+
+        // finally, we also include the blocking tiles from the reference grid (if its not space).
+        if (_gridEdges.TryGetValue(referenceGrid, out var localEdges))
+        {
+            // the space map and the grid edges are using the same coordinate system
+            // but we still need the edge map for propagation in space. so we create a simplified one
+            foreach (var (tile, _) in localEdges)
+            {
+                if (!transformedEdges.TryGetValue(tile, out var data))
+                {
+                    data = new();
+                    transformedEdges[tile] = data;
+                }
+
+                var center = ((Vector2) tile + 0.5f) * tileSize;
+                data.BlockingGridEdges.Add(new(tile, referenceGrid, center, targetAngle, tileSize));
+                data.BlockedDirections = AtmosDirection.All;
+            }
         }
 
         return transformedEdges;
     }
 
-    private void TransformSimpleEdges(GridId grid, float tileSize, Angle angle, Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
-    {
-        if (_diagGridEdges.TryGetValue(grid, out var diagEdges))
-        {
-            foreach (var tile in diagEdges)
-            {
-                if (!transformedEdges.TryGetValue(tile, out var set))
-                {
-                    set = new();
-                    transformedEdges[tile] = set;
-                }
-
-                var center = ((Vector2) tile + 0.5f) * tileSize;
-                // explosions are not allowed to propagate diagonally ONTO grids.
-                // so we use an invalid grid id.
-                set.Add(new(tile, GridId.Invalid, center, angle, tileSize));
-            }
-        }
-
-        if (_gridEdges.TryGetValue(grid, out var edges))
-        {
-            foreach (var (tile, _) in edges)
-            {
-                if (!transformedEdges.TryGetValue(tile, out var set))
-                {
-                    set = new();
-                    transformedEdges[tile] = set;
-                }
-
-                var center = ((Vector2) tile + 0.5f) * tileSize;
-                // explosions are not allowed to propagate diagonally ONTO grids.
-                // so we use an invalid grid id.
-                set.Add(new(tile, grid, center, angle, tileSize));
-            }
-        }
-    }
-
-    /// <summary>
-    ///     This is function maps the edges of a single grid onto some other grid. Used by <see
-    ///     cref="TransformAllGridEdges"/>
-    /// </summary>
-    public void TransformGridEdges(GridId grid, float tileSize, Angle angle, Matrix3 matrix,
-        Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
-    {
-        if (!_gridEdges.TryGetValue(grid, out var edges)) return;
-
-        var (x, y) = angle.RotateVec((tileSize / 4, tileSize / 4));
-
-        HashSet<Vector2i> transformedTiles = new();
-        foreach (var (tile, dir) in edges)
-        {
-            transformedTiles.Clear();
-            var center = matrix.Transform(tile);
-            TryAddEdgeTile(tile, center, x, y); // initial direction
-            TryAddEdgeTile(tile, center, -y, x); // rotated 90 degrees
-            TryAddEdgeTile(tile, center, -x, -y); // rotated 180 degrees
-            TryAddEdgeTile(tile, center, y, -x); // rotated 270 degrees
-        }
-
-        void TryAddEdgeTile(Vector2i original, Vector2 center, float x, float y)
-        {
-            Vector2i newIndices = new((int) MathF.Floor(center.X + x), (int) MathF.Floor(center.Y + y));
-            if (!transformedTiles.Add(newIndices))
-                return;
-
-            if (!transformedEdges.TryGetValue(newIndices, out var set))
-            {
-                set = new();
-                transformedEdges[newIndices] = set;
-            }
-            set.Add(new(original, grid, center, angle, tileSize));
-        }
-    }
-
-    /// <summary>
-    ///     This is a variation of <see cref="TransformGridEdges"/> and is used by <see
-    ///     cref="TransformAllGridEdges"/>. This variation simply transforms the center of a tile, rather than 4
-    ///     nodes.
-    /// </summary>
-    public void TransformDiagGridEdges(GridId grid, float tileSize, Angle angle, Matrix3 matrix,
-        Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges)
-    {
-        if (!_diagGridEdges.TryGetValue(grid, out var edges)) return;
-        foreach (var tile in edges)
-        {
-            var center = matrix.Transform(tile);
-            Vector2i newIndices = new((int) MathF.Floor(center.X), (int) MathF.Floor(center.Y));
-            if (!transformedEdges.TryGetValue(newIndices, out var set))
-            {
-                set = new();
-                transformedEdges[newIndices] = set;
-            }
-
-            // explosions are not allowed to propagate diagonally ONTO grids.
-            // so we use an invalid grid id.
-            set.Add(new(tile, GridId.Invalid, center, angle, tileSize));
-        }
-    }
-
     /// <summary>
     ///     Given an grid-edge blocking map, check if the blockers are allowed to propagate to each other through gaps.
     /// </summary>
@@ -258,87 +256,40 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     After grid edges were transformed into the reference frame of some other grid, this function figures out
     ///     which of those edges are actually blocking explosion propagation.
     /// </remarks>
-    private (HashSet<Vector2i>, HashSet<Vector2i>) GetUnblockedDirections(Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges, float tileSize)
+    public void GetUnblockedDirections(Dictionary<Vector2i, GridBlockData> transformedEdges, float tileSize)
     {
-        HashSet<Vector2i> blockedNS = new(), blockedEW = new();
-
         foreach (var (tile, data) in transformedEdges)
         {
-            foreach (var datum in data)
+            if (data.BlockedDirections == AtmosDirection.All)
+                continue; // already all blocked.
+
+            var tileCenter = ((Vector2) tile + 0.5f) * tileSize;
+            foreach (var edge in data.BlockingGridEdges)
             {
-                var tileCenter = ((Vector2) tile + 0.5f) * tileSize;
-                if (datum.Box.Contains(tileCenter))
+                // if a blocking edge contains the center of the tile, block all directions
+                if (edge.Box.Contains(tileCenter))
                 {
-                    blockedNS.Add(tile);
-                    blockedEW.Add(tile);
-                    blockedNS.Add(tile + (0, -1));
-                    blockedEW.Add(tile + (-1, 0));
+                    data.BlockedDirections = AtmosDirection.All;
                     break;
                 }
 
-                // its faster to just check Box.Contains, instead of first checking Hashset.Contains().
-
                 // check north
-                if (datum.Box.Contains(tileCenter + (0, tileSize / 2)))
-                {
-                    blockedNS.Add(tile);
-                }
+                if (edge.Box.Contains(tileCenter + (0, tileSize / 2)))
+                    data.BlockedDirections = AtmosDirection.North;
 
                 // check south
-                if (datum.Box.Contains(tileCenter + (0, -tileSize / 2)))
-                {
-                    blockedNS.Add(tile + (0, -1));
-                }
+                if (edge.Box.Contains(tileCenter + (0, -tileSize / 2)))
+                    data.BlockedDirections |= AtmosDirection.South;
 
                 // check east
-                if (datum.Box.Contains(tileCenter + (tileSize / 2, 0)))
-                {
-                    blockedEW.Add(tile);
-                }
+                if (edge.Box.Contains(tileCenter + (tileSize / 2, 0)))
+                    data.BlockedDirections |= AtmosDirection.East;
 
                 // check south
-                if (datum.Box.Contains(tileCenter + (-tileSize / 2, 0)))
-                {
-                    blockedEW.Add(tile + (-1, 0));
-                }
+                if (edge.Box.Contains(tileCenter + (-tileSize / 2, 0)))
+                    data.BlockedDirections |= AtmosDirection.West;
             }
         }
-        return (blockedNS, blockedEW);
-    }
-
-    /// <summary>
-    ///     Given an grid-edge blocking map, check if the blockers are allowed to propagate to each other through gaps.
-    /// </summary>
-    /// <remarks>
-    ///     After grid edges were transformed into the reference frame of some other grid, this function figures out
-    ///     which of those edges are actually blocking explosion propagation.
-    /// </remarks>
-    public Dictionary<Vector2i, AtmosDirection> GetUnblockedDirectionsBoogaloo(Dictionary<Vector2i, HashSet<GridEdgeData>> transformedEdges, float tileSize)
-    {
-        var (blockedNS, blockedEW) =  GetUnblockedDirections(transformedEdges, tileSize);
-
-        Dictionary<Vector2i, AtmosDirection> blockerMap = new(transformedEdges.Count);
-        AtmosDirection blocked;
-        foreach (var tile in transformedEdges.Keys)
-        {
-            if (blockedNS.Contains(tile))
-                blocked = AtmosDirection.North;
-            else
-                blocked = AtmosDirection.Invalid;
-
-            if (blockedNS.Contains(tile + (0, -1)))
-                blocked |= AtmosDirection.South;
-
-            if (blockedEW.Contains(tile))
-                blocked |= AtmosDirection.East;
-
-            if (blockedEW.Contains(tile + (-1, 0)))
-                blocked |= AtmosDirection.West;
-
-            blockerMap[tile] = blocked;
-        }
-
-        return blockerMap;
     }
 
     /// <summary>
@@ -383,7 +334,7 @@ public sealed partial class ExplosionSystem : EntitySystem
 
                 if (grid.TryGetTileRef(neighbourIndex, out var neighbourTile) && !neighbourTile.Tile.IsEmpty)
                 {
-                    edges[neighbourIndex] = edges.GetValueOrDefault(neighbourIndex) |  direction.GetOpposite();
+                    edges[neighbourIndex] = edges.GetValueOrDefault(neighbourIndex) | direction.GetOpposite();
                     diagEdges.Remove(neighbourIndex);
                 }
             }
