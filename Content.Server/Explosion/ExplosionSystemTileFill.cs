@@ -74,7 +74,7 @@ public class GridExplosion
             for (var i = 0; i < Atmospherics.Directions; i++)
             {
                 var direction = (AtmosDirection) (1 << i);
-                if (dir.HasFlag(direction))
+                if (dir.IsFlagSet(direction))
                     SpaceTiles.Add(tile.Offset(direction));
             }
         }

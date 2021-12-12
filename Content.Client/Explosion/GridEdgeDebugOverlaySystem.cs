@@ -27,8 +27,8 @@ public sealed class GridEdgeDebugOverlaySystem : EntitySystem
 
         if (!_overlayManager.HasOverlay<GridEdgeDebugOverlay>())
             _overlayManager.AddOverlay(_overlay);
-        _overlay.GridEdges = ev.GridEdges;
-        _overlay.DiagGridEdges = ev.DiagGridEdges;
+        _overlay._gridEdges = ev.GridEdges;
+        _overlay._diagGridEdges = ev.DiagGridEdges;
         _overlay.Reference = ev.Reference;
     }
 }
