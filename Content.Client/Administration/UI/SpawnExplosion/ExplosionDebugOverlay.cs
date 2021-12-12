@@ -142,7 +142,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
                 {
                     var color = ColorMap(Intensity![i]);
                     var colorTransparent = color;
-                    colorTransparent.A = 0.4f;
+                    colorTransparent.A = 0.2f;
 
 
                     if (!tileSetList.TryGetValue(i, out var tiles)) continue;

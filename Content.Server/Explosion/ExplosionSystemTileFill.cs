@@ -107,7 +107,7 @@ public class GridExplosion
         Offset = Angle.RotateVec((size / 4, size / 4));
     }
 
-    public int AddNewTiles(int iteration, HashSet<Vector2i> inputGridTiles, HashSet<Vector2i> outputSpaceTiles)
+    public int AddNewTiles(int iteration, HashSet<Vector2i>? inputGridTiles, HashSet<Vector2i> outputSpaceTiles)
     {
         HashSet<Vector2i> newTiles = new();
         var newTileCount = 0;
@@ -196,7 +196,7 @@ public class GridExplosion
     }
 
     // Get all of the new tiles that the explosion will cover in this new iteration.
-    public IEnumerable<(Vector2i, AtmosDirection)> GetNewTiles(int iteration, HashSet<Vector2i> inputGridTiles)
+    public IEnumerable<(Vector2i, AtmosDirection)> GetNewTiles(int iteration, HashSet<Vector2i>? inputGridTiles)
     {
         // firstly, if any delayed spreaders were cleared, add them to processed tiles to avoid unnecessary
         // calculations
@@ -220,7 +220,7 @@ public class GridExplosion
 
         enumerable = enumerable.Concat(GetDelayedNeighbors(iteration));
 
-        return enumerable.Concat(IterateSpaceInterface(inputGridTiles));
+        return (inputGridTiles == null) ? enumerable : enumerable.Concat(IterateSpaceInterface(inputGridTiles));
     }
 
     public IEnumerable<(Vector2i, AtmosDirection)> IterateSpaceInterface(HashSet<Vector2i> inputGridTiles)
@@ -731,9 +731,12 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         var intensityStepSize = slope / 2;
 
-        Dictionary<GridId, HashSet<Vector2i>> gridTileSets = new();
         HashSet<Vector2i> spaceTiles = new();
         HashSet<Vector2i> previousSpaceTiles = new();
+
+        HashSet<GridId> knownGrids = new();
+        Dictionary<GridId, HashSet<Vector2i>> gridTileSets = new();
+        Dictionary<GridId, HashSet<Vector2i>> previousGridTileSets = new();
 
         // EXPLOSION TODO
         // intelligent space-orientation determination.
@@ -745,7 +748,7 @@ public sealed partial class ExplosionSystem : EntitySystem
                 airtightMap = new();
 
             GridExplosion initialGrid = new(gridId, airtightMap, maxIntensity, intensityStepSize, typeID, _gridEdges[gridId]);
-            gridTileSets.Add(gridId, new());
+            knownGrids.Add(gridId);
             gridData.Add(gridId, initialGrid);
             initialGrid.Processed.Add(initialTile);
             initialGrid.TileSets[0] = new() { initialTile };
@@ -823,9 +826,13 @@ public sealed partial class ExplosionSystem : EntitySystem
             previousSpaceTiles = spaceTiles;
             spaceTiles = new();
 
+            previousGridTileSets = gridTileSets;
+            gridTileSets = new();
+
             int newTileCount = 0;
 
-            foreach (var (grid, gridSet) in gridTileSets)
+            knownGrids.UnionWith(previousGridTileSets.Keys);
+            foreach (var grid in knownGrids)
             {
                 if (!gridData.TryGetValue(grid, out var data))
                 {
@@ -837,9 +844,7 @@ public sealed partial class ExplosionSystem : EntitySystem
                     gridData[grid] = data;
                 }
 
-                newTileCount += data.AddNewTiles(iteration, gridSet, spaceTiles);
-
-                gridSet.Clear();
+                newTileCount += data.AddNewTiles(iteration, previousGridTileSets.GetValueOrDefault(grid), spaceTiles);
             }
 
             if (spaceData != null)

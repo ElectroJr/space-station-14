@@ -83,7 +83,8 @@ public sealed class GridEdgeDebugOverlay : Overlay
 
     Dictionary<Vector2i, GridBlockData> _transformedEdges = new();
 
-    public const bool DrawLocalEdges = false;
+    public bool DrawLocalEdges = false;
+    public bool DrawGridEdges = true;
 
     public GridEdgeDebugOverlay()
     {
@@ -299,6 +300,9 @@ public sealed class GridEdgeDebugOverlay : Overlay
 
     protected override void Draw(in OverlayDrawArgs args)
     {
+        if (!DrawGridEdges)
+            return;
+
         var worldBounds = _eyeManager.GetWorldViewbounds();
         var handle = args.WorldHandle;
 

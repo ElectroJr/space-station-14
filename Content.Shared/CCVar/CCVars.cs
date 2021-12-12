@@ -323,6 +323,15 @@ namespace Content.Shared.CCVar
         public static readonly CVarDef<bool> ExplosionSleepNodeSys =
             CVarDef.Create("explosion.nodesleep", true, CVar.SERVERONLY);
 
+        // TMP DEBUG
+        // TODO EXPLOSION REMOVE THIS
+        public static readonly CVarDef<bool> ExplosionDrawEdges =
+            CVarDef.Create("explosion.edges", true, CVar.CLIENTONLY);
+
+        public static readonly CVarDef<bool> ExplosionDrawLocalEdges =
+            CVarDef.Create("explosion.localedges", false, CVar.CLIENTONLY);
+
+
         /*
          * Atmos
          */

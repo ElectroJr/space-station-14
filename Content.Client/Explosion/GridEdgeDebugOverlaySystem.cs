@@ -1,5 +1,7 @@
+using Content.Shared.CCVar;
 using Content.Shared.Explosion;
 using Robust.Client.Graphics;
+using Robust.Shared.Configuration;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 
@@ -13,6 +15,7 @@ public sealed class GridEdgeDebugOverlaySystem : EntitySystem
     private GridEdgeDebugOverlay _overlay = default!;
 
     [Dependency] private readonly IOverlayManager _overlayManager = default!;
+    [Dependency] private readonly IConfigurationManager _cfg = default!;
 
     public override void Initialize()
     {
@@ -20,6 +23,10 @@ public sealed class GridEdgeDebugOverlaySystem : EntitySystem
 
         SubscribeNetworkEvent<GridEdgeUpdateEvent>(UpdateOverlay);
         _overlay = new GridEdgeDebugOverlay();
+
+        _cfg.OnValueChanged(CCVars.ExplosionDrawEdges, value => _overlay.DrawGridEdges = value, true);
+        _cfg.OnValueChanged(CCVars.ExplosionDrawLocalEdges, value => _overlay.DrawLocalEdges = value, true);
+
     }
 
     private void UpdateOverlay(GridEdgeUpdateEvent ev)
