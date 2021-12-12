@@ -48,9 +48,9 @@ public struct GridEdgeData : IEquatable<GridEdgeData>
 public record GridBlockData
 {
     /// <summary>
-    ///     What directions of this tile are blocked by some other grid?
+    ///     What directions of this tile are not blocked by some other grid?
     /// </summary>
-    public AtmosDirection BlockedDirections;
+    public AtmosDirection UnblockedDirections = AtmosDirection.All;
 
     /// <summary>
     ///     Hashset contains information about the edge-tiles, which belong to some other grid(s), that are blocking
@@ -118,11 +118,11 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
     ///     edges all onto one grids reference frame.
     /// </summary>
-    public Dictionary<Vector2i, GridBlockData> TransformAllGridEdges(MapId targetMap, GridId referenceGrid)
+    public Dictionary<Vector2i, GridBlockData> TransformGridEdges(MapId targetMap, GridId referenceGrid)
     {
         Dictionary<Vector2i, GridBlockData> transformedEdges = new();
 
-        var targetMatrix = Matrix3.Identity;
+          var targetMatrix = Matrix3.Identity;
         Angle targetAngle = new();
         float tileSize = DefaultTileSize;
 
@@ -196,6 +196,10 @@ public sealed partial class ExplosionSystem : EntitySystem
         Vector2i newIndex;
         foreach (var (gridToTransform, diagEdges) in _diagGridEdges)
         {
+            // we treat the target grid separately
+            if (gridToTransform == referenceGrid)
+                continue;
+
             if (!_mapManager.TryGetGrid(gridToTransform, out var grid) ||
                 grid.ParentMapId != targetMap)
                 continue;
@@ -222,16 +226,13 @@ public sealed partial class ExplosionSystem : EntitySystem
 
                 // explosions are not allowed to propagate diagonally ONTO grids. so we just use defaults for some fields.
                 data.BlockingGridEdges.Add(new(default, default, center, angle, tileSize));
-                if (gridToTransform == referenceGrid)
-                    data.BlockedDirections = AtmosDirection.All;
             }
         }
 
         // finally, we also include the blocking tiles from the reference grid (if its not space).
+
         if (_gridEdges.TryGetValue(referenceGrid, out var localEdges))
         {
-            // the space map and the grid edges are using the same coordinate system
-            // but we still need the edge map for propagation in space. so we create a simplified one
             foreach (var (tile, _) in localEdges)
             {
                 if (!transformedEdges.TryGetValue(tile, out var data))
@@ -240,9 +241,21 @@ public sealed partial class ExplosionSystem : EntitySystem
                     transformedEdges[tile] = data;
                 }
 
-                var center = ((Vector2) tile + 0.5f) * tileSize;
-                data.BlockingGridEdges.Add(new(tile, referenceGrid, center, targetAngle, tileSize));
-                data.BlockedDirections = AtmosDirection.All;
+                data.BlockingGridEdges.Add(new(tile, referenceGrid, ((Vector2) tile + 0.5f) * tileSize, 0, tileSize));
+            }
+        }
+
+        if (_diagGridEdges.TryGetValue(referenceGrid, out var localDiagEdges))
+        {
+            foreach (var tile in localDiagEdges)
+            {
+                if (!transformedEdges.TryGetValue(tile, out var data))
+                {
+                    data = new();
+                    transformedEdges[tile] = data;
+                }
+
+                data.BlockingGridEdges.Add(new(default, default, ((Vector2) tile + 0.5f) * tileSize, 0, tileSize));
             }
         }
 
@@ -260,7 +273,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     {
         foreach (var (tile, data) in transformedEdges)
         {
-            if (data.BlockedDirections == AtmosDirection.All)
+            if (data.UnblockedDirections == AtmosDirection.Invalid)
                 continue; // already all blocked.
 
             var tileCenter = ((Vector2) tile + 0.5f) * tileSize;
@@ -269,25 +282,25 @@ public sealed partial class ExplosionSystem : EntitySystem
                 // if a blocking edge contains the center of the tile, block all directions
                 if (edge.Box.Contains(tileCenter))
                 {
-                    data.BlockedDirections = AtmosDirection.All;
+                    data.UnblockedDirections = AtmosDirection.Invalid;
                     break;
                 }
 
                 // check north
                 if (edge.Box.Contains(tileCenter + (0, tileSize / 2)))
-                    data.BlockedDirections = AtmosDirection.North;
+                    data.UnblockedDirections &= ~AtmosDirection.North;
 
                 // check south
                 if (edge.Box.Contains(tileCenter + (0, -tileSize / 2)))
-                    data.BlockedDirections |= AtmosDirection.South;
+                    data.UnblockedDirections &= ~AtmosDirection.South;
 
                 // check east
                 if (edge.Box.Contains(tileCenter + (tileSize / 2, 0)))
-                    data.BlockedDirections |= AtmosDirection.East;
+                    data.UnblockedDirections &= ~AtmosDirection.East;
 
-                // check south
+                // check west
                 if (edge.Box.Contains(tileCenter + (-tileSize / 2, 0)))
-                    data.BlockedDirections |= AtmosDirection.West;
+                    data.UnblockedDirections &= ~AtmosDirection.West;
             }
         }
     }

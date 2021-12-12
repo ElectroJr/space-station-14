@@ -62,7 +62,7 @@ namespace Content.Server.Administration.UI
                 request.MaxIntensity);
 
             // the explosion event that **would** be sent to all clients, if it were a real explosion.
-            var explosion = sys.GetExplosionEvent(request.Epicenter, request.TypeId, spaceData, gridData, tileSetIntensity);
+            var explosion = sys.GetExplosionEvent(request.Epicenter, request.TypeId, spaceData, gridData.Values, tileSetIntensity);
 
             SendMessage(new SpawnExplosionEuiMsg.PreviewData(explosion, request.IntensitySlope, request.TotalIntensity));
             sys.SendEdges(gridId);

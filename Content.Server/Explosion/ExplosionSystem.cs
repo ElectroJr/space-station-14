@@ -285,7 +285,7 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, type.ID, totalIntensity, slope, maxTileIntensity);
 
-        RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceData, gridData, tileSetIntensity));
+        RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceData, gridData.Values, tileSetIntensity));
 
         // camera shake
         CameraShake(tileSetIntensity.Count * 2.5f, epicenter, totalIntensity);
@@ -301,12 +301,12 @@ public sealed partial class ExplosionSystem : EntitySystem
         return new(this,
             type,
             spaceData,
-            gridData,
+            gridData.Values.ToList(),
             tileSetIntensity,
             epicenter);
     }
 
-    public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, ExplosionSpaceData? spaceData, List<ExplosionGridData> gridData, List<float> tileSetIntensity)
+    public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, SpaceExplosion? spaceData, IEnumerable<GridExplosion> gridData, List<float> tileSetIntensity)
     {
         Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles = new();
 
@@ -547,8 +547,8 @@ class Explosion
 
     public Explosion(ExplosionSystem system,
         ExplosionPrototype explosionType,
-        ExplosionSpaceData? spaceData,
-        List<ExplosionGridData> gridData,
+        SpaceExplosion? spaceData,
+        List<GridExplosion> gridData,
         List<float> tileSetIntensity,
         MapCoordinates epicenter)
     {
