@@ -6,7 +6,6 @@ using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
-using Robust.Shared.Utility;
 
 namespace Content.Server.Explosion;
 
@@ -96,15 +95,15 @@ public class GridExplosion
         }
     }
 
-    public void SetSpaceTransform(Angle spaceAngle, Matrix3 spaceMatrix)
+    public void SetSpaceTransform(SpaceExplosion space)
     {
         NeedToTransform = true;
         var transform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(Grid.GridEntityId);
         var size = (float) Grid.TileSize;
         Matrix.R0C2 = size / 2;
         Matrix.R1C2 = size / 2;
-        Matrix *= transform.WorldMatrix * Matrix3.Invert(spaceMatrix);
-        Angle = transform.WorldRotation - spaceAngle;
+        Matrix *= transform.WorldMatrix * Matrix3.Invert(space.Matrix);
+        Angle = transform.WorldRotation - space.Angle;
         Offset = Angle.RotateVec((size / 4, size / 4));
     }
 
@@ -463,9 +462,10 @@ public class SpaceExplosion
     {
         HashSet<Vector2i> newTiles = new();
         var newTileCount = 0;
+        HashSet<Vector2i> blockedTiles = new();
 
         // Use GetNewTiles to enumerate over neighbors of tiles that were recently added to tileSetList.
-        foreach (var newTile in GetNewTiles(iteration, inputSpaceTiles))
+        foreach (var newTile in GetNewTiles(iteration, inputSpaceTiles, blockedTiles))
         {
             newTiles.Add(newTile);
             newTileCount++;
@@ -473,8 +473,10 @@ public class SpaceExplosion
             CheckGridTile(newTile, gridTileSets);
         }
 
-        if (BlockedSpreader.TryGetValue(iteration, out var blockedTiles))
+        blockedTiles.ExceptWith(Processed);
+        if (blockedTiles.Count != 0)
         {
+            BlockedSpreader.Add(iteration, blockedTiles);
             foreach (var tile in blockedTiles)
             {
                 newTileCount++;
@@ -510,16 +512,16 @@ public class SpaceExplosion
     }
 
     // Get all of the new tiles that the explosion will cover in this new iteration.
-    public IEnumerable<Vector2i> GetNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles)
+    public IEnumerable<Vector2i> GetNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles, HashSet<Vector2i> blockedTiles)
     {
         // construct our enumerable from several other iterators
         var enumerable = Enumerable.Empty<Vector2i>();
 
         if (TileSets.TryGetValue(iteration - 2, out var adjacent))
-            enumerable = enumerable.Concat(GetNewAdjacentTiles(iteration, adjacent));
+            enumerable = enumerable.Concat(GetNewAdjacentTiles(adjacent, blockedTiles));
 
         if (TileSets.TryGetValue(iteration - 3, out var diagonal))
-            enumerable = enumerable.Concat(GetNewDiagonalTiles(diagonal));
+            enumerable = enumerable.Concat(GetNewDiagonalTiles(diagonal, blockedTiles));
         
         return enumerable.Concat(IterateSpaceInterface(inputSpaceTiles));
     }
@@ -533,7 +535,7 @@ public class SpaceExplosion
         }
     }
 
-    IEnumerable<Vector2i> GetNewAdjacentTiles(int iteration, IEnumerable<Vector2i> tiles)
+    IEnumerable<Vector2i> GetNewAdjacentTiles(IEnumerable<Vector2i> tiles, HashSet<Vector2i> blockedTiles)
     {
         Vector2i newTile;
         foreach (var tile in tiles)
@@ -544,27 +546,26 @@ public class SpaceExplosion
             for (var i = 0; i < Atmospherics.Directions; i++)
             {
                 var direction = (AtmosDirection) (1 << i);
-                newTile = tile.Offset(direction); ;
 
-                if (unblockedDirections.IsFlagSet(direction))
+                if (!unblockedDirections.IsFlagSet(direction))
+                    continue;
+
+                newTile = tile.Offset(direction);
+                
+                if (GetUnblocked(newTile).IsFlagSet(direction.GetOpposite()))
                 {
                     if (Processed.Add(newTile))
                         yield return newTile;
                 }
-                else if (!Processed.Contains(newTile))
+                else
                 {
-                    if (!BlockedSpreader.TryGetValue(iteration, out var blocked))
-                    {
-                        blocked = new();
-                        BlockedSpreader[iteration] = blocked;
-                    }
-                    blocked.Add(newTile);
+                    blockedTiles.Add(newTile);
                 }
             }
         }
     }
 
-    IEnumerable<Vector2i> GetNewDiagonalTiles(IEnumerable<Vector2i> tiles)
+    IEnumerable<Vector2i> GetNewDiagonalTiles(IEnumerable<Vector2i> tiles, HashSet<Vector2i> blockedTiles)
     {
         Vector2i newTile;
         AtmosDirection direction;
@@ -589,8 +590,14 @@ public class SpaceExplosion
                     direction |= AtmosDirection.North;
 
                 newTile = tile + (1, 1);
-                if (direction != AtmosDirection.Invalid && Processed.Add(newTile))
-                    yield return newTile;
+
+                if (direction != AtmosDirection.Invalid)
+                {
+                    if ( (direction & GetUnblocked(newTile)) != AtmosDirection.Invalid && Processed.Add(newTile))
+                        yield return newTile;
+                    else
+                        blockedTiles.Add(newTile);
+                }
             }
 
             // North West
@@ -603,8 +610,14 @@ public class SpaceExplosion
                     direction |= AtmosDirection.North;
 
                 newTile = tile + (-1, 1);
-                if (direction != AtmosDirection.Invalid && Processed.Add(newTile))
-                    yield return newTile;
+
+                if (direction != AtmosDirection.Invalid)
+                {
+                    if ((direction & GetUnblocked(newTile)) != AtmosDirection.Invalid && Processed.Add(newTile))
+                        yield return newTile;
+                    else
+                        blockedTiles.Add(newTile);
+                }
             }
 
             // South East
@@ -617,8 +630,14 @@ public class SpaceExplosion
                     direction |= AtmosDirection.South;
 
                 newTile = tile + (1, -1);
-                if (direction != AtmosDirection.Invalid && Processed.Add(newTile))
-                    yield return newTile;
+
+                if (direction != AtmosDirection.Invalid)
+                {
+                    if ((direction & GetUnblocked(newTile)) != AtmosDirection.Invalid && Processed.Add(newTile))
+                        yield return newTile;
+                    else
+                        blockedTiles.Add(newTile);
+                }
             }
 
             // South West
@@ -631,8 +650,14 @@ public class SpaceExplosion
                     direction |= AtmosDirection.South;
 
                 newTile = tile + (-1, -1);
-                if (direction != AtmosDirection.Invalid && Processed.Add(newTile))
-                    yield return newTile;
+
+                if (direction != AtmosDirection.Invalid)
+                {
+                    if ((direction & GetUnblocked(newTile)) != AtmosDirection.Invalid && Processed.Add(newTile))
+                        yield return newTile;
+                    else
+                        blockedTiles.Add(newTile);
+                }
             }
         }
     }
@@ -794,20 +819,27 @@ public sealed partial class ExplosionSystem : EntitySystem
 
             // Next, we will add a new iteration of tiles
 
+            // In order to put the "iteration delay" of going off a grid on the same level as going ON a grid, both space-> grid and grid -> space have to be delayed by one iteration
+            previousSpaceTiles = spaceTiles;
+            spaceTiles = new();
+
             int newTileCount = 0;
 
             foreach (var (grid, gridSet) in gridTileSets)
             {
                 if (!gridData.TryGetValue(grid, out var data))
                 {
-                    if (!_airtightMap.TryGetValue(gridId, out var airtightMap))
+                    if (!_airtightMap.TryGetValue(grid, out var airtightMap))
                         airtightMap = new();
 
                     data = new(grid, airtightMap, maxIntensity, intensityStepSize, typeID, _gridEdges[grid]);
+                    data.SetSpaceTransform(spaceData!);
                     gridData[grid] = data;
                 }
 
                 newTileCount += data.AddNewTiles(iteration, gridSet, spaceTiles);
+
+                gridSet.Clear();
             }
 
             if (spaceData != null)
@@ -819,15 +851,6 @@ public sealed partial class ExplosionSystem : EntitySystem
                 spaceData = new(this, _mapManager.GetGrid(gridId).TileSize, intensityStepSize, map, gridId);
                 newTileCount += spaceData.AddNewTiles(iteration, previousSpaceTiles, gridTileSets);
             }
-
-            foreach(var gridSet in gridTileSets.Values)
-            {
-                gridSet.Clear();
-            }
-
-            // In order to put the "iteration delay" of going off a grid on the same level as going ON a grid, both space-> grid and grid -> space have to be delayed by one iteration
-            previousSpaceTiles = spaceTiles;
-            spaceTiles = new();
 
             // Does adding these tiles bring us above the total target intensity?
             if (newTileCount * intensityStepSize >= remainingIntensity)
