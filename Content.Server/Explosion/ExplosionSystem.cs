@@ -73,7 +73,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     private int _previousTileIteration;
 
-    private AudioParams _audioParams = AudioParams.Default.WithVolume(-5f);
+    private AudioParams _audioParams = AudioParams.Default.WithVolume(-5f); // why are these so damn loud.
 
     public override void Initialize()
     {
@@ -202,7 +202,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // course, as the explosions are not perfectly circular, this formula isn't perfect, but the formula works
         // reasonably well.
 
-        // TODO EXPLOSION I guess this should actually use the formula for the volume of an Octagon-pyramid?
+        // TODO EXPLOSION I guess this should actually use the formula for the volume of a distorted octagonal frustum?
 
         var coneVolume = slope * MathF.PI / 3 * MathF.Pow(radius, 3);
 
@@ -600,20 +600,23 @@ class Explosion
             {
                 // try get any tile hash-set corresponding to this intensity
                 var tileSets = _explosionData[_currentDataIndex].TileSets;
-                if (tileSets.TryGetValue(CurrentIteration, out var tileSet))
+                if (!tileSets.TryGetValue(CurrentIteration, out var tileSet))
                 {
-                    _currentEnumerator = tileSet.GetEnumerator();
-                    _currentLookup = _explosionData[_currentDataIndex].Lookup;
-                    if (_floorTilesToUpdate.Count > 0)
-                    {
-                        _currentGrid?.SetTiles(_floorTilesToUpdate);
-                        _floorTilesToUpdate.Clear();
-                    }
-                    _currentGrid = _explosionData[_currentDataIndex].MapGrid;
-                    return true;
+                    _currentDataIndex++;
+                    continue;
                 }
-                // go to the next grid/space tile sets
+
+                _currentEnumerator = tileSet.GetEnumerator();
+                _currentLookup = _explosionData[_currentDataIndex].Lookup;
+                if (_floorTilesToUpdate.Count > 0)
+                {
+                    _currentGrid?.SetTiles(_floorTilesToUpdate);
+                    _floorTilesToUpdate.Clear();
+                }
+                _currentGrid = _explosionData[_currentDataIndex].MapGrid;
+
                 _currentDataIndex++;
+                return true;
             }
 
             // this explosion intensity has been fully processed, move to the next one
