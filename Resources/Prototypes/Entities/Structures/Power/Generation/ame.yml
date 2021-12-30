@@ -11,6 +11,7 @@
     sprite: Structures/Power/Generation/ame.rsi
     state: control
   - type: Physics
+  - type: Fixtures
     fixtures:
     - shape:
         !type:PhysShapeAabb
@@ -78,6 +79,7 @@
   components:
   - type: Physics
     bodyType: Dynamic
+  - type: Fixtures
     fixtures:
     - shape:
         !type:PhysShapeAabb
@@ -106,6 +108,7 @@
     sprite: Structures/Power/Generation/ame.rsi
     state: shield_0
   - type: Physics
+  - type: Fixtures
     fixtures:
     - shape:
         !type:PhysShapeAabb {}

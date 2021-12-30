@@ -25,6 +25,7 @@ namespace Content.Shared.Movement.EntitySystems
         public override void Initialize()
         {
             base.Initialize();
+            UpdatesOutsidePrediction = true;
             SubscribeLocalEvent<MovementSpeedModifierComponent, ComponentGetState>(OnGetState);
             SubscribeLocalEvent<MovementSpeedModifierComponent, ComponentHandleState>(OnHandleState);
         }
@@ -35,6 +36,8 @@ namespace Content.Shared.Movement.EntitySystems
             {
                 BaseWalkSpeed = component.BaseWalkSpeed,
                 BaseSprintSpeed = component.BaseSprintSpeed,
+                WalkSpeedModifier = component.WalkSpeedModifier,
+                SprintSpeedModifier = component.SprintSpeedModifier
             };
         }
 
@@ -43,6 +46,8 @@ namespace Content.Shared.Movement.EntitySystems
             if (args.Current is not MovementSpeedModifierComponentState state) return;
             component.BaseWalkSpeed = state.BaseWalkSpeed;
             component.BaseSprintSpeed = state.BaseSprintSpeed;
+            component.WalkSpeedModifier = state.WalkSpeedModifier;
+            component.SprintSpeedModifier = state.SprintSpeedModifier;
         }
 
         public void RefreshMovementSpeedModifiers(EntityUid uid)
@@ -69,6 +74,8 @@ namespace Content.Shared.Movement.EntitySystems
         {
             public float BaseWalkSpeed;
             public float BaseSprintSpeed;
+            public float WalkSpeedModifier;
+            public float SprintSpeedModifier;
         }
     }
 

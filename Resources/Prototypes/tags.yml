@@ -4,6 +4,9 @@
   id: Baguette
 
 - type: Tag
+  id: Bee
+
+- type: Tag
   id: Brutepack
 
 - type: Tag
@@ -28,10 +31,16 @@
   id: Carrot
 
 - type: Tag
+  id: Carpet
+
+- type: Tag
   id: CanPilot
 
 - type: Tag
   id: CaptainSabre
+
+- type: Tag
+  id: CigFilter
 
 - type: Tag
   id: CigPack
@@ -85,6 +94,9 @@
   id: DoorElectronics
 
 - type: Tag
+  id: DonkPocket
+
+- type: Tag
   id: Donut
 
 - type: Tag
@@ -122,7 +134,7 @@
 
 - type: Tag
   id: Handcuffs
-  
+
 - type: Tag
   id: HideContextMenu
 
@@ -164,6 +176,9 @@
 
 - type: Tag
   id: Pill
+
+- type: Tag
+  id: PillCanister
 
 - type: Tag
   id: Pipe
@@ -230,4 +245,3 @@
 
 - type: Tag
   id: Write
-

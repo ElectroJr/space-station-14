@@ -1,19 +1,31 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Content.Server.GameTicking;
+using Content.Server.GameTicking.Presets;
+using Content.Server.Maps;
 using Content.Server.RoundEnd;
 using Content.Shared.CCVar;
 using Content.Shared.Voting;
 using Robust.Server.Player;
+using Robust.Shared.Configuration;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Localization;
+using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 
 namespace Content.Server.Voting.Managers
 {
     public sealed partial class VoteManager
     {
+        private static readonly Dictionary<StandardVoteType, CVarDef<bool>> _voteTypesToEnableCVars = new()
+        {
+            {StandardVoteType.Restart, CCVars.VoteRestartEnabled},
+            {StandardVoteType.Preset, CCVars.VotePresetEnabled},
+            {StandardVoteType.Map, CCVars.VoteMapEnabled},
+        };
+
         public void CreateStandardVote(IPlayerSession? initiator, StandardVoteType voteType)
         {
             switch (voteType)
@@ -83,7 +95,7 @@ namespace Content.Server.Voting.Managers
                 vote.CastVote(initiator, 0);
             }
 
-            foreach (var player in _playerManager.GetAllPlayers())
+            foreach (var player in _playerManager.ServerSessions)
             {
                 if (player != initiator && !_afkManager.IsAfk(player))
                 {
@@ -95,13 +107,15 @@ namespace Content.Server.Voting.Managers
 
         private void CreatePresetVote(IPlayerSession? initiator)
         {
-            var presets = new Dictionary<string, string>
+            var presets = new Dictionary<string, string>();
+
+            foreach (var preset in _prototypeManager.EnumeratePrototypes<GamePresetPrototype>())
             {
-                ["traitor"] = "mode-traitor",
-                ["extended"] = "mode-extended",
-                ["sandbox"] = "mode-sandbox",
-                ["suspicion"] = "mode-suspicion",
-            };
+                if(!preset.ShowInVote)
+                    continue;
+
+                presets[preset.ID] = preset.ModeTitle;
+            }
 
             var alone = _playerManager.PlayerCount == 1 && initiator != null;
             var options = new VoteOptions
@@ -140,17 +154,13 @@ namespace Content.Server.Voting.Managers
                         Loc.GetString("ui-vote-gamemode-win", ("winner", Loc.GetString(presets[picked]))));
                 }
 
-                EntitySystem.Get<GameTicker>().SetStartPreset(picked);
+                EntitySystem.Get<GameTicker>().SetGamePreset(picked);
             };
         }
 
         private void CreateMapVote(IPlayerSession? initiator)
         {
-            var maps = new Dictionary<string, string>
-            {
-                ["Maps/saltern.yml"] = "Saltern",
-                ["Maps/packedstation.yml"] = "PackedStation",
-            };
+            var maps = _gameMapManager.CurrentlyEligibleMaps().ToDictionary(map => map, map => map.MapName);
 
             var alone = _playerManager.PlayerCount == 1 && initiator != null;
             var options = new VoteOptions
@@ -175,21 +185,21 @@ namespace Content.Server.Voting.Managers
 
             vote.OnFinished += (_, args) =>
             {
-                string picked;
+                GameMapPrototype picked;
                 if (args.Winner == null)
                 {
-                    picked = (string) _random.Pick(args.Winners);
+                    picked = (GameMapPrototype) _random.Pick(args.Winners);
                     _chatManager.DispatchServerAnnouncement(
                         Loc.GetString("ui-vote-map-tie", ("picked", maps[picked])));
                 }
                 else
                 {
-                    picked = (string) args.Winner;
+                    picked = (GameMapPrototype) args.Winner;
                     _chatManager.DispatchServerAnnouncement(
                         Loc.GetString("ui-vote-map-win", ("winner", maps[picked])));
                 }
 
-                _cfg.SetCVar(CCVars.GameMap, picked);
+                _gameMapManager.TrySelectMap(picked.ID);
             };
         }
 

@@ -1,7 +1,9 @@
 using System;
+using Content.Server.Chemistry.Components.SolutionManager;
 using Content.Server.Explosion;
-using Content.Shared.Chemistry.Components;
-using Content.Shared.Chemistry.Reaction;
+using Content.Shared.Administration.Logs;
+using Content.Shared.Chemistry.Reagent;
+using Content.Shared.Database;
 using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Serialization.Manager.Attributes;
@@ -10,7 +12,7 @@ using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototy
 namespace Content.Server.Chemistry.ReactionEffects
 {
     [DataDefinition]
-    public class ExplosionReactionEffect : IReactionEffect
+    public class ExplosionReactionEffect : ReagentEffect
     {
         /// <summary>
         ///     The type of explosion. Determines damage types and tile break chance scaling.
@@ -24,7 +26,7 @@ namespace Content.Server.Chemistry.ReactionEffects
         /// </summary>
         [DataField("maxIntensity")]
         public float MaxIntensity = 5;
-
+        
         /// <summary>
         ///     How quickly intensity drops off as you move away from the epicenter
         /// </summary>
@@ -47,9 +49,12 @@ namespace Content.Server.Chemistry.ReactionEffects
         [DataField("intensityPerUnit")]
         public float IntensityPerUnit = 1;
 
-        public void React(Solution solution, EntityUid uid, double quantity, IEntityManager entityManager)
+        public override bool ShouldLog => true;
+        public override LogImpact LogImpact => LogImpact.High;
+
+        public override void Effect(ReagentEffectArgs args)
         {
-            var intensity = (float) Math.Min(quantity * IntensityPerUnit, MaxTotalIntensity);
+            var intensity = (float) Math.Min(args.Quantity * IntensityPerUnit, MaxTotalIntensity);
 
             EntitySystem.Get<ExplosionSystem>().QueueExplosion(
                 uid,

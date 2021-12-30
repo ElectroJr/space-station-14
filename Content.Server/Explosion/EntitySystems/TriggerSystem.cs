@@ -1,10 +1,14 @@
 using System;
+using Content.Server.Administration.Logs;
 using Content.Server.Doors.Components;
 using Content.Server.Explosion.Components;
 using Content.Server.Flash;
 using Content.Server.Flash.Components;
+using Content.Server.Projectiles.Components;
 using Content.Shared.Audio;
+using Content.Shared.Database;
 using Content.Shared.Doors;
+using Content.Shared.Throwing;
 using JetBrains.Annotations;
 using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
@@ -20,10 +24,10 @@ namespace Content.Server.Explosion.EntitySystems
     /// </summary>
     public class TriggerEvent : HandledEntityEventArgs
     {
-        public IEntity Triggered { get; }
-        public IEntity? User { get; }
+        public EntityUid Triggered { get; }
+        public EntityUid? User { get; }
 
-        public TriggerEvent(IEntity triggered, IEntity? user = null)
+        public TriggerEvent(EntityUid triggered, EntityUid? user = null)
         {
             Triggered = triggered;
             User = user;
@@ -35,7 +39,8 @@ namespace Content.Server.Explosion.EntitySystems
     {
         [Dependency] private readonly ExplosionSystem _explosions = default!;
         [Dependency] private readonly FlashSystem _flashSystem = default!;
-        
+        [Dependency] private readonly AdminLogSystem _logSystem = default!;
+
         public override void Initialize()
         {
             base.Initialize();
@@ -59,7 +64,7 @@ namespace Content.Server.Explosion.EntitySystems
             if (component.Flashed) return;
 
             // TODO Make flash durations sane ffs.
-            _flashSystem.FlashArea(uid, args.User?.Uid, component.Range, component.Duration * 1000f);
+            _flashSystem.FlashArea(uid, args.User, component.Range, component.Duration * 1000f);
             component.Flashed = true;
         }
         #endregion
@@ -96,16 +101,23 @@ namespace Content.Server.Explosion.EntitySystems
 
         private void HandleCollide(EntityUid uid, TriggerOnCollideComponent component, StartCollideEvent args)
         {
-            Trigger(component.Owner);
+            EntityUid? user = null;
+            if (EntityManager.TryGetComponent(uid, out ProjectileComponent projectile))
+                user = projectile.Shooter;
+            else if (EntityManager.TryGetComponent(uid, out ThrownItemComponent thrown))
+                user = thrown.Thrower;
+
+            Trigger(component.Owner, user);
         }
 
-        public void Trigger(IEntity trigger, IEntity? user = null)
+
+        public void Trigger(EntityUid trigger, EntityUid? user = null)
         {
             var triggerEvent = new TriggerEvent(trigger, user);
-            EntityManager.EventBus.RaiseLocalEvent(trigger.Uid, triggerEvent);
+            EntityManager.EventBus.RaiseLocalEvent(trigger, triggerEvent);
         }
 
-        public void HandleTimerTrigger(TimeSpan delay, IEntity triggered, IEntity? user = null)
+        public void HandleTimerTrigger(TimeSpan delay, EntityUid triggered, EntityUid? user = null)
         {
             if (delay.TotalSeconds <= 0)
             {
@@ -115,7 +127,7 @@ namespace Content.Server.Explosion.EntitySystems
 
             Timer.Spawn(delay, () =>
             {
-                if (triggered.Deleted) return;
+                if (Deleted(triggered)) return;
                 Trigger(triggered, user);
             });
         }
