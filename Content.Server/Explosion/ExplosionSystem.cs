@@ -1,12 +1,11 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Content.Server.Atmos.Components;
-using Content.Server.Camera;
 using Content.Server.Explosion.Components;
 using Content.Server.NodeContainer.EntitySystems;
 using Content.Server.Throwing;
+using Content.Shared.Camera;
 using Content.Shared.CCVar;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
@@ -35,9 +34,11 @@ public sealed partial class ExplosionSystem : EntitySystem
     [Dependency] private readonly IConfigurationManager _cfg = default!;
     [Dependency] private readonly IPlayerManager _playerManager = default!;
     [Dependency] private readonly IEntityLookup _entityLookup = default!;
+
     [Dependency] private readonly DamageableSystem _damageableSystem = default!;
     [Dependency] private readonly ContainerSystem _containerSystem = default!;
     [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
+    [Dependency] private readonly CameraRecoilSystem _recoilSystem = default!;
 
     /// <summary>
     ///     Queue for delayed processing of explosions. If there is an explosion that covers more than <see
@@ -328,15 +329,15 @@ public sealed partial class ExplosionSystem : EntitySystem
 
     private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)
     {
-        foreach (var player in _playerManager.GetPlayersInRange(epicenter, (int) range))
+        var players = Filter.Empty();
+        players.AddInRange(epicenter, range, _playerManager, EntityManager);
+
+        foreach (var player in players.Recipients)
         {
-            if (player.AttachedEntity == null)
+            if (player.AttachedEntity is not EntityUid uid)
                 continue;
 
-            if (!EntityManager.TryGetComponent(player.AttachedEntity.Uid, out CameraRecoilComponent? recoil))
-                continue;
-
-            var playerPos = player.AttachedEntity.Transform.WorldPosition;
+            var playerPos = Transform(player.AttachedEntity!.Value).WorldPosition;
             var delta = epicenter.Position - playerPos;
 
             if (delta.EqualsApprox(Vector2.Zero))
@@ -345,7 +346,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             var distance = delta.Length;
             var effect = 5 * MathF.Pow(totalIntensity, 0.5f) * (1 - distance / range);
             if (effect > 0.01f)
-                recoil.Kick(-delta.Normalized * effect);
+                _recoilSystem.KickCamera(uid, -delta.Normalized * effect);
         }
     }
     #endregion
@@ -368,7 +369,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // get the entities on a tile. Note that we cannot process them directly, or we get
         // enumerator-changed-while-enumerating errors.
         List<EntityUid> list = new();
-        _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity.Uid));
+        _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity));
         list.AddRange(grid.GetAnchoredEntities(tile));
 
         // process those entities
@@ -385,7 +386,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             return;
 
         list.Clear();
-        _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity.Uid));
+        _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity));
 
         foreach (var e in list)
         {
@@ -412,10 +413,10 @@ public sealed partial class ExplosionSystem : EntitySystem
         var worldBox = spaceMatrix.TransformBox(gridBox);
         List<EntityUid> list = new();
 
-        EntityQueryCallback callback = (entity) =>
+        EntityUidQueryCallback callback = uid =>
         {
-            if (gridBox.Contains(invSpaceMatrix.Transform(entity.Transform.WorldPosition)))
-                list.Add(entity.Uid);
+            if (gridBox.Contains(invSpaceMatrix.Transform(Transform(uid).WorldPosition)))
+                list.Add(uid);
         };
 
         _entityLookup.FastEntitiesIntersecting(lookup, ref worldBox, callback);
@@ -456,7 +457,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             EntityManager.HasComponent<ExplosionLaunchedComponent>(uid) &&
             EntityManager.TryGetComponent(uid, out TransformComponent transform))
         {
-            EntityManager.GetEntity(uid).TryThrow(transform.WorldPosition - epicenter.Position, throwForce.Value);
+            uid.TryThrow(transform.WorldPosition - epicenter.Position, throwForce.Value);
         }
 
         // TODO EXPLOSION puddle / flammable ignite?

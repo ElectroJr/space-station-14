@@ -6,6 +6,7 @@ using Robust.Client.Console;
 using Robust.Client.Player;
 using Robust.Client.UserInterface.CustomControls;
 using Robust.Client.UserInterface.XAML;
+using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Prototypes;
@@ -22,6 +23,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IMapManager _mapManager = default!;
         [Dependency] private readonly IPlayerManager _playerManager = default!;
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
+        [Dependency] private readonly IEntityManager _entMan = default!;
 
 
         private readonly SpawnExplosionEui _eui;
@@ -99,8 +101,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         {
             UpdateMapOptions();
 
-            var transform = _playerManager.LocalPlayer?.ControlledEntity?.Transform;
-            if (transform == null)
+            if (!_entMan.TryGetComponent(_playerManager.LocalPlayer?.ControlledEntity, out TransformComponent? transform))
                 return;
 
             _pausePreview = true;

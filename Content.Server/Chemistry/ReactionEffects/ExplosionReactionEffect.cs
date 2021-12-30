@@ -54,10 +54,10 @@ namespace Content.Server.Chemistry.ReactionEffects
 
         public override void Effect(ReagentEffectArgs args)
         {
-            var intensity = (float) Math.Min(args.Quantity * IntensityPerUnit, MaxTotalIntensity);
+            var intensity = MathF.Min((float) args.Quantity * IntensityPerUnit, MaxTotalIntensity);
 
             EntitySystem.Get<ExplosionSystem>().QueueExplosion(
-                uid,
+                args.SolutionEntity,
                 ExplosionType,
                 intensity,
                 IntensitySlope,

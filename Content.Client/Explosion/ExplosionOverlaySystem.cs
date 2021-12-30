@@ -19,6 +19,8 @@ public sealed class ExplosionOverlaySystem : EntitySystem
 {
     private ExplosionOverlay _overlay = default!;
 
+    [Dependency] private readonly IPrototypeManager _protoMan = default!;
+
     /// <summary>
     ///     For how many seconds should an explosion stay on-screen once it has finished expanding?
     /// </summary>
@@ -80,11 +82,19 @@ public sealed class ExplosionOverlaySystem : EntitySystem
     /// </summary>
     private void OnExplosion(ExplosionEvent args)
     {
-        var light = EntityManager.SpawnEntity("ExplosionLight", args.Epicenter);
+        if (!_protoMan.TryIndex(args.TypeID, out ExplosionPrototype? type))
+            return;
+
+        // spawn in a light source at the epicenter
+        var lightEntity = EntityManager.SpawnEntity("ExplosionLight", args.Epicenter);
+        var light = EnsureComp<PointLightComponent>(lightEntity);
+        light.Energy = light.Radius = args.Tiles.Count;
+        light.Color = type.LightColor;
+
         if (_overlay.ActiveExplosion != null)
             _overlay.CompletedExplosions.Add(_overlay.ActiveExplosion);
 
-        _overlay.ActiveExplosion = new(args, light);
+        _overlay.ActiveExplosion = new(args, type, lightEntity);
     }
 
     public override void Shutdown()
@@ -119,22 +129,14 @@ internal class Explosion
 
     public Color? FireColor;
 
-    internal Explosion(ExplosionEvent args, IEntity light)
+    internal Explosion(ExplosionEvent args, ExplosionPrototype type, EntityUid lightEntity)
     {
         SpaceMatrix = args.SpaceMatrix;
         Map = args.Epicenter.MapId;
         Tiles = args.Tiles;
         Intensity = args.Intensity;
-
-        if (!IoCManager.Resolve<IPrototypeManager>().TryIndex(args.TypeID, out ExplosionPrototype? type))
-            return;
-
-        LightEntity = light.Uid;
-        var lightComp = light.GetComponent<PointLightComponent>();
-        lightComp.Radius = args.Tiles.Count;
-        lightComp.Energy = lightComp.Radius;
-        lightComp.Color = type.LightColor;
         FireColor = type.FireColor;
+        LightEntity = lightEntity;
 
         var fireRsi = IoCManager.Resolve<IResourceCache>().GetResource<RSIResource>(type.TexturePath).RSI;
         foreach (var state in fireRsi)

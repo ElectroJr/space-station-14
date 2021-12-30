@@ -5,11 +5,10 @@ using Content.Shared.MobState.Components;
 using Content.Shared.Pointing.Components;
 using JetBrains.Annotations;
 using Robust.Server.GameObjects;
-using Robust.Server.Player;
-using Robust.Shared.Audio;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Maths;
+using Robust.Shared.Player;
 using Robust.Shared.Random;
 using DrawDepth = Content.Shared.DrawDepth.DrawDepth;
 
