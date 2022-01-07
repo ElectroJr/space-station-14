@@ -41,6 +41,16 @@ public sealed partial class ExplosionSystem : EntitySystem
     [Dependency] private readonly CameraRecoilSystem _recoilSystem = default!;
 
     /// <summary>
+    ///     Used to identify explosions when communicating with the client. Might be needed if more than one explosion is spawned in a single tick.
+    /// </summary>
+    /// <remarks>
+    ///     Overflowing back to 0 should cause no issue, as long as you don't have more than 256 explosions happening in a single tick.
+    /// </remarks>
+    private byte _explosionCounter = 0;
+    // maybe should just use a UID/explosion-entity and a state to convey information?
+    // but then need to ignore PVS?
+
+    /// <summary>
     ///     Queue for delayed processing of explosions. If there is an explosion that covers more than <see
     ///     cref="TilesPerTick"/> tiles, other explosions will actually be delayed slightly. Unless it's a station
     ///     nuke, this delay should never really be noticeable.
@@ -117,6 +127,7 @@ public sealed partial class ExplosionSystem : EntitySystem
                 if (!_explosionQueue.TryDequeue(out var spawnNextExplosion))
                     break;
 
+                _explosionCounter++;
                 _activeExplosion = spawnNextExplosion();
                 _previousTileIteration = 0;
 
@@ -141,12 +152,12 @@ public sealed partial class ExplosionSystem : EntitySystem
                 return;
 
             _previousTileIteration = _activeExplosion.CurrentIteration;
-            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_previousTileIteration));
+            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_explosionCounter, _previousTileIteration+1));
             return;
         }
 
         // We have finished processing all explosions. Clear client explosion overlays
-        RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(int.MaxValue));
+        RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_explosionCounter, int.MaxValue));
 
         //wakey wakey
         _nodeGroupSystem.Snoozing = false;
@@ -324,7 +335,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             tiles.Add(grid.GridId, grid.TileSets);
         }
 
-        return new ExplosionEvent(epicenter, id, tileSetIntensity, tiles, spaceMatrix);
+        return new ExplosionEvent(_explosionCounter, epicenter, id, tileSetIntensity, tiles, spaceMatrix);
     }
 
     private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)

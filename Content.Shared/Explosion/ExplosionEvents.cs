@@ -43,13 +43,16 @@ public class ExplosionEvent : EntityEventArgs
 
     public Matrix3 SpaceMatrix;
 
-    public ExplosionEvent(MapCoordinates epicenter, string typeID, List<float> intensity, Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles, Matrix3 spaceMatrix)
+    public byte ExplosionId;
+
+    public ExplosionEvent(byte explosionId, MapCoordinates epicenter, string typeID, List<float> intensity, Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles, Matrix3 spaceMatrix)
     {
         Epicenter = epicenter;
         Tiles = tiles;
         Intensity = intensity;
         TypeID = typeID;
         SpaceMatrix = spaceMatrix;
+        ExplosionId = explosionId;
     }
 }
 
@@ -60,9 +63,11 @@ public class ExplosionEvent : EntityEventArgs
 public class ExplosionOverlayUpdateEvent : EntityEventArgs
 {
     public int Index;
+    public byte ExplosionId;
 
-    public ExplosionOverlayUpdateEvent(int index)
+    public ExplosionOverlayUpdateEvent(byte explosionId, int index)
     {
         Index = index;
+        ExplosionId = explosionId;
     }
 }

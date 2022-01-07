@@ -21,6 +21,7 @@ public sealed class ExplosionOverlaySystem : EntitySystem
 
     [Dependency] private readonly IPrototypeManager _protoMan = default!;
 
+
     /// <summary>
     ///     For how many seconds should an explosion stay on-screen once it has finished expanding?
     /// </summary>
@@ -63,11 +64,21 @@ public sealed class ExplosionOverlaySystem : EntitySystem
     /// </summary>
     private void HandleExplosionUpdate(ExplosionOverlayUpdateEvent args)
     {
-        if (_overlay.ActiveExplosion == null)
+        if (args.ExplosionId != _overlay.ActiveExplosion?.Explosionid && !IsNewer(args.ExplosionId))
+        {
+            // out of order events. Ignore.
             return;
+        }
 
         _overlay.Index = args.Index;
-        if (_overlay.Index <= _overlay.ActiveExplosion.Tiles.Count)
+
+        if (_overlay.ActiveExplosion == null)
+        {
+            // no active explosion... events out of order?
+            return;
+        }
+
+        if (args.Index != int.MaxValue)
             return;
 
         // the explosion has finished expanding
@@ -88,13 +99,43 @@ public sealed class ExplosionOverlaySystem : EntitySystem
         // spawn in a light source at the epicenter
         var lightEntity = EntityManager.SpawnEntity("ExplosionLight", args.Epicenter);
         var light = EnsureComp<PointLightComponent>(lightEntity);
-        light.Energy = light.Radius = args.Tiles.Count;
+        light.Energy = light.Radius = args.Intensity.Count;
         light.Color = type.LightColor;
 
-        if (_overlay.ActiveExplosion != null)
-            _overlay.CompletedExplosions.Add(_overlay.ActiveExplosion);
+        if (_overlay.ActiveExplosion == null)
+        {
+            _overlay.ActiveExplosion = new(args, type, lightEntity);
+            return;
+        }
 
-        _overlay.ActiveExplosion = new(args, type, lightEntity);
+        // we have a currently active explosion. Can happen when events are received out of order. either multiple
+        // explosions are happening in one tick, or a new explosion was received before the event telling us the old one
+        // finished got through.
+
+        if (IsNewer(args.ExplosionId))
+        {
+            // This is a newer explosion. Add the old-currently-active explosions to the completed list
+            _overlay.CompletedExplosions.Add(_overlay.ActiveExplosion);
+            _overlay.ActiveExplosion = new(args, type, lightEntity);
+        }
+        else
+        {
+            // explosions were out of order. keep the active one, and directly add the received one to the completed
+            // list.
+            _overlay.CompletedExplosions.Add(new(args, type, lightEntity));
+            return;
+        }
+    }
+
+    public bool IsNewer(byte explosionId)
+    {
+        if (_overlay.ActiveExplosion == null)
+            return true;
+
+        // byte goes up to 255, then wraps back to zero.
+        // what are the odds of more than 128 explosions happening in a tick?
+        return _overlay.ActiveExplosion.Explosionid < explosionId
+            || _overlay.ActiveExplosion.Explosionid > 192 && explosionId < 64;
     }
 
     public override void Shutdown()
@@ -113,6 +154,7 @@ internal class Explosion
     public List<float> Intensity;
     public EntityUid LightEntity;
     public MapId Map;
+    public byte Explosionid;
 
     public Matrix3 SpaceMatrix;
 
@@ -131,10 +173,11 @@ internal class Explosion
 
     internal Explosion(ExplosionEvent args, ExplosionPrototype type, EntityUid lightEntity)
     {
-        SpaceMatrix = args.SpaceMatrix;
         Map = args.Epicenter.MapId;
         Tiles = args.Tiles;
         Intensity = args.Intensity;
+        SpaceMatrix = args.SpaceMatrix;
+        Explosionid = args.ExplosionId;
         FireColor = type.FireColor;
         LightEntity = lightEntity;
 
