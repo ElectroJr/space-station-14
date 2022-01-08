@@ -4,6 +4,7 @@ using Robust.Shared.Enums;
 using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 using System;
 using System.Collections.Generic;
@@ -41,14 +42,18 @@ public sealed class ExplosionOverlay : Overlay
     /// </summary>
     public const int IntensityPerState = 12;
 
+    private ShaderInstance _shader;
+
     public ExplosionOverlay()
     {
         IoCManager.InjectDependencies(this);
+        _shader = IoCManager.Resolve<IPrototypeManager>().Index<ShaderPrototype>("unshaded").Instance();
     }
 
     protected override void Draw(in OverlayDrawArgs args)
     {
         var drawHandle = args.WorldHandle;
+        drawHandle.UseShader(_shader);
 
         if (ActiveExplosion != null)
         {
