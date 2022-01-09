@@ -553,7 +553,7 @@ class Explosion
     private float _currentIntensity;
     private HashSet<Vector2i>.Enumerator _currentEnumerator;
     private int _currentDataIndex;
-    private List<(Vector2i, Tile)> _floorTilesToUpdate = new();
+    private Dictionary<IMapGrid, List<(Vector2i, Tile)>> _tileUpdateDict = new();
 
     private readonly ExplosionSystem _system;
 
@@ -620,11 +620,6 @@ class Explosion
 
                 _currentEnumerator = tileSet.GetEnumerator();
                 _currentLookup = _explosionData[_currentDataIndex].Lookup;
-                if (_floorTilesToUpdate.Count > 0)
-                {
-                    _currentGrid?.SetTiles(_floorTilesToUpdate);
-                    _floorTilesToUpdate.Clear();
-                }
                 _currentGrid = _explosionData[_currentDataIndex].MapGrid;
 
                 _currentDataIndex++;
@@ -667,15 +662,21 @@ class Explosion
                 _currentGrid.TryGetTileRef(_currentEnumerator.Current, out var tileRef) &&
                 !tileRef.Tile.IsEmpty)
             {
-                _system.ExplodeTile(_currentLookup,
-                        _currentGrid,
-                        _currentEnumerator.Current,
-                        _currentIntensity,
-                        _currentDamage,
-                        Epicenter,
-                        ProcessedEntities);
+                if (!_tileUpdateDict.TryGetValue(_currentGrid, out var tileUpdateList))
+                {
+                    tileUpdateList = new();
+                    _tileUpdateDict[_currentGrid] = tileUpdateList;
+                }
 
-                _system.DamageFloorTile(tileRef, _currentIntensity, _floorTilesToUpdate, ExplosionType);
+                _system.ExplodeTile(_currentLookup,
+                    _currentGrid,
+                    _currentEnumerator.Current,
+                    _currentIntensity,
+                    _currentDamage,
+                    Epicenter,
+                    ProcessedEntities);
+
+                _system.DamageFloorTile(tileRef, _currentIntensity, tileUpdateList, ExplosionType);
             }
             else
             {
@@ -693,11 +694,14 @@ class Explosion
                 break;
         }
 
-        if (_floorTilesToUpdate.Count > 0)
+        foreach (var (grid, list) in _tileUpdateDict)
         {
-            _currentGrid?.SetTiles(_floorTilesToUpdate);
-            _floorTilesToUpdate.Clear();
+            if (list.Count > 0)
+            {
+                grid.SetTiles(list);
+            }
         }
+        _tileUpdateDict.Clear();
 
         return processed;
     }
