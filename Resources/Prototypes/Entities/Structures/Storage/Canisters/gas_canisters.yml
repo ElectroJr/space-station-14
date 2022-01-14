@@ -266,9 +266,9 @@
             PlasmaCanisterBroken:
               min: 1
               max: 1
+        - !type:DumpCanisterBehavior
         - !type:DoActsBehavior
           acts: [ "Destruction" ]
-        - !type:DumpCanisterBehavior
 
 - type: entity
   parent: GasCanister

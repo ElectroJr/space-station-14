@@ -36,11 +36,11 @@
         !type:DamageTrigger
         damage: 50
       behaviors:
-      - !type:DoActsBehavior
-        acts: ["Destruction"]
       - !type:PlaySoundBehavior
         sound:
           path: /Audio/Effects/plant_rustle.ogg
+      - !type:DoActsBehavior
+        acts: ["Destruction"]
 
 - type: entity
   id: PottedPlantRandom

@@ -41,11 +41,11 @@
         !type:DamageTrigger
         damage: 200
       behaviors:
-      - !type:DoActsBehavior
-        acts: ["Destruction"]
       - !type:PlaySoundBehavior
         sound:
           path: /Audio/Effects/metalbreak.ogg
+      - !type:DoActsBehavior
+        acts: ["Destruction"]
   - type: ReagentDispenser
     beakerSlot:
       whitelistFailPopup: reagent-dispenser-component-cannot-put-entity-message

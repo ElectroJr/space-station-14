@@ -3,6 +3,7 @@ using Content.Server.Destructible.Thresholds.Behaviors;
 using Content.Server.Destructible.Thresholds.Triggers;
 using Content.Shared.Damage;
 using Robust.Shared.GameObjects;
+using Robust.Shared.Log;
 using Robust.Shared.Serialization.Manager.Attributes;
 using Robust.Shared.ViewVariables;
 
@@ -84,18 +85,25 @@ namespace Content.Server.Destructible.Thresholds
         ///     An instance of <see cref="DestructibleSystem"/> to get dependency and
         ///     system references from, if relevant.
         /// </param>
-        public void Execute(EntityUid owner, DestructibleSystem system, IEntityManager entityManager)
+        /// <returns>False if the entity has been deleted</returns>
+        public bool Execute(EntityUid owner, DestructibleSystem system, IEntityManager entityManager)
         {
             Triggered = true;
 
             foreach (var behavior in Behaviors)
             {
-                // The owner has been deleted. We stop execution of behaviors here.
-                if (!entityManager.EntityExists(owner))
-                    return;
+                if (entityManager.Deleted(owner))
+                {
+                    // Entity was deleted before all behaviors finished? Is there a premature destruction behavior in
+                    // yaml?
+                    Logger.Error($"Entity {entityManager.ToPrettyString(owner)} was deleted before destruction acts could complete.");
+                    return false;
+                }
 
                 behavior.Execute(owner, system);
             }
+
+            return !entityManager.Deleted(owner);
         }
     }
 }

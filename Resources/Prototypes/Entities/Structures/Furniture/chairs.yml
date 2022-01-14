@@ -35,11 +35,11 @@
         !type:DamageTrigger
         damage: 50
       behaviors:
-      - !type:DoActsBehavior
-        acts: ["Destruction"]
       - !type:PlaySoundBehavior
         sound:
           path: /Audio/Effects/metalbreak.ogg
+      - !type:DoActsBehavior
+        acts: ["Destruction"]
 
 - type: entity
   name: chair
@@ -143,8 +143,6 @@
         !type:DamageTrigger
         damage: 25
       behaviors:
-      - !type:DoActsBehavior
-        acts: ["Destruction"]
       - !type:PlaySoundBehavior
         sound:
           path: /Audio/Effects/woodhit.ogg
@@ -153,6 +151,8 @@
           MaterialWoodPlank:
             min: 1
             max: 1
+      - !type:DoActsBehavior
+        acts: ["Destruction"]
   - type: Tag
     tags:
     - Wooden

@@ -44,7 +44,7 @@ namespace Content.Shared.Acts
                 destroyAct.OnDestroy(eventArgs);
             }
 
-            EntityManager.QueueDeleteEntity(owner);
+            Del(owner);
         }
 
         public void HandleBreakage(EntityUid owner)

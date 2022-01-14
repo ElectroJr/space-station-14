@@ -27,11 +27,11 @@
         !type:DamageTrigger
         damage: 100
       behaviors:
-      - !type:DoActsBehavior
-        acts: ["Destruction"]
       - !type:PlaySoundBehavior
         sound:
           path: /Audio/Effects/metalbreak.ogg
+      - !type:DoActsBehavior
+        acts: ["Destruction"]
 
 - type: entity
   abstract: true
