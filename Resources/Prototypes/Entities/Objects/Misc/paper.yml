@@ -23,6 +23,11 @@
           # This default isn't actually explicitly used right now.
           enum.PaperStatus.Blank: paper
           enum.PaperStatus.Written: paper_words
+  - type: Item
+    size: 1
+  - type: Tag
+    tags:
+    - Trash
 
 - type: entity
   parent: Paper
@@ -35,6 +40,9 @@
     # Changing it here is fine - if the PaperStatus key is actually added,
     #  something happened, so that ought to override this either way.
     - state: paper_words
+  - type: Tag
+    tags:
+    - Trash
 
 - type: entity
   parent: PaperWritten
@@ -62,3 +70,4 @@
   - type: Item
     sprite: Objects/Misc/bureaucracy.rsi
     HeldPrefix: pen
+    size: 2

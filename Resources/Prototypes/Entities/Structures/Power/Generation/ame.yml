@@ -154,3 +154,6 @@
   - type: Appearance
     visuals:
     - type: AMEVisualizer
+  - type: Construction
+    graph: ameShielding
+    node: ameShielding

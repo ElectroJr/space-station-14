@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Damage.Prototypes;
 using Content.Shared.FixedPoint;
+using Content.Shared.Inventory;
 using Robust.Shared.GameObjects;
 using Robust.Shared.GameStates;
 using Robust.Shared.IoC;
@@ -348,8 +349,11 @@ namespace Content.Shared.Damage
     ///
     ///     For example, armor.
     /// </summary>
-    public class DamageModifyEvent : EntityEventArgs
+    public class DamageModifyEvent : EntityEventArgs, IInventoryRelayEvent
     {
+        // Whenever locational damage is a thing, this should just check only that bit of armour.
+        public SlotFlags TargetSlots { get; } = ~SlotFlags.POCKET;
+
         public DamageSpecifier Damage;
 
         public DamageModifyEvent(DamageSpecifier damage)
