@@ -359,7 +359,7 @@ namespace Content.Server.Weapon.Ranged.Barrels.Components
                 });
 
 
-                Entities.GetComponent<TransformComponent>(projectile).WorldRotation = projectileAngle + MathHelper.PiOver2;
+                Entities.GetComponent<TransformComponent>(projectile).WorldRotation = projectileAngle - MathHelper.PiOver2;
             }
 
             Entities.EventBus.RaiseLocalEvent(Owner, new GunShotEvent(firedProjectiles));
