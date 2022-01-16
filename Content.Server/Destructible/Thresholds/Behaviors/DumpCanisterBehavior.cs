@@ -9,9 +9,10 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
     [DataDefinition]
     public class DumpCanisterBehavior : IThresholdBehavior
     {
-        public void Execute(EntityUid owner, DestructibleSystem system)
+        public bool Execute(EntityUid owner, DestructibleSystem system)
         {
             system.EntityManager.EntitySysManager.GetEntitySystem<GasCanisterSystem>().PurgeContents(owner);
+            return true;
         }
     }
 }

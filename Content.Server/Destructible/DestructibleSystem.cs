@@ -11,7 +11,6 @@ using Robust.Server.GameObjects;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
 using Robust.Shared.Random;
-using Robust.Shared.Utility;
 using System;
 
 namespace Content.Server.Destructible
@@ -40,16 +39,13 @@ namespace Content.Server.Destructible
         {
             foreach (var threshold in component.Thresholds)
             {
-                if (threshold.Reached(args.Damageable, this))
-                {
-                    RaiseLocalEvent(uid, new DamageThresholdReached(component, threshold));
+                if (!threshold.Reached(args.Damageable, this))
+                    continue;
 
-                    if (!threshold.Execute(uid, this, EntityManager))
-                    {
-                        // entity deleted
-                        return;
-                    }
-                }
+                RaiseLocalEvent(uid, new DamageThresholdReached(component, threshold));
+
+                if (!threshold.Execute(uid, this, EntityManager))
+                    return;
             }
         }
 

@@ -10,15 +10,17 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
     [DataDefinition]
     public class EmptyAllContainersBehaviour : IThresholdBehavior
     {
-        public void Execute(EntityUid owner, DestructibleSystem system)
+        public bool Execute(EntityUid owner, DestructibleSystem system)
         {
             if (!system.EntityManager.TryGetComponent<ContainerManagerComponent>(owner, out var containerManager))
-                return;
+                return true;
 
             foreach (var container in containerManager.GetAllContainers())
             {
                 container.EmptyContainer(true, system.EntityManager.GetComponent<TransformComponent>(owner).Coordinates);
             }
+
+            return true;
         }
     }
 }

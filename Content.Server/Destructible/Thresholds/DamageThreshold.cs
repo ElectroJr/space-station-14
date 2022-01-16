@@ -85,25 +85,22 @@ namespace Content.Server.Destructible.Thresholds
         ///     An instance of <see cref="DestructibleSystem"/> to get dependency and
         ///     system references from, if relevant.
         /// </param>
-        /// <returns>False if the entity has been deleted</returns>
+        /// <returns>
+        ///     Returns true if destructible system should continue executing behaviors. Returns false if it should
+        ///     terminate. Useful for early-termination when taking excess damage and you want to avoid trigging
+        ///     low-damage threshold behaviors.
+        /// </returns>
         public bool Execute(EntityUid owner, DestructibleSystem system, IEntityManager entityManager)
         {
             Triggered = true;
 
             foreach (var behavior in Behaviors)
             {
-                if (entityManager.Deleted(owner))
-                {
-                    // Entity was deleted before all behaviors finished? Is there a premature destruction behavior in
-                    // yaml?
-                    Logger.Error($"Entity {entityManager.ToPrettyString(owner)} was deleted before destruction acts could complete.");
+                if (!behavior.Execute(owner, system))
                     return false;
-                }
-
-                behavior.Execute(owner, system);
             }
 
-            return !entityManager.Deleted(owner);
+            return true;
         }
     }
 }

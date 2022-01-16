@@ -13,9 +13,10 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
     [DataDefinition]
     public class ExplodeBehavior : IThresholdBehavior
     {
-        public void Execute(EntityUid owner, DestructibleSystem system)
+        public bool Execute(EntityUid owner, DestructibleSystem system)
         {
-            system.ExplosionSystem.TriggerExplosive(owner);  
+            system.ExplosionSystem.TriggerExplosive(owner, delete: false);
+            return true;
         }
     }
 }

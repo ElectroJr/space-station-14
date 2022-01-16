@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Content.Shared.Acts;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Serialization.Manager.Attributes;
@@ -21,7 +21,7 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
             return (Acts & act) != 0;
         }
 
-        public void Execute(EntityUid owner, DestructibleSystem system)
+        public bool Execute(EntityUid owner, DestructibleSystem system)
         {
             if (HasAct(ThresholdActs.Breakage))
             {
@@ -31,7 +31,10 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
             if (HasAct(ThresholdActs.Destruction))
             {
                 system.ActSystem.HandleDestruction(owner);
+                return false;
             }
+
+            return true;
         }
     }
 }

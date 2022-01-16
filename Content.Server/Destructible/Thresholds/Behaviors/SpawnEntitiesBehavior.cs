@@ -22,7 +22,7 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
         [DataField("offset")]
         public float Offset { get; set; } = 0.5f;
 
-        public void Execute(EntityUid owner, DestructibleSystem system)
+        public bool Execute(EntityUid owner, DestructibleSystem system)
         {
             var position = system.EntityManager.GetComponent<TransformComponent>(owner).MapPosition;
 
@@ -50,6 +50,8 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
                     }
                 }
             }
+
+            return true;
         }
     }
 }

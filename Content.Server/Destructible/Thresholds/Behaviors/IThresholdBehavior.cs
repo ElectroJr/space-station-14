@@ -1,4 +1,4 @@
-﻿using Robust.Shared.GameObjects;
+using Robust.Shared.GameObjects;
 
 namespace Content.Server.Destructible.Thresholds.Behaviors
 {
@@ -12,6 +12,11 @@ namespace Content.Server.Destructible.Thresholds.Behaviors
         ///     An instance of <see cref="DestructibleSystem"/> to pull dependencies
         ///     and other systems from.
         /// </param>
-        void Execute(EntityUid owner, DestructibleSystem system);
+        /// <returns>
+        ///     Returns true if destructible system should continue executing behaviors. Returns false if it should
+        ///     terminate. Useful for early-termination when taking excess damage and you want to avoid trigging
+        ///     low-damage threshold behaviors.
+        /// </returns>
+        bool Execute(EntityUid owner, DestructibleSystem system);
     }
 }
