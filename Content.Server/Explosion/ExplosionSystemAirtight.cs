@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Content.Server.Atmos.Components;
 using Content.Server.Destructible;
+using Content.Server.Explosion.Components;
 using Content.Shared.Atmos;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
@@ -29,9 +30,8 @@ public sealed partial class ExplosionSystem : EntitySystem
     // grid
     // indices to this tile-data.
     //
-    // Indexing a Dictionary with Vector2ikeys is faster than using a TileRef or (GridId, Vector2i) tuple key. So
-    // given that we process one grid at a time, AFAIK a nested dictionary is just the best option here performance
-    // wise?
+    // Indexing a Dictionary with Vector2ikeys is faster than using a TileRef or (GridId, Vector2i) tuple key. So, AFAIK
+    // a nested dictionary is just the best option here performance wise?
     private Dictionary<GridId, Dictionary<Vector2i, TileData>> _airtightMap = new();
     // EXPLOSION TODO fix shit code
 
@@ -102,20 +102,36 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     public Dictionary<string, float> GetExplosionTolerance(EntityUid uid)
     {
-        // How much total damage is needed to destroy this entity? This also includes "break" behaviors. This
-        // ASSUMES that this will result in a non-airtight entity.
+        // How much total damage is needed to destroy this entity? This also includes "break" behaviors. This ASSUMES
+        // that this will result in a non-airtight entity.Entities that ONLY break via construction graph node changes
+        // are currently effectively "invincible" as far as this is concerned. This really should be done more rigorously.
         var totalDamageTarget = _destructibleSystem.DestroyedAt(uid);
 
         Dictionary<string, float> explosionTolerance = new();
 
-        if (totalDamageTarget == FixedPoint2.MaxValue)
+        if (totalDamageTarget == FixedPoint2.MaxValue || !TryComp(uid, out DamageableComponent? damageable))
             return explosionTolerance;
 
-        // What multiple of each explosion type damage set will result in the damage exceeding the required amount?
-        foreach (var type in _prototypeManager.EnumeratePrototypes<ExplosionPrototype>())
-        {   
-            explosionTolerance[type.ID] =
-                _damageableSystem.InverseResistanceSolve(uid, type.DamagePerIntensity, totalDamageTarget, 1);
+        // What multiple of each explosion type damage set will result in the damage exceeding the required amount? This
+        // does not support entities dynamically changing explosive resistances (e.g. via clothing). But these probably
+        // shouldn't be airtight structures anyways....
+
+        foreach (var explosionType in _prototypeManager.EnumeratePrototypes<ExplosionPrototype>())
+        {
+            // evaluate the damage that this damage type would do to this entity
+            var damagePerIntensity = FixedPoint2.Zero;
+            foreach (var (type, value) in explosionType.DamagePerIntensity.DamageDict)
+            {
+                if (!damageable.Damage.DamageDict.ContainsKey(type))
+                    continue;
+
+                var ev = new GetExplosionResistanceEvent(explosionType.ID);
+                RaiseLocalEvent(uid, ev, false);
+
+                damagePerIntensity += value * Math.Clamp(0, 1 - ev.Resistance, 1);
+            }
+
+            explosionTolerance[explosionType.ID] = (float) ((totalDamageTarget - damageable.TotalDamage) / damagePerIntensity);
         }
 
         return explosionTolerance;

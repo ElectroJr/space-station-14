@@ -9,6 +9,8 @@
   - type: Clothing
     sprite: Clothing/Head/Helmets/bombsuit.rsi
   - type: IngestionBlocker
+  - type: ExplosionResistance
+    resistance: 20 # +60 from body -> 80%
 
 - type: entity
   parent: ClothingHeadBase

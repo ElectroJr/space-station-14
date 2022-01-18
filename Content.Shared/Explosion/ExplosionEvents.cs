@@ -1,4 +1,5 @@
 using Content.Shared.Atmos;
+using Content.Shared.Inventory;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
@@ -24,6 +25,28 @@ public class GridEdgeUpdateEvent : EntityEventArgs
         Reference = reference;
         GridEdges = gridEdges;
         DiagGridEdges = diagGridEdges;
+    }
+}
+
+/// <summary>
+///     Raised directed at an entity to determine its explosion resistance, probably right before it is about to be
+///     damaged by one.
+/// </summary>
+public class GetExplosionResistanceEvent : EntityEventArgs, IInventoryRelayEvent
+{
+    /// <summary>
+    ///     Can be set to whatever, but currently is being additively increased by components & clothing. So think twice
+    ///     before multiplying or directly setting this.
+    /// </summary>
+    public float Resistance = 0;
+
+    public readonly string ExplotionPrototype;
+
+    SlotFlags IInventoryRelayEvent.TargetSlots =>  ~SlotFlags.POCKET;
+
+    public GetExplosionResistanceEvent(string id)
+    {
+        ExplotionPrototype = id;
     }
 }
 

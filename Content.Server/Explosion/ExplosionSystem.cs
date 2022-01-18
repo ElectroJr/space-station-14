@@ -93,6 +93,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // handled in ExplosionSystemGridMap.cs
         SubscribeLocalEvent<GridRemovalEvent>(OnGridRemoved);
         SubscribeLocalEvent<GridStartupEvent>(OnGridStartup);
+        SubscribeLocalEvent<ExplosionResistanceComponent, GetExplosionResistanceEvent>(OnGetExplosion);
         _mapManager.TileChanged += MapManagerOnTileChanged;
 
         // handled in ExplosionSystemAirtight.cs
@@ -102,12 +103,18 @@ public sealed partial class ExplosionSystem : EntitySystem
         _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => EnablePhysicsThrow = value, true);
         _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, value => SleepNodeSys = value, true);
     }
-
     public override void Shutdown()
     {
         base.Shutdown();
         _mapManager.TileChanged -= MapManagerOnTileChanged;
     }
+
+    private void OnGetExplosion(EntityUid uid, ExplosionResistanceComponent component, GetExplosionResistanceEvent args)
+    {
+        if (component.Resistances.TryGetValue(args.ExplotionPrototype, out var resistance))
+            args.Resistance += resistance;
+    }
+
 
     /// <summary>
     ///     Process the explosion queue.
@@ -372,7 +379,8 @@ public sealed partial class ExplosionSystem : EntitySystem
         float intensity,
         DamageSpecifier damage,
         MapCoordinates epicenter,
-        HashSet<EntityUid> processed)
+        HashSet<EntityUid> processed,
+        string id)
     {
         var gridBox = new Box2(tile * grid.TileSize, (grid.TileSize, grid.TileSize));
         var throwForce = 10 * MathF.Sqrt(intensity);
@@ -386,7 +394,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // process those entities
         foreach (var entity in list)
         {
-            ProcessEntity(entity, epicenter, processed, damage, throwForce);
+            ProcessEntity(entity, epicenter, processed, damage, throwForce, id);
         }
 
         // Next, we get the intersecting entities AGAIN, but purely for throwing. This way, glass shards spawned
@@ -403,7 +411,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         {
             // Here we only throw, no dealing damage. Containers n such might drop their entities after being destroyed, but
             // they handle their own damage pass-through.
-            ProcessEntity(e, epicenter, processed, null, throwForce);
+            ProcessEntity(e, epicenter, processed, null, throwForce, id);
         }
     }
 
@@ -417,7 +425,8 @@ public sealed partial class ExplosionSystem : EntitySystem
         float intensity,
         DamageSpecifier damage,
         MapCoordinates epicenter,
-        HashSet<EntityUid> processed)
+        HashSet<EntityUid> processed,
+        string id)
     {
         var gridBox = new Box2(tile * DefaultTileSize, (DefaultTileSize, DefaultTileSize));
         var throwForce = 10 * MathF.Sqrt(intensity);
@@ -434,7 +443,7 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         foreach (var entity in list)
         {
-            ProcessEntity(entity, epicenter, processed, damage, throwForce);
+            ProcessEntity(entity, epicenter, processed, damage, throwForce, id);
         }
 
         if (!EnablePhysicsThrow)
@@ -444,15 +453,14 @@ public sealed partial class ExplosionSystem : EntitySystem
         _entityLookup.FastEntitiesIntersecting(lookup, ref worldBox, callback);
         foreach (var entity in list)
         {
-            ProcessEntity(entity, epicenter, processed, null, throwForce);
+            ProcessEntity(entity, epicenter, processed, null, throwForce, id);
         }
     }
 
     /// <summary>
     ///     This function actually applies the explosion affects to an entity.
     /// </summary>
-    private void ProcessEntity(EntityUid uid, MapCoordinates epicenter, HashSet<EntityUid> processed,
-        DamageSpecifier? damage = null, float? throwForce = null)
+    private void ProcessEntity(EntityUid uid, MapCoordinates epicenter, HashSet<EntityUid> processed, DamageSpecifier? damage, float throwForce, string id)
     {
         // check whether this is a valid target, and whether we have already damaged this entity (can happen with
         // explosion-throwing).
@@ -461,14 +469,21 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         // damage
         if (damage != null)
-            _damageableSystem.TryChangeDamage(uid, damage);
+        {
+            var ev = new GetExplosionResistanceEvent(id);
+            RaiseLocalEvent(uid, ev, false);
+            var coeff = Math.Clamp(0, 1 - ev.Resistance, 1);
+
+            if (!MathHelper.CloseTo(0, coeff))
+                _damageableSystem.TryChangeDamage(uid, damage * coeff, ignoreResistances: true);
+        }
 
         // throw
-        if (throwForce != null && EnablePhysicsThrow &&
+        if (EnablePhysicsThrow &&
             EntityManager.HasComponent<ExplosionLaunchedComponent>(uid) &&
             EntityManager.TryGetComponent(uid, out TransformComponent transform))
         {
-            uid.TryThrow(transform.WorldPosition - epicenter.Position, throwForce.Value);
+            uid.TryThrow(transform.WorldPosition - epicenter.Position, throwForce);
         }
 
         // TODO EXPLOSION puddle / flammable ignite?
@@ -674,7 +689,8 @@ class Explosion
                     _currentIntensity,
                     _currentDamage,
                     Epicenter,
-                    ProcessedEntities);
+                    ProcessedEntities,
+                    ExplosionType.ID);
 
                 _system.DamageFloorTile(tileRef, _currentIntensity, tileUpdateList, ExplosionType);
             }
@@ -687,7 +703,8 @@ class Explosion
                     _currentIntensity,
                     _currentDamage,
                     Epicenter,
-                    ProcessedEntities);
+                    ProcessedEntities,
+                    ExplosionType.ID);
             }
 
             if (!MoveNext())
