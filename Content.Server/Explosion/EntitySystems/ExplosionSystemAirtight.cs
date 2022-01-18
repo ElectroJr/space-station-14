@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Content.Server.Atmos.Components;
 using Content.Server.Destructible;
-using Content.Server.Explosion.Components;
 using Content.Shared.Atmos;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
@@ -12,7 +11,7 @@ using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
-namespace Content.Server.Explosion;
+namespace Content.Server.Explosion.EntitySystems;
 
 public sealed partial class ExplosionSystem : EntitySystem
 {

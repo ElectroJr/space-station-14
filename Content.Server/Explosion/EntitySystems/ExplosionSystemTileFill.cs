@@ -7,7 +7,7 @@ using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
-namespace Content.Server.Explosion;
+namespace Content.Server.Explosion.EntitySystems;
 
 public class GridExplosion
 {

@@ -1,5 +1,5 @@
 using System.Linq;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Server.Pointing.Components;
 using Content.Shared.MobState.Components;
 using Content.Shared.Pointing.Components;

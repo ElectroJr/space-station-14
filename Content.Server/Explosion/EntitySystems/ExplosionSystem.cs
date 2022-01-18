@@ -25,7 +25,7 @@ using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 
-namespace Content.Server.Explosion;
+namespace Content.Server.Explosion.EntitySystems;
 
 public sealed partial class ExplosionSystem : EntitySystem
 {
@@ -162,7 +162,7 @@ public sealed partial class ExplosionSystem : EntitySystem
                 return;
 
             _previousTileIteration = _activeExplosion.CurrentIteration;
-            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_explosionCounter, _previousTileIteration+1));
+            RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_explosionCounter, _previousTileIteration + 1));
             return;
         }
 
@@ -202,7 +202,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             explosive.ExplosionType,
             (float) totalIntensity,
             explosive.IntensitySlope,
-            explosive.MaxIntensity );
+            explosive.MaxIntensity);
 
         if (delete)
             EntityManager.QueueDeleteEntity(uid);
@@ -235,7 +235,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // Instead of a cone, we have a conical frustum.
 
         // Subtract the volume of the missing cone segment, with height:
-        var h =  slope * radius - maxIntensity;
+        var h = slope * radius - maxIntensity;
         return coneVolume - h * MathF.PI / 3 * MathF.Pow(h / slope, 2);
     }
 
@@ -289,7 +289,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         float maxTileIntensity)
     {
         Vector2i initialTile;
-        GridId gridId; 
+        GridId gridId;
         if (_mapManager.TryFindGridAt(epicenter, out var grid) &&
             grid.TryGetTileRef(grid.WorldToTile(epicenter.Position), out var tileRef) &&
             !tileRef.Tile.IsEmpty)
@@ -332,7 +332,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     {
         Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles = new();
 
-        Matrix3 spaceMatrix = Matrix3.Identity;
+        var spaceMatrix = Matrix3.Identity;
 
         if (spaceData != null)
         {
@@ -420,7 +420,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
 
         // process anchored entities
-        bool tileBlocked = false;
+        var tileBlocked = false;
         foreach (var entity in grid.GetAnchoredEntities(tile).ToList())
         {
             ProcessEntity(entity, epicenter, processed, damage, throwForce, id, true);
@@ -628,7 +628,7 @@ class Explosion
                 Lookup = entityMan.GetComponent<EntityLookupComponent>(mapUid),
                 MapGrid = null
             });
-            
+
             _spaceMatrix = spaceData.Matrix;
             _invSpaceMatrix = Matrix3.Invert(spaceData.Matrix);
         }
@@ -701,7 +701,7 @@ class Explosion
     public int Proccess(int processingTarget)
     {
         int processed;
-        
+
         for (processed = 0; processed < processingTarget; processed++)
         {
             if (_currentGrid != null &&

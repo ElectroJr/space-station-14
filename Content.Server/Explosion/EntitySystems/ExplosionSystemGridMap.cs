@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Content.Shared.Atmos;
-using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
-namespace Content.Server.Explosion;
+namespace Content.Server.Explosion.EntitySystems;
 
 /// <summary>
 ///     AAAAAAAAAAA

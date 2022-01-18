@@ -1,5 +1,5 @@
 using Content.Server.Atmos.Components;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Server.Kudzu;
 using Content.Shared.Atmos;
 using JetBrains.Annotations;

@@ -1,5 +1,5 @@
 using Content.Server.EUI;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Administration;
 using Content.Shared.Eui;
 using JetBrains.Annotations;

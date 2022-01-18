@@ -1,6 +1,6 @@
 using Content.Server.Administration.UI;
 using Content.Server.EUI;
-using Content.Server.Explosion;
+using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Administration;
 using Content.Shared.Explosion;
 using Robust.Server.Player;
