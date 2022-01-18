@@ -10,6 +10,7 @@ using Content.Shared.CCVar;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.Maps;
+using Content.Shared.Physics;
 using Robust.Server.Containers;
 using Robust.Server.Player;
 using Robust.Shared.Audio;
@@ -19,6 +20,7 @@ using Robust.Shared.IoC;
 using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Physics;
 using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
@@ -371,9 +373,29 @@ public sealed partial class ExplosionSystem : EntitySystem
 
     #region Processing
     /// <summary>
+    ///     Determines whether an entity is blocking a tile or not. (whether it can prevent the tile from being uprooted by an explosion).
+    /// </summary>
+    /// <remarks>
+    ///     Used for a bariation of <see cref="TurfHelpers.IsBlockedTurf()"/> that makes use of the fact that we have already done
+    ///     an entity lookup and don't need to do so again.
+    /// </remarks>
+    public bool IsBlockingTurf(EntityUid uid)
+    {
+        if (EntityManager.IsQueuedForDeletion(uid))
+            return false;
+
+        if (!TryComp(uid, out IPhysBody? body))
+            return false;
+
+        return body.CanCollide && body.Hard && (body.CollisionLayer & (int) CollisionGroup.Impassable) != 0;
+    }
+
+
+    /// <summary>
     ///     Find entities on a grid tile using the EntityLookupComponent and apply explosion effects. 
     /// </summary>
-    internal void ExplodeTile(EntityLookupComponent lookup,
+    /// <returns>True if the underlying tile can be uprooted, false if the tile is blocked by a dense entity</returns>
+    internal bool ExplodeTile(EntityLookupComponent lookup,
         IMapGrid grid,
         Vector2i tile,
         float intensity,
@@ -389,20 +411,27 @@ public sealed partial class ExplosionSystem : EntitySystem
         // enumerator-changed-while-enumerating errors.
         List<EntityUid> list = new();
         _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity));
-        list.AddRange(grid.GetAnchoredEntities(tile));
 
         // process those entities
         foreach (var entity in list)
         {
-            ProcessEntity(entity, epicenter, processed, damage, throwForce, id);
+            ProcessEntity(entity, epicenter, processed, damage, throwForce, id, false);
+        }
+
+        // process anchored entities
+        bool tileBlocked = true;
+        foreach (var entity in grid.GetAnchoredEntities(tile).ToList())
+        {
+            ProcessEntity(entity, epicenter, processed, damage, throwForce, id, true);
+            tileBlocked |= IsBlockingTurf(entity);
         }
 
         // Next, we get the intersecting entities AGAIN, but purely for throwing. This way, glass shards spawned
         // from windows will be flung outwards, and not stay where they spawned. This is however somewhat
-        // unnecessary, and a prime candidate for computational cost-cutting
+        // unnecessary, and a prime candidate for computational cost-cutting.
         // TODO EXPLOSIONS PERFORMANCE keep this?
         if (!EnablePhysicsThrow)
-            return;
+            return !tileBlocked;
 
         list.Clear();
         _entityLookup.FastEntitiesIntersecting(lookup, ref gridBox, entity => list.Add(entity));
@@ -411,8 +440,10 @@ public sealed partial class ExplosionSystem : EntitySystem
         {
             // Here we only throw, no dealing damage. Containers n such might drop their entities after being destroyed, but
             // they handle their own damage pass-through.
-            ProcessEntity(e, epicenter, processed, null, throwForce, id);
+            ProcessEntity(e, epicenter, processed, null, throwForce, id, false);
         }
+
+        return !tileBlocked;
     }
 
     /// <summary>
@@ -443,7 +474,7 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         foreach (var entity in list)
         {
-            ProcessEntity(entity, epicenter, processed, damage, throwForce, id);
+            ProcessEntity(entity, epicenter, processed, damage, throwForce, id, false);
         }
 
         if (!EnablePhysicsThrow)
@@ -453,18 +484,18 @@ public sealed partial class ExplosionSystem : EntitySystem
         _entityLookup.FastEntitiesIntersecting(lookup, ref worldBox, callback);
         foreach (var entity in list)
         {
-            ProcessEntity(entity, epicenter, processed, null, throwForce, id);
+            ProcessEntity(entity, epicenter, processed, null, throwForce, id, false);
         }
     }
 
     /// <summary>
     ///     This function actually applies the explosion affects to an entity.
     /// </summary>
-    private void ProcessEntity(EntityUid uid, MapCoordinates epicenter, HashSet<EntityUid> processed, DamageSpecifier? damage, float throwForce, string id)
+    private void ProcessEntity(EntityUid uid, MapCoordinates epicenter, HashSet<EntityUid> processed, DamageSpecifier? damage, float throwForce, string id, bool anchored)
     {
         // check whether this is a valid target, and whether we have already damaged this entity (can happen with
         // explosion-throwing).
-        if (_containerSystem.IsEntityInContainer(uid) || !processed.Add(uid))
+        if (!anchored && _containerSystem.IsEntityInContainer(uid) || !processed.Add(uid))
             return;
 
         // damage
@@ -479,9 +510,10 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
 
         // throw
-        if (EnablePhysicsThrow &&
-            EntityManager.HasComponent<ExplosionLaunchedComponent>(uid) &&
-            EntityManager.TryGetComponent(uid, out TransformComponent transform))
+        if (!anchored
+            && EnablePhysicsThrow
+            && HasComp<ExplosionLaunchedComponent>(uid)
+            && TryComp(uid, out TransformComponent? transform))
         {
             uid.TryThrow(transform.WorldPosition - epicenter.Position, throwForce);
         }
@@ -500,9 +532,6 @@ public sealed partial class ExplosionSystem : EntitySystem
         List<(Vector2i GridIndices, Tile Tile)> damagedTiles,
         ExplosionPrototype type)
     {
-        if (tileRef.Tile.IsEmpty || tileRef.IsBlockedTurf(false))
-            return;
-
         var tileDef = _tileDefinitionManager[tileRef.Tile.TypeId];
 
         while (_robustRandom.Prob(type.TileBreakChance(intensity)))
@@ -683,7 +712,7 @@ class Explosion
                     _tileUpdateDict[_currentGrid] = tileUpdateList;
                 }
 
-                _system.ExplodeTile(_currentLookup,
+                var canDamageFloor = _system.ExplodeTile(_currentLookup,
                     _currentGrid,
                     _currentEnumerator.Current,
                     _currentIntensity,
@@ -692,7 +721,8 @@ class Explosion
                     ProcessedEntities,
                     ExplosionType.ID);
 
-                _system.DamageFloorTile(tileRef, _currentIntensity, tileUpdateList, ExplosionType);
+                if (canDamageFloor)
+                    _system.DamageFloorTile(tileRef, _currentIntensity, tileUpdateList, ExplosionType);
             }
             else
             {
