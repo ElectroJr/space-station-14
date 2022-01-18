@@ -1,7 +1,7 @@
 using System;
 using Content.Server.Atmos.EntitySystems;
 using Content.Server.Body.Components;
-using Content.Server.Explosion.EntitySystems;
+using Content.Server.Explosion;
 using Content.Server.UserInterface;
 using Content.Shared.ActionBlocker;
 using Content.Shared.Actions;
@@ -259,14 +259,14 @@ namespace Content.Server.Atmos.Components
                 var range = (pressure - TankFragmentPressure) / TankFragmentScale;
 
                 // Let's cap the explosion, yeah?
+                // !1984
                 if (range > MaxExplosionRange)
                 {
                     range = MaxExplosionRange;
                 }
 
-                EntitySystem.Get<ExplosionSystem>().SpawnExplosion(Owner, (int) (range * 0.25f), (int) (range * 0.5f), (int) (range * 1.5f), 1);
+                EntitySystem.Get<ExplosionSystem>().TriggerExplosive(Owner, radius: range);
 
-                _entMan.QueueDeleteEntity(Owner);
                 return;
             }
 

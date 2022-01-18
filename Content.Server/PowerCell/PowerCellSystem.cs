@@ -1,6 +1,6 @@
 using Content.Server.Administration.Logs;
 using Content.Server.Chemistry.EntitySystems;
-using Content.Server.Explosion.EntitySystems;
+using Content.Server.Explosion;
 using Content.Server.Power.Components;
 using Content.Shared.Database;
 using Content.Shared.Examine;
@@ -67,10 +67,10 @@ public class PowerCellSystem : SharedPowerCellSystem
         if (!Resolve(uid, ref battery))
             return;
 
-        var heavy = (int) Math.Ceiling(Math.Sqrt(battery.CurrentCharge) / 60);
-        var light = (int) Math.Ceiling(Math.Sqrt(battery.CurrentCharge) / 30);
+        var radius = MathF.Min(5, MathF.Ceiling(MathF.Sqrt(battery.CurrentCharge) / 30));
+        battery.CurrentCharge = 0;
 
-        _explosionSystem.SpawnExplosion(uid, 0, heavy, light, light * 2);
+        _explosionSystem.TriggerExplosive(uid, radius: radius);
         QueueDel(uid);
     }
 

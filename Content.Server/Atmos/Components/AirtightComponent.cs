@@ -1,12 +1,14 @@
 using Content.Server.Atmos.EntitySystems;
 using Content.Shared.Atmos;
+using Content.Shared.Explosion;
 using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Serialization.Manager.Attributes;
 using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom;
+using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype.Dictionary;
 using Robust.Shared.ViewVariables;
+using System.Collections.Generic;
 
 namespace Content.Server.Atmos.Components
 {
@@ -41,6 +43,19 @@ namespace Content.Server.Atmos.Components
         [ViewVariables]
         [DataField("noAirWhenFullyAirBlocked")]
         public bool NoAirWhenFullyAirBlocked { get; set; } = true;
+
+        /// <summary>
+        ///     How many multiples of the base explosion damage that this entity can receive before being destroyed.
+        /// </summary>
+        /// <remarks>
+        ///     This is used by the explosion system when figuring out what area is affected by an explosion. If not
+        ///     specified, this will be computed upon initialization based on the entities destruction threshold and
+        ///     resistance to explosion damage. In order to avoid unnecessary computation at start-up, common structures
+        ///     like walls should probably specify this. This value will also be updated whenever the entity takes
+        ///     damage.
+        /// </remarks>
+        [DataField("explosionTolerance", customTypeSerializer: typeof(PrototypeIdDictionarySerializer<float, ExplosionPrototype>))]
+        public Dictionary<string, float>? ExplosionTolerance;
 
         public AtmosDirection AirBlockedDirection => (AtmosDirection)CurrentAirBlockedDirection;
     }
