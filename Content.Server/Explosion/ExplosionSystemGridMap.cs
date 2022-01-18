@@ -74,14 +74,6 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     private Dictionary<GridId, HashSet<Vector2i>> _diagGridEdges = new();
 
-    public void SendEdges(GridId referenceGrid)
-    {
-        // temporary for debugging.
-        // todo remove
-
-        RaiseNetworkEvent(new GridEdgeUpdateEvent(referenceGrid, _gridEdges, _diagGridEdges));
-    }
-
     /// <summary>
     ///     On grid startup, prepare a map of grid edges.
     /// </summary>

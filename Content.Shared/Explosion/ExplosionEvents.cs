@@ -9,25 +9,6 @@ using System.Collections.Generic;
 
 namespace Content.Shared.Explosion;
 
-// Temporary file for testing multi-grid explosions
-// TODO EXPLOSIONS REMOVE
-[Serializable, NetSerializable]
-public class GridEdgeUpdateEvent : EntityEventArgs
-{
-    public GridId Reference;
-    public Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> GridEdges;
-    public Dictionary<GridId, HashSet<Vector2i>> DiagGridEdges;
-
-    public GridEdgeUpdateEvent(GridId reference,
-        Dictionary<GridId, Dictionary<Vector2i, AtmosDirection>> gridEdges,
-        Dictionary<GridId, HashSet<Vector2i>> diagGridEdges)
-    {
-        Reference = reference;
-        GridEdges = gridEdges;
-        DiagGridEdges = diagGridEdges;
-    }
-}
-
 /// <summary>
 ///     Raised directed at an entity to determine its explosion resistance, probably right before it is about to be
 ///     damaged by one.
