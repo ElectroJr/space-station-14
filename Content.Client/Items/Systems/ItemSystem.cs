@@ -25,7 +25,7 @@ public sealed class ItemSystem : SharedItemSystem
     {
         base.Initialize();
 
-        SubscribeLocalEvent<SharedItemComponent, GetHeldVisualsEvent>(OnGetVisuals);
+        SubscribeLocalEvent<SharedItemComponent, GetInhandVisualsEvent>(OnGetVisuals);
     }
 
     #region InhandVisuals
@@ -45,7 +45,7 @@ public sealed class ItemSystem : SharedItemSystem
     /// <summary>
     ///     An entity holding this item is requesting visual information for in-hand sprites.
     /// </summary>
-    private void OnGetVisuals(EntityUid uid, SharedItemComponent item, GetHeldVisualsEvent args)
+    private void OnGetVisuals(EntityUid uid, SharedItemComponent item, GetInhandVisualsEvent args)
     {
         var defaultKey = $"inhand-{args.Location.ToString().ToLowerInvariant()}";
 

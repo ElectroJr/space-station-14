@@ -22,7 +22,7 @@ public sealed class HandheldLightSystem : EntitySystem
     {
         base.Initialize();
         SubscribeLocalEvent<HandheldLightComponent, ComponentHandleState>(OnHandleState);
-        SubscribeLocalEvent<HandheldLightComponent, GetHeldVisualsEvent>(OnGetHeldVisuals, after: new[] { typeof(ItemSystem) } );
+        SubscribeLocalEvent<HandheldLightComponent, GetInhandVisualsEvent>(OnGetHeldVisuals, after: new[] { typeof(ItemSystem) } );
         SubscribeLocalEvent<HandheldLightComponent, GetEquipmentVisualsEvent>(OnGetEquipmentVisuals, after: new[] { typeof(ClothingSystem)});
     }
 
@@ -54,7 +54,7 @@ public sealed class HandheldLightSystem : EntitySystem
     /// <summary>
     ///     Add the unshaded light overlays to any in-hand sprites.
     /// </summary>
-    private void OnGetHeldVisuals(EntityUid uid, HandheldLightComponent component, GetHeldVisualsEvent args)
+    private void OnGetHeldVisuals(EntityUid uid, HandheldLightComponent component, GetInhandVisualsEvent args)
     {
         if (!component.Activated)
             return;

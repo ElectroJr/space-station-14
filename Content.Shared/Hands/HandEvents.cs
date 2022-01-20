@@ -13,7 +13,7 @@ namespace Content.Shared.Hands
     /// <summary>
     ///     Raised directed at an item that needs to update its in-hand sprites/layers.
     /// </summary>
-    public class GetHeldVisualsEvent : EntityEventArgs
+    public class GetInhandVisualsEvent : EntityEventArgs
     {
         /// <summary>
         ///     Entity that owns the hand holding the item.
@@ -30,7 +30,7 @@ namespace Content.Shared.Hands
         /// </remarks>
         public List<(string, PrototypeLayerData)> Layers = new();
 
-        public GetHeldVisualsEvent(EntityUid user, HandLocation location)
+        public GetInhandVisualsEvent(EntityUid user, HandLocation location)
         {
             User = user;
             Location = location;

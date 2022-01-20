@@ -226,7 +226,7 @@ namespace Content.Client.Hands
                 return;
             }
 
-            var ev = new GetHeldVisualsEvent(uid, hand.Location);
+            var ev = new GetInhandVisualsEvent(uid, hand.Location);
             RaiseLocalEvent(held, ev, false);
 
             if (ev.Layers.Count == 0)
