@@ -8,6 +8,17 @@
     tags:
     - Flashlight
   - type: HandheldLight
+    inhandVisuals:
+      left:
+      - sprite: Objects/Tools/flashlight.rsi
+        shader: unshaded
+        state: on-inhand-left
+        map: [ "light" ]
+      right:
+      - sprite: Objects/Tools/flashlight.rsi
+        shader: unshaded
+        state: on-inhand-right
+        map: [ "light" ]
   - type: ItemActions
     actions:
       - actionType: ToggleLight
@@ -21,10 +32,11 @@
       - state: flashlight-overlay
         shader: unshaded
         visible: false
+        map: [ "light" ]
   - type: Item
     sprite: Objects/Tools/flashlight.rsi
-    HeldPrefix: off
   - type: PointLight
+    netsync: false
     enabled: false
     mask: /Textures/Effects/LightMasks/cone.png
     autoRot: true
@@ -49,6 +61,7 @@
       - state: seclite-overlay
         shader: unshaded
         visible: false
+        map: [ "light" ]
   - type: Item
     sprite: Objects/Tools/seclite.rsi
   - type: PointLight

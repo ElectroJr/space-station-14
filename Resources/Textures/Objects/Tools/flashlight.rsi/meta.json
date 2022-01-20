@@ -17,11 +17,11 @@
       "name": "flashlight-overlay"
     },
     {
-      "name": "off-inhand-left",
+      "name": "inhand-left",
       "directions": 4
     },
     {
-      "name": "off-inhand-right",
+      "name": "inhand-right",
       "directions": 4
     },
     {

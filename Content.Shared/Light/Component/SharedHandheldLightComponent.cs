@@ -2,6 +2,7 @@ using System;
 using Robust.Shared.GameObjects;
 using Robust.Shared.GameStates;
 using Robust.Shared.Serialization;
+using Robust.Shared.Serialization.Manager.Attributes;
 
 namespace Content.Shared.Light.Component
 {
@@ -16,8 +17,11 @@ namespace Content.Shared.Light.Component
         {
             public byte? Charge { get; }
 
-            public HandheldLightComponentState(byte? charge)
+            public bool Activated { get; }
+
+            public HandheldLightComponentState(bool activated, byte? charge)
             {
+                Activated = activated;
                 Charge = charge;
             }
         }
@@ -26,6 +30,7 @@ namespace Content.Shared.Light.Component
     [Serializable, NetSerializable]
     public enum HandheldLightVisuals
     {
+        Activated,
         Power
     }
 
