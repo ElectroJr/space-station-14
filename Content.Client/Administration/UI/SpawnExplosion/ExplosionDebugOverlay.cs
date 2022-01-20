@@ -79,7 +79,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
                     matrix = SpaceMatrix;
                 }
 
-                for (int i = 0; i < Intensity.Count; i++)
+                for (int i = 1; i < Intensity.Count; i++)
                 {
                     if (!tileSetList.TryGetValue(i, out var tiles)) continue;
                     foreach (var tile in tiles)

@@ -31,7 +31,9 @@ namespace Content.Server.Administration.UI
             if (request.TotalIntensity <= 0 || request.IntensitySlope <= 0)
                 return;
 
+            var sys = EntitySystem.Get<ExplosionSystem>();
             var mapManager = IoCManager.Resolve<IMapManager>();
+            var refGridId = sys.GetReferenceGrid(request.Epicenter, request.TotalIntensity, request.IntensitySlope);
 
             Vector2i initialTile;
             GridId gridId;
@@ -45,17 +47,23 @@ namespace Content.Server.Administration.UI
             else
             {
                 gridId = GridId.Invalid; // implies space
-                initialTile = new Vector2i(
-                    (int) Math.Floor(request.Epicenter.Position.X / ExplosionSystem.DefaultTileSize),
-                    (int) Math.Floor(request.Epicenter.Position.Y / ExplosionSystem.DefaultTileSize));
+                if (refGridId.IsValid())
+                {
+                    initialTile = mapManager.GetGrid(refGridId).WorldToTile(request.Epicenter.Position);
+                }
+                else
+                {
+                    initialTile = new Vector2i(
+                        (int) Math.Floor(request.Epicenter.Position.X / ExplosionSystem.DefaultTileSize),
+                        (int) Math.Floor(request.Epicenter.Position.Y / ExplosionSystem.DefaultTileSize));
+                }
             }
-
-            var sys = EntitySystem.Get<ExplosionSystem>();
 
             var (tileSetIntensity, spaceData, gridData) = sys.GetExplosionTiles(
                 request.Epicenter.MapId,
                 gridId,
                 initialTile,
+                refGridId,
                 request.TypeId,
                 request.TotalIntensity,
                 request.IntensitySlope,

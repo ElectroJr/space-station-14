@@ -209,7 +209,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     }
 
     /// <summary>
-    ///     Find the strength needed to generate an explosion of a given radius
+    ///     Find the strength needed to generate an explosion of a given radius. More useful for radii larger then 4, when the explosion becomes less "blocky".
     /// </summary>
     /// <remarks>
     ///     This assumes the explosion is in a vacuum / unobstructed. Given that explosions are not perfectly
@@ -237,6 +237,13 @@ public sealed partial class ExplosionSystem : EntitySystem
         // Subtract the volume of the missing cone segment, with height:
         var h = slope * radius - maxIntensity;
         return coneVolume - h * MathF.PI / 3 * MathF.Pow(h / slope, 2);
+    }
+
+    // inverse of RadiusToIntensity, if you neglect maxIntensity.
+    // only needed for getting nearby grids, so good enough for me.
+    public float ApproxIntensityToRadius(float totalIntensity, float slope)
+    {
+        return MathF.Cbrt(3 * totalIntensity / (slope * MathF.PI));
     }
 
     #region Queueing
@@ -290,6 +297,8 @@ public sealed partial class ExplosionSystem : EntitySystem
     {
         Vector2i initialTile;
         GridId gridId;
+        var refGridId = GetReferenceGrid(epicenter, totalIntensity, slope);
+
         if (_mapManager.TryFindGridAt(epicenter, out var grid) &&
             grid.TryGetTileRef(grid.WorldToTile(epicenter.Position), out var tileRef) &&
             !tileRef.Tile.IsEmpty)
@@ -300,12 +309,20 @@ public sealed partial class ExplosionSystem : EntitySystem
         else
         {
             gridId = GridId.Invalid; // implies space
-            initialTile = new Vector2i(
-                (int) Math.Floor(epicenter.Position.X / DefaultTileSize),
-                (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));
-        }
 
-        var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, type.ID, totalIntensity, slope, maxTileIntensity);
+            if (refGridId.IsValid())
+            {
+                initialTile = _mapManager.GetGrid(refGridId).WorldToTile(epicenter.Position);
+            }
+            else
+            {
+                initialTile = new Vector2i(
+                    (int) Math.Floor(epicenter.Position.X / DefaultTileSize),
+                    (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));
+            }
+        }
+        
+        var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, refGridId, type.ID, totalIntensity, slope, maxTileIntensity);
 
         RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceData, gridData.Values, tileSetIntensity));
 
@@ -326,6 +343,29 @@ public sealed partial class ExplosionSystem : EntitySystem
             gridData.Values.ToList(),
             tileSetIntensity,
             epicenter);
+    }
+
+    /// <summary>
+    ///     Look for grids in an area and select the heaviest one to orient an explosion in space.
+    /// </summary>
+    public GridId GetReferenceGrid(MapCoordinates epicenter, float totalIntensity, float slope)
+    {
+        var diameter = 2 * ApproxIntensityToRadius(totalIntensity, slope);
+
+        GridId result = GridId.Invalid;
+        float mass = 0;
+
+        var grids = _mapManager.FindGridsIntersecting(epicenter.MapId, Box2.CenteredAround(epicenter.Position, (diameter, diameter)));
+        foreach (var grid in grids)
+        {
+            if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
+            {
+                mass = physics.Mass;
+                result = grid.Index;
+            }
+        }
+
+        return result;
     }
 
     public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, SpaceExplosion? spaceData, IEnumerable<GridExplosion> gridData, List<float> tileSetIntensity)

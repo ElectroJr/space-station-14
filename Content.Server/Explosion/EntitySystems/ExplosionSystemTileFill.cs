@@ -434,10 +434,10 @@ public class SpaceExplosion
 
     public SpaceExplosion(ExplosionSystem system, float tileSize, float intensityStepSize, MapId targetMap, GridId targetGridId)
     {
-        // TODO transform only in-range grids
-        // TODO for source-grid... don't transform, just add to map
-        // TODO for source-grid don't check unblocked directions... just block.
-        // TODO merge EdgeData and GridBlockMap
+        // TODO EXPLOSION transform only in-range grids
+        // TODO EXPLOSION for source-grid... don't transform, just add to map
+        // TODO EXPLOSION for source-grid don't check unblocked directions... just block.
+        // TODO EXPLOSION merge EdgeData and GridBlockMap
 
         BlockMap = system.TransformGridEdges(targetMap, targetGridId);
         system.GetUnblockedDirections(BlockMap, tileSize);
@@ -705,8 +705,10 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     This is the main explosion generating function. 
     /// </summary>
+    /// <param name="map"></param>
     /// <param name="gridId">The grid where the epicenter tile is located</param>
     /// <param name="initialTile"> The initial "epicenter" tile.</param>
+    /// <param name="referenceGrid">This grid (if any) determines the orientation of the explosion in space.</param>
     /// <param name="typeID">The explosion type. this determines the explosion damage</param>
     /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
     /// explosion</param>
@@ -718,6 +720,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         MapId map,
         GridId gridId,
         Vector2i initialTile,
+        GridId referenceGrid,
         string typeID,
         float totalIntensity,
         float slope,
@@ -732,14 +735,11 @@ public sealed partial class ExplosionSystem : EntitySystem
         var intensityStepSize = slope / 2;
 
         HashSet<Vector2i> spaceTiles = new();
-        HashSet<Vector2i> previousSpaceTiles = new();
+        HashSet<Vector2i> previousSpaceTiles;
 
         HashSet<GridId> knownGrids = new();
         Dictionary<GridId, HashSet<Vector2i>> gridTileSets = new();
-        Dictionary<GridId, HashSet<Vector2i>> previousGridTileSets = new();
-
-        // EXPLOSION TODO
-        // intelligent space-orientation determination.
+        Dictionary<GridId, HashSet<Vector2i>> previousGridTileSets;
 
         // is the explosion starting on a grid
         if (gridId.IsValid())
@@ -755,7 +755,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
         else
         {
-            spaceData = new(this, DefaultTileSize, intensityStepSize, map, GridId.Invalid);
+            spaceData = new(this, DefaultTileSize, intensityStepSize, map, referenceGrid);
             spaceData.Processed.Add(initialTile);
             spaceData.TileSets[0] = new() { initialTile };
 
@@ -853,7 +853,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             }
             else if (previousSpaceTiles.Count != 0)
             {
-                spaceData = new(this, _mapManager.GetGrid(gridId).TileSize, intensityStepSize, map, gridId);
+                spaceData = new(this, _mapManager.GetGrid(gridId).TileSize, intensityStepSize, map, referenceGrid);
                 newTileCount += spaceData.AddNewTiles(iteration, previousSpaceTiles, gridTileSets);
             }
 
