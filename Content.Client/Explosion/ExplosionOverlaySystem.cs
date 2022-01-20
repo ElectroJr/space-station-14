@@ -25,7 +25,7 @@ public sealed class ExplosionOverlaySystem : EntitySystem
     /// <summary>
     ///     For how many seconds should an explosion stay on-screen once it has finished expanding?
     /// </summary>
-    public const float ExplosionPersistence = 0.2f;
+    public const float ExplosionPersistence = 0.3f;
 
     public override void Initialize()
     {
