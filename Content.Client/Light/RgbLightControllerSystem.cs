@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Content.Client.Clothing;
 using Content.Client.Items.Systems;
 using Content.Shared.Clothing;
@@ -118,12 +119,14 @@ namespace Content.Client.Light
             rgb.OriginalLightColor = light.Color;
             rgb.OriginalLayerColors = new();
 
+            var layerCount = sprite.AllLayers.Count();
+
             // if layers is null, get unshaded layers
             if (rgb.Layers == null)
             {
                 rgb.Layers = new();
 
-                for (var i = 0; i < sprite.LayerCount; i++)
+                for (var i = 0; i < layerCount; i++)
                 {
                     if (sprite[i] is Layer layer && layer.ShaderPrototype == "unshaded")
                     {
@@ -136,7 +139,7 @@ namespace Content.Client.Light
 
             foreach (var index in rgb.Layers.ToArray())
             {
-                if (index < sprite.LayerCount)
+                if (index < layerCount)
                     rgb.OriginalLayerColors[index] = sprite[index].Color;
                 else
                 {
