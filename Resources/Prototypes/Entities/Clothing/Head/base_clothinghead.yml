@@ -74,6 +74,7 @@
     # right now there is no power system for hardsuits
     # so hardsuit helmet just have small battery inside
   - type: HandheldLight
+    addPrefix: true
   - type: PowerCellSlot
     cellSlot:
       startingItem: PowerCellHardsuitHelmet # self recharging

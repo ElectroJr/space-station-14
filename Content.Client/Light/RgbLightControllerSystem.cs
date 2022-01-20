@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Content.Client.Clothing;
 using Content.Client.Items.Systems;
+using Content.Shared.Clothing;
 using Content.Shared.Hands;
 using Content.Shared.Inventory.Events;
 using Content.Shared.Light;

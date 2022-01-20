@@ -16,6 +16,7 @@
       shader: unshaded
       map: [ "light" ]
   - type: HandheldLight
+    addPrefix: false
     inhandVisuals:
       left:
       - state: inhand-left-light

@@ -154,12 +154,6 @@ namespace Content.Server.Light.EntitySystems
         {
             if (!component.Activated) return false;
 
-
-            if (TryComp(component.Owner, out AppearanceComponent? appearance))
-            {
-                appearance.SetData(HandheldLightVisuals.Activated, false);
-            }
-
             component.Activated = false;
             UpdateLightAction(component);
             _activeLights.Remove(component);
@@ -193,11 +187,6 @@ namespace Content.Server.Light.EntitySystems
                 _popup.PopupEntity(Loc.GetString("handheld-light-component-cell-dead-message"), component.Owner, Filter.Entities(user));
                 UpdateLightAction(component);
                 return false;
-            }
-
-            if (TryComp(component.Owner, out AppearanceComponent? appearance))
-            {
-                appearance.SetData(HandheldLightVisuals.Activated, true);
             }
 
             component.Activated = true;

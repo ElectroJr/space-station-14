@@ -13,12 +13,6 @@ namespace Content.Client.Light.Visualizers
     [UsedImplicitly]
     public class FlashLightVisualizer : AppearanceVisualizer
     {
-        /// <summary>
-        ///     Sprite layer that will have it's visibility toggled when this item is toggled.
-        /// </summary>
-        [DataField("layer")]
-        public string Layer = "light";
-
         private readonly Animation _radiatingLightAnimation = new()
         {
             Length = TimeSpan.FromSeconds(1),
@@ -67,23 +61,6 @@ namespace Content.Client.Light.Visualizers
         public override void OnChangeData(AppearanceComponent component)
         {
             base.OnChangeData(component);
-
-            var entMan = IoCManager.Resolve<IEntityManager>(); 
-
-            if (component.TryGetData(HandheldLightVisuals.Activated,
-                out bool activated))
-            {
-
-                if (entMan.TryGetComponent(component.Owner, out SpriteComponent? sprite))
-                {
-                    sprite.LayerSetVisible(Layer, activated);
-                }
-
-                if (entMan.TryGetComponent(component.Owner, out PointLightComponent? light))
-                {
-                    light.Enabled = activated;
-                }
-            }
 
             if (component.TryGetData(HandheldLightVisuals.Power,
                 out HandheldLightPowerStates state))

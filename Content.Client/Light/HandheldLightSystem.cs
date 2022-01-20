@@ -1,9 +1,11 @@
 using Content.Client.Clothing;
 using Content.Client.Items.Systems;
 using Content.Client.Light.Components;
+using Content.Shared.Clothing;
 using Content.Shared.Hands;
 using Content.Shared.Item;
 using Content.Shared.Light.Component;
+using Robust.Client.GameObjects;
 using Robust.Shared.GameObjects;
 using Robust.Shared.GameStates;
 using Robust.Shared.IoC;
@@ -85,12 +87,22 @@ public sealed class HandheldLightSystem : EntitySystem
         if (state.Activated == component.Activated)
             return;
 
-        // really hand-held lights should be using a separate unshaded layer. (see FlashlightVisualizer)
-        // this prefix stuff is largely for backwards compatibility with RSIs/yamls that have not been updated.
-        if (TryComp(uid, out SharedItemComponent? item))
-            item.EquippedPrefix = state.Activated ? "on" : "off";
-
         component.Activated = state.Activated;
         _itemSys.VisualsChanged(uid);
+
+        if (TryComp(component.Owner, out SpriteComponent? sprite))
+        {
+            sprite.LayerSetVisible(component.Layer, state.Activated);
+        }
+
+        if (TryComp(uid, out PointLightComponent? light))
+        {
+            light.Enabled = state.Activated;
+        }
+
+        // really hand-held lights should be using a separate unshaded layer. (see FlashlightVisualizer)
+        // this prefix stuff is largely for backwards compatibility with RSIs/yamls that have not been updated.
+        if (component.AddPrefix && TryComp(uid, out SharedItemComponent? item))
+            item.EquippedPrefix = state.Activated ? "on" : "off";
     }
 }
