@@ -41,7 +41,6 @@ public sealed partial class ExplosionSystem : EntitySystem
     public (List<float>, SpaceExplosion?, Dictionary<GridId, GridExplosion>)? GetExplosionTiles(
         MapCoordinates epicenter,
         Vector2i initialTile,
-        GridId referenceGrid,
         string typeID,
         float totalIntensity,
         float slope,
@@ -52,7 +51,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             return null;
 
         GridId? epicentreGrid = null;
-        var refGridId = GetReferenceGrid(epicenter, totalIntensity, slope);
+        var referenceGrid = GetReferenceGrid(epicenter, totalIntensity, slope);
 
         // get the epicenter tile indices
         if (_mapManager.TryFindGridAt(epicenter, out var candidateGrid) &&
@@ -62,9 +61,9 @@ public sealed partial class ExplosionSystem : EntitySystem
             epicentreGrid = candidateGrid.Index;
             initialTile = tileRef.GridIndices;
         }
-        else if (refGridId != null)
+        else if (referenceGrid != null)
         {
-            initialTile = _mapManager.GetGrid(refGridId!.Value).WorldToTile(epicenter.Position);
+            initialTile = _mapManager.GetGrid(referenceGrid!.Value).WorldToTile(epicenter.Position);
         }
         else
         {
@@ -91,6 +90,9 @@ public sealed partial class ExplosionSystem : EntitySystem
         Dictionary<GridId, HashSet<Vector2i>> spaceToGridTiles = new();
         Dictionary<GridId, HashSet<Vector2i>> previousSpaceToGrid;
 
+        // matrix for transforming between grid and space-coordiantes
+        var SpaceMatrix = Matrix3.Identity;
+
         // is the explosion starting on a grid?
         if (epicentreGrid != null)
         {
@@ -109,7 +111,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         else
         {
             // set up the space explosion data
-            spaceData = new(this, DefaultTileSize, stepSize, epicenter.MapId, referenceGrid);
+            spaceData = new SpaceExplosion(this, DefaultTileSize, stepSize, epicenter.MapId, referenceGrid);
             spaceData.Processed.Add(initialTile);
             spaceData.TileSets[0] = new() { initialTile };
 
@@ -120,12 +122,12 @@ public sealed partial class ExplosionSystem : EntitySystem
             {
                 foreach (var edge in blocker.BlockingGridEdges)
                 {
-                    if (!edge.Grid.IsValid()) continue;
+                    if (edge.Grid == null) continue;
 
-                    if (!spaceToGridTiles.TryGetValue(edge.Grid, out var set))
+                    if (!spaceToGridTiles.TryGetValue(edge.Grid.Value, out var set))
                     {
                         set = new();
-                        spaceToGridTiles[edge.Grid] = set;
+                        spaceToGridTiles[edge.Grid.Value] = set;
                     }
 
                     set.Add(edge.Tile);

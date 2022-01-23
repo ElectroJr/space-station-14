@@ -15,7 +15,6 @@ public class GridExplosion
     public IMapGrid Grid;
     public bool NeedToTransform = false;
 
-    public Angle Angle;
     public Matrix3 Matrix = Matrix3.Identity;
     public Vector2 Offset;
 
@@ -103,8 +102,8 @@ public class GridExplosion
         Matrix.R0C2 = size / 2;
         Matrix.R1C2 = size / 2;
         Matrix *= transform.WorldMatrix * Matrix3.Invert(space.Matrix);
-        Angle = transform.WorldRotation - space.Angle;
-        Offset = Angle.RotateVec((size / 4, size / 4));
+        var relativeAngle = transform.WorldRotation - space.Angle;
+        Offset = relativeAngle.RotateVec((size / 4, size / 4));
     }
 
     public int AddNewTiles(int iteration, HashSet<Vector2i>? inputGridTiles, HashSet<Vector2i> outputSpaceTiles)

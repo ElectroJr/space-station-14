@@ -28,27 +28,19 @@ public class SpaceExplosion
 
     public Dictionary<int, HashSet<Vector2i>> BlockedSpreader = new();
 
-    public float IntensityStepSize;
+    public float StepSize;
 
-    public SpaceExplosion(ExplosionSystem system, float tileSize, float intensityStepSize, MapId targetMap, GridId targetGridId)
+    public SpaceExplosion(ExplosionSystem system, float tileSize, float stepSize, MapId targetMap, GridId? referenceGrid)
     {
         // TODO EXPLOSION transform only in-range grids
-        // TODO EXPLOSION for source-grid... don't transform, just add to map
-        // TODO EXPLOSION for source-grid don't check unblocked directions... just block.
         // TODO EXPLOSION merge EdgeData and GridBlockMap
 
-        GridBlockMap = system.TransformGridEdges(targetMap, targetGridId);
+        (GridBlockMap, Angle, var invMatrix) = system.TransformGridEdges(targetMap, referenceGrid);
+        Matrix = Matrix3.Invert(invMatrix);
+
         system.GetUnblockedDirections(GridBlockMap, tileSize);
 
-        IntensityStepSize = intensityStepSize;
-
-        if (!targetGridId.IsValid())
-            return;
-
-        var targetGrid = IoCManager.Resolve<IMapManager>().GetGrid(targetGridId);
-        var xform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(targetGrid.GridEntityId);
-        Matrix = xform.WorldMatrix;
-        Angle = xform.WorldRotation;
+        StepSize = stepSize;
     }
 
     private AtmosDirection GetUnblocked(Vector2i tile)
