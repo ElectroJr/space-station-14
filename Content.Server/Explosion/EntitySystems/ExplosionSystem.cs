@@ -295,33 +295,6 @@ public sealed partial class ExplosionSystem : EntitySystem
         float slope,
         float maxTileIntensity)
     {
-        Vector2i initialTile;
-        GridId gridId;
-        var refGridId = GetReferenceGrid(epicenter, totalIntensity, slope);
-
-        if (_mapManager.TryFindGridAt(epicenter, out var grid) &&
-            grid.TryGetTileRef(grid.WorldToTile(epicenter.Position), out var tileRef) &&
-            !tileRef.Tile.IsEmpty)
-        {
-            gridId = grid.Index;
-            initialTile = tileRef.GridIndices;
-        }
-        else
-        {
-            gridId = GridId.Invalid; // implies space
-
-            if (refGridId.IsValid())
-            {
-                initialTile = _mapManager.GetGrid(refGridId).WorldToTile(epicenter.Position);
-            }
-            else
-            {
-                initialTile = new Vector2i(
-                    (int) Math.Floor(epicenter.Position.X / DefaultTileSize),
-                    (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));
-            }
-        }
-        
         var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, refGridId, type.ID, totalIntensity, slope, maxTileIntensity);
 
         RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceData, gridData.Values, tileSetIntensity));
@@ -348,15 +321,41 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     Look for grids in an area and select the heaviest one to orient an explosion in space.
     /// </summary>
-    public GridId GetReferenceGrid(MapCoordinates epicenter, float totalIntensity, float slope)
+    /// <remarks>
+    ///     Note that even though an explosion may start ON a grid, the explosion in space may still be orientated to
+    ///     match a separate grid. This is done so that if you have something like a tiny suicide-bomb shuttle exploding
+    ///     near a large station, the explosion will still orient to match the station, not the tiny shuttle.
+    /// </remarks>
+    public GridId? GetReferenceGrid(MapCoordinates epicenter, float totalIntensity, float slope)
     {
-        var diameter = 2 * ApproxIntensityToRadius(totalIntensity, slope);
+        // get the approximate explosion radius. note that if the explosion is confined in some directions but not in
+        // others, the actual explosion reach further than this distance from the epicenter.
+        var radius = ApproxIntensityToRadius(totalIntensity, slope);
 
-        GridId result = GridId.Invalid;
+        // Above formula not super accurate for small explosions. Just fudge it for a larger lookup area
+        radius += 1;
+
+        GridId? result = null;
         float mass = 0;
 
-        var grids = _mapManager.FindGridsIntersecting(epicenter.MapId, Box2.CenteredAround(epicenter.Position, (diameter, diameter)));
-        foreach (var grid in grids)
+        // First attempt to find a grid that is relatively close to the explosion's center
+        // instead of looking in a diameter x diameter sized box, use a smaller box with radius-sized sides:
+        var box = Box2.CenteredAround(epicenter.Position, (radius, radius));
+        
+        foreach (var grid in _mapManager.FindGridsIntersecting(epicenter.MapId, box))
+        {
+            if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
+            {
+                mass = physics.Mass;
+                result = grid.Index;
+            }
+        }
+
+        if (result != null)
+            return result;
+
+        // No grid in the immediate vicinity of the epicenter. Expand the lookup area.
+        foreach (var grid in _mapManager.FindGridsIntersecting(epicenter.MapId, box.Scale(2.5f)))
         {
             if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
             {

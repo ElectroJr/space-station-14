@@ -19,7 +19,12 @@ public class SpaceExplosion
     public Dictionary<int, HashSet<Vector2i>> TileSets = new();
     public HashSet<Vector2i> Processed = new();
 
-    public Dictionary<Vector2i, GridBlockData> BlockMap;
+    /// <summary>
+    ///     The keys of this dictionary correspond to space tiles that intersect a grid. The values have information
+    ///     about what grid (which could be more than one), and in what directions the space-based explosion is allowed
+    ///     to propagate from this tile.
+    /// </summary>
+    public Dictionary<Vector2i, GridBlockData> GridBlockMap;
 
     public Dictionary<int, HashSet<Vector2i>> BlockedSpreader = new();
 
@@ -32,8 +37,8 @@ public class SpaceExplosion
         // TODO EXPLOSION for source-grid don't check unblocked directions... just block.
         // TODO EXPLOSION merge EdgeData and GridBlockMap
 
-        BlockMap = system.TransformGridEdges(targetMap, targetGridId);
-        system.GetUnblockedDirections(BlockMap, tileSize);
+        GridBlockMap = system.TransformGridEdges(targetMap, targetGridId);
+        system.GetUnblockedDirections(GridBlockMap, tileSize);
 
         IntensityStepSize = intensityStepSize;
 
@@ -48,7 +53,7 @@ public class SpaceExplosion
 
     private AtmosDirection GetUnblocked(Vector2i tile)
     {
-        return BlockMap.TryGetValue(tile, out var blocker) ? blocker.UnblockedDirections : AtmosDirection.All;
+        return GridBlockMap.TryGetValue(tile, out var blocker) ? blocker.UnblockedDirections : AtmosDirection.All;
     }
 
     public int AddNewTiles(int iteration, HashSet<Vector2i> inputSpaceTiles, Dictionary<GridId, HashSet<Vector2i>> gridTileSets)
@@ -87,7 +92,7 @@ public class SpaceExplosion
     private void CheckGridTile(Vector2i tile, Dictionary<GridId, HashSet<Vector2i>> gridTileSets)
     {
         // is this a grid tile?
-        if (!BlockMap.TryGetValue(tile, out var blocker))
+        if (!GridBlockMap.TryGetValue(tile, out var blocker))
             return;
 
         foreach (var edge in blocker.BlockingGridEdges)
