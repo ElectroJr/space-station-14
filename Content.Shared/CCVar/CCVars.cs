@@ -360,7 +360,7 @@ namespace Content.Shared.CCVar
         ///     unnaturally "slow" explosions.
         /// </remarks>
         public static readonly CVarDef<int> ExplosionTilesPerTick =
-            CVarDef.Create("explosion.speed", 50, CVar.SERVERONLY);
+            CVarDef.Create("explosion.tilespertick", int.MaxValue, CVar.SERVERONLY);
 
         /// <summary>
         ///     Whether or not explosions actually physics-throw entities. Disabling this will improve performance
@@ -378,6 +378,34 @@ namespace Content.Shared.CCVar
         /// </remarks>
         public static readonly CVarDef<bool> ExplosionSleepNodeSys =
             CVarDef.Create("explosion.nodesleep", true, CVar.SERVERONLY);
+
+        /// <summary>
+        ///     Upper limit on the total area that an explosion can affect before the neighbor-finding algorithm just
+        ///     stops. Defaults to a 50-rile radius explosion.
+        /// </summary>
+        public static readonly CVarDef<int> ExplosionMaxArea =
+            CVarDef.Create("explosion.maxarea", (int) 3.14f * 2500, CVar.SERVERONLY);
+
+        /// <summary>
+        ///     Upper limit on the number of neighbor finding steps for the explosion system neighbor-finding algorithm.
+        /// </summary>
+        /// <remarks>
+        ///     Effectively places an upper limit on the range that any explosion can have. In the vast majority of
+        ///     instances, <see cref="ExplosionMaxArea"/> will likely be hit before this becomes a limiting factor.
+        /// </remarks>
+        public static readonly CVarDef<int> ExplosionMaxIterations =
+            CVarDef.Create("explosion.maxiterations", 100, CVar.SERVERONLY);
+
+        /// <summary>
+        ///     Max Time in milliseconds to spend processing explosions every tick.
+        /// </summary>
+        /// <remarks>
+        ///     This time limiting is not perfectly implemented. Firstly, a significant chunk of processing time happens
+        ///     due to queued entity deletions, which happen outside of the system update code. Secondly, explosion
+        ///     spawning cannot currently be interrupted & resumed, and may lead to exceeding this time limit.
+        /// </remarks>
+        public static readonly CVarDef<int> ExplosionMaxProcessingTime =
+            CVarDef.Create("explosion.maxtime", 9995, CVar.SERVERONLY);
 
         /*
          * Admin logs

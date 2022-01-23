@@ -9,10 +9,12 @@ using Content.Shared.Maps;
 using Content.Shared.Physics;
 using Robust.Shared.GameObjects;
 using Robust.Shared.IoC;
+using Robust.Shared.Log;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 using Robust.Shared.Physics;
 using Robust.Shared.Random;
+using Robust.Shared.Timing;
 
 namespace Content.Server.Explosion.EntitySystems;
 
@@ -27,6 +29,16 @@ public sealed partial class ExplosionSystem : EntitySystem
     private byte _explosionCounter = 0;
     // maybe should just use a UID/explosion-entity and a state to convey information?
     // but then need to ignore PVS?
+
+    /// <summary>
+    ///     Used to limit explosion processing time. See <see cref="MaxProcessingTime"/>.
+    /// </summary>
+    internal readonly Stopwatch Stopwatch = new();
+
+    /// <summary>
+    ///     How many tiles to explode before checking the stopwatch timer
+    /// </summary>
+    internal static int TileCheckIteration = 1;
 
     /// <summary>
     ///     Queue for delayed processing of explosions. If there is an explosion that covers more than <see
@@ -56,12 +68,22 @@ public sealed partial class ExplosionSystem : EntitySystem
             // nothing to do
             return;
 
+        Stopwatch.Restart();
+        var x = Stopwatch.Elapsed.TotalMilliseconds;
+
+        var availableTime = MaxProcessingTime;
+
         var tilesRemaining = TilesPerTick;
-        while (tilesRemaining > 0)
+        while (tilesRemaining > 0 && MaxProcessingTime > Stopwatch.Elapsed.TotalMilliseconds)
         {
             // if there is no active explosion, get a new one to process
             if (_activeExplosion == null)
             {
+                // EXPLOSION TODO allow explosion spawning to be interrupted by time limit. In the meantime, ensure that
+                // there is at-least 1ms of time left before creating a new explosion
+                if (MathF.Max(MaxProcessingTime - 1, 0.1f)  < Stopwatch.Elapsed.TotalMilliseconds)
+                    break;
+
                 if (!_explosionQueue.TryDequeue(out var spawnNextExplosion))
                     break;
 
@@ -88,6 +110,8 @@ public sealed partial class ExplosionSystem : EntitySystem
                 _activeExplosion = null;
         }
 
+        Logger.InfoS("Explosion", $"Processed {TilesPerTick - tilesRemaining} tiles in {Stopwatch.Elapsed.TotalMilliseconds}ms");
+
         // we have finished processing our tiles. Is there still an ongoing explosion?
         if (_activeExplosion != null)
         {
@@ -99,6 +123,9 @@ public sealed partial class ExplosionSystem : EntitySystem
             RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_explosionCounter, _previousTileIteration + 1));
             return;
         }
+
+        if (_explosionQueue.Count > 0)
+            return;
 
         // We have finished processing all explosions. Clear client explosion overlays
         RaiseNetworkEvent(new ExplosionOverlayUpdateEvent(_explosionCounter, int.MaxValue));
@@ -434,10 +461,26 @@ class Explosion
 
     public int Proccess(int processingTarget)
     {
-        int processed;
+        // In case the explosion terminated early last tick due to exceeding the allocated processing time, use this
+        // time to update the tiles.
+        foreach (var (grid, list) in _tileUpdateDict)
+        {
+            if (list.Count > 0)
+            {
+                grid.SetTiles(list);
+            }
+        }
+        _tileUpdateDict.Clear();
 
+        int processed;
         for (processed = 0; processed < processingTarget; processed++)
         {
+            if (processed % ExplosionSystem.TileCheckIteration == 0 &&
+                _system.Stopwatch.Elapsed.TotalMilliseconds > _system.MaxProcessingTime)
+            {
+                break;
+            }
+
             if (_currentGrid != null &&
                 _currentGrid.TryGetTileRef(_currentEnumerator.Current, out var tileRef) &&
                 !tileRef.Tile.IsEmpty)

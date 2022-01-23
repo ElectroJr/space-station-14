@@ -156,7 +156,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         var intensityUnchangedLastLoop = false;
 
         // Main flood-fill / neighbor-finding loop
-        while (remainingIntensity > 0 && iteration <= MaxRange && totalTiles < MaxArea)
+        while (remainingIntensity > 0 && iteration <= MaxIterations && totalTiles < MaxArea)
         {
             previousIntensity = remainingIntensity;
 

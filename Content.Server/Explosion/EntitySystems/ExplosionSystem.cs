@@ -41,34 +41,16 @@ public sealed partial class ExplosionSystem : EntitySystem
 
     // TODO EXPLOSION MAKE THESE CVARS
 
-    public const ushort DefaultTileSize = 1;
+    public const ushort DefaultTileSize = 5;
 
-    /// <summary>
-    ///     Upper limit on the explosion tile-fill iterations. Effectively limits the radius of an explosion.
-    ///     Unless the explosion is very non-circular due to obstacles, <see cref="MaxArea"/> is likely to be reached before this
-    /// </summary>
-    public const int MaxRange = 100;
-
-    /// <summary>
-    ///     The maximum size an explosion can cover. Currently corresponds to a circle with ~50 tile radius.
-    /// </summary>
-    public const int MaxArea = (int) 3.14f * 2500;
-
-
-    /// <summary>
-    ///     How many tiles to "explode" per tick (deal damage, throw entities, break tiles).
-    /// </summary>
+    #region cvars
+    public int MaxIterations { get; private set; }
+    public int MaxArea { get; private set; }
+    public float MaxProcessingTime { get; private set; }
     public int TilesPerTick { get; private set; }
-
-    /// <summary>
-    ///     Whether or not entities will be thrown by explosions. Turning this off helps a little bit with performance.
-    /// </summary>
     public bool EnablePhysicsThrow { get; private set; }
-
-    /// <summary>
-    ///     Disables node group updating while the station is being shredded by an explosion.
-    /// </summary>
     public bool SleepNodeSys { get; private set; }
+    #endregion
 
     private AudioParams _audioParams = AudioParams.Default.WithVolume(-3f);
 
@@ -88,6 +70,9 @@ public sealed partial class ExplosionSystem : EntitySystem
         _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, value => TilesPerTick = value, true);
         _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => EnablePhysicsThrow = value, true);
         _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, value => SleepNodeSys = value, true);
+        _cfg.OnValueChanged(CCVars.ExplosionMaxArea, value => MaxArea = value, true);
+        _cfg.OnValueChanged(CCVars.ExplosionMaxIterations, value => MaxIterations = value, true);
+        _cfg.OnValueChanged(CCVars.ExplosionMaxProcessingTime, value => MaxProcessingTime = value, true);
     }
 
     public override void Shutdown()
