@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
@@ -11,22 +12,6 @@ namespace Content.Server.Explosion.EntitySystems;
 
 public sealed partial class ExplosionSystem : EntitySystem
 {
-
-    // TODO EXPLOSION MAKE THESE CVARS
-
-    public const ushort DefaultTileSize = 1;
-
-    /// <summary>
-    ///     Upper limit on the explosion tile-fill iterations. Effectively limits the radius of an explosion.
-    ///     Unless the explosion is very non-circular due to obstacles, <see cref="MaxArea"/> is likely to be reached before this
-    /// </summary>
-    public const int MaxRange = 100;
-
-    /// <summary>
-    ///     The maximum size an explosion can cover. Currently corresponds to a circle with ~50 tile radius.
-    /// </summary>
-    public const int MaxArea = (int) 3.14f * 2500;
-
     /// <summary>
     ///     This is the main explosion generating function. 
     /// </summary>
@@ -276,6 +261,67 @@ public sealed partial class ExplosionSystem : EntitySystem
         spaceData?.CleanUp();
 
         return (iterationIntensity, spaceData, gridData, spaceMatrix);
+    }
+
+    /// <summary>
+    ///     Look for grids in an area and returns them. Also selects a special grid that will be used to determine the
+    ///     orientation of an explosion in space.
+    /// </summary>
+    /// <remarks>
+    ///     Note that even though an explosion may start ON a grid, the explosion in space may still be orientated to
+    ///     match a separate grid. This is done so that if you have something like a tiny suicide-bomb shuttle exploding
+    ///     near a large station, the explosion will still orient to match the station, not the tiny shuttle.
+    /// </remarks>
+    public (List<GridId>, GridId?) GetLocalGrids(MapCoordinates epicenter, float totalIntensity, float slope, float maxIntensity)
+    {
+        // get the approximate explosion radius. note that if the explosion is confined in some directions but not in
+        // others, the actual explosion reach further than this distance from the epicenter.
+        var radius = 0.5f + ApproxIntensityToRadius(totalIntensity, slope, maxIntensity);
+
+        GridId? referenceGrid = null;
+        float mass = 0;
+
+        // First attempt to find a grid that is relatively close to the explosion's center. Instead of looking in a
+        // diameter x diameter sized box, use a smaller box with radius-sized sides:
+        var box = Box2.CenteredAround(epicenter.Position, (radius, radius));
+
+        foreach (var grid in _mapManager.FindGridsIntersecting(epicenter.MapId, box))
+        {
+            if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
+            {
+                mass = physics.Mass;
+                referenceGrid = grid.Index;
+            }
+        }
+
+        // Next, we use a much larger lookup to determine all grids relevant to the explosion. This is used to ignore
+        // some grids during the grid-edge transformation steps. Basically: it means that if a grid is not in this set,
+        // the explosion can never propagate from space onto this grid.
+
+        // As mentioned before, the `diameter` is only indicative, as an explosion that is obstructed (e.g., in a
+        // tunnel) may travel further away from the epicenter. But this is relatively rare, espc for space-traversing
+        // explosions (a tunnel made out of other grids?), so instead of using the largest possible distance that an
+        // explosion could travel and using that for the grid look up, we will just arbitrarily fudge the lookup size
+        // to be twice the diameter.
+
+        box = box.Scale(4); // box with width and height of 4*radius.
+        var mapGrids = _mapManager.FindGridsIntersecting(epicenter.MapId, box).ToList();
+        var grids = mapGrids.Select(x => x.Index).ToList();
+
+        if (referenceGrid != null)
+            return (grids, referenceGrid);
+
+        // We still don't have are reference grid. So lets also look in the enlarged region
+        foreach (var grid in mapGrids)
+        {
+            if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
+            {
+                mass = physics.Mass;
+                referenceGrid = grid.Index;
+            }
+        }
+
+        return (grids, referenceGrid);
     }
 }
 
