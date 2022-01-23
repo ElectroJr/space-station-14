@@ -274,15 +274,16 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </remarks>
     public (List<GridId>, GridId?) GetLocalGrids(MapCoordinates epicenter, float totalIntensity, float slope, float maxIntensity)
     {
-        // get the approximate explosion radius. note that if the explosion is confined in some directions but not in
-        // others, the actual explosion reach further than this distance from the epicenter.
-        var radius = 0.5f + ApproxIntensityToRadius(totalIntensity, slope, maxIntensity);
+        // Get the explosion radius (approx radius if it were in open-space). Note that if the explosion is confined in
+        // some directions but not in others, the actual explosion may reach further than this distance from the
+        // epicenter. Conversely, it might go nowhere near as far.
+        var radius = 0.5f + IntensityToRadius(totalIntensity, slope, maxIntensity);
 
         GridId? referenceGrid = null;
         float mass = 0;
 
         // First attempt to find a grid that is relatively close to the explosion's center. Instead of looking in a
-        // diameter x diameter sized box, use a smaller box with radius-sized sides:
+        // diameter x diameter sized box, use a smaller box with radius sized sides:
         var box = Box2.CenteredAround(epicenter.Position, (radius, radius));
 
         foreach (var grid in _mapManager.FindGridsIntersecting(epicenter.MapId, box))
@@ -299,10 +300,9 @@ public sealed partial class ExplosionSystem : EntitySystem
         // the explosion can never propagate from space onto this grid.
 
         // As mentioned before, the `diameter` is only indicative, as an explosion that is obstructed (e.g., in a
-        // tunnel) may travel further away from the epicenter. But this is relatively rare, espc for space-traversing
-        // explosions (a tunnel made out of other grids?), so instead of using the largest possible distance that an
-        // explosion could travel and using that for the grid look up, we will just arbitrarily fudge the lookup size
-        // to be twice the diameter.
+        // tunnel) may travel further away from the epicenter. But this should be very rare for space-traversing
+        // explosions. So instead of using the largest possible distance that an explosion could theoretically travel
+        // and using that for the grid look-up, we will just arbitrarily fudge the lookup size to be twice the diameter.
 
         box = box.Scale(4); // box with width and height of 4*radius.
         var mapGrids = _mapManager.FindGridsIntersecting(epicenter.MapId, box).ToList();

@@ -39,8 +39,6 @@ public sealed partial class ExplosionSystem : EntitySystem
     [Dependency] private readonly CameraRecoilSystem _recoilSystem = default!;
 
 
-
-
     // TODO EXPLOSION MAKE THESE CVARS
 
     public const ushort DefaultTileSize = 1;
@@ -55,10 +53,6 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     The maximum size an explosion can cover. Currently corresponds to a circle with ~50 tile radius.
     /// </summary>
     public const int MaxArea = (int) 3.14f * 2500;
-
-
-
-
 
 
     /// <summary>
@@ -176,13 +170,25 @@ public sealed partial class ExplosionSystem : EntitySystem
         return coneVolume - h * MathF.PI / 3 * MathF.Pow(h / slope, 2);
     }
 
-    // inverse of RadiusToIntensity, if you neglect maxIntensity.
-    // only needed for getting nearby grids, so good enough for me.
-    public float ApproxIntensityToRadius(float totalIntensity, float slope, float maxIntensity)
-    {
-        // TODO EXPLOSION include max intensity
 
-        return MathF.Cbrt(3 * totalIntensity / (slope * MathF.PI));
+    /// <summary>
+    ///     Inverse formula for <see cref="RadiusToIntensity"/>
+    /// </summary>
+    public float IntensityToRadius(float totalIntensity, float slope, float maxIntensity)
+    {
+        // max radius to avoid being capped by max-intensity
+        var r0 = maxIntensity / slope;
+
+        // volume at r0
+        var v0 = RadiusToIntensity(r0, slope);
+
+        if (totalIntensity <= v0)
+        {
+            // maxIntensity is a non-issue, can use simple inverse formula
+            return MathF.Cbrt(3 * totalIntensity / (slope * MathF.PI));
+        }
+
+        return r0 * (MathF.Sqrt(12 * totalIntensity/ v0 - 3) / 6 + 0.5f);
     }
 
     /// <summary>
