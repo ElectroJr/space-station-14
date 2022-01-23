@@ -57,7 +57,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     cref="TilesPerTick"/> tiles, other explosions will actually be delayed slightly. Unless it's a station
     ///     nuke, this delay should never really be noticeable.
     /// </summary>
-    private Queue<Func<Explosion>> _explosionQueue = new();
+    private Queue<Func<Explosion?>> _explosionQueue = new();
 
     /// <summary>
     ///     The explosion currently being processed.
@@ -137,8 +137,14 @@ public sealed partial class ExplosionSystem : EntitySystem
                 if (!_explosionQueue.TryDequeue(out var spawnNextExplosion))
                     break;
 
-                _explosionCounter++;
                 _activeExplosion = spawnNextExplosion();
+
+                // explosion spawning can be null if something somewhere went wrong. (e.g., negative explosion
+                // intensity).
+                if (_activeExplosion == null)
+                    continue;
+
+                _explosionCounter++;
                 _previousTileIteration = 0;
 
                 // just a lil nap
@@ -241,8 +247,10 @@ public sealed partial class ExplosionSystem : EntitySystem
 
     // inverse of RadiusToIntensity, if you neglect maxIntensity.
     // only needed for getting nearby grids, so good enough for me.
-    public float ApproxIntensityToRadius(float totalIntensity, float slope)
+    public float ApproxIntensityToRadius(float totalIntensity, float slope, float maxIntensity)
     {
+        // TODO EXPLOSION include max intensity
+
         return MathF.Cbrt(3 * totalIntensity / (slope * MathF.PI));
     }
 
@@ -289,57 +297,62 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     information about the affected tiles for the explosion system to process. It will also trigger the
     ///     camera shake and sound effect.
     /// </summary>
-    private Explosion SpawnExplosion(MapCoordinates epicenter,
+    private Explosion? SpawnExplosion(MapCoordinates epicenter,
         ExplosionPrototype type,
         float totalIntensity,
         float slope,
         float maxTileIntensity)
     {
-        var (tileSetIntensity, spaceData, gridData) = GetExplosionTiles(epicenter.MapId, gridId, initialTile, refGridId, type.ID, totalIntensity, slope, maxTileIntensity);
+        var results = GetExplosionTiles(epicenter, type.ID, totalIntensity, slope, maxTileIntensity);
 
-        RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceData, gridData.Values, tileSetIntensity));
+        if (results == null)
+            return null;
+
+        var (iterationIntensity, spaceData, gridData, spaceMatrix) = results.Value;
+
+        RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceMatrix, spaceData, gridData.Values, iterationIntensity));
 
         // camera shake
-        CameraShake(tileSetIntensity.Count * 2.5f, epicenter, totalIntensity);
+        CameraShake(iterationIntensity.Count * 2.5f, epicenter, totalIntensity);
 
         //For whatever bloody reason, sound system requires ENTITY coordinates.
         var mapEntityCoords = EntityCoordinates.FromMap(EntityManager, _mapManager.GetMapEntityId(epicenter.MapId), epicenter);
 
         // play sound. 
-        var audioRange = tileSetIntensity.Count * 5;
+        var audioRange = iterationIntensity.Count * 5;
         var filter = Filter.Pvs(epicenter).AddInRange(epicenter, audioRange);
         SoundSystem.Play(filter, type.Sound.GetSound(), mapEntityCoords, _audioParams);
 
-        return new(this,
+        return new Explosion(this,
             type,
             spaceData,
             gridData.Values.ToList(),
-            tileSetIntensity,
-            epicenter);
+            iterationIntensity,
+            epicenter,
+            spaceMatrix
+            );
     }
 
     /// <summary>
-    ///     Look for grids in an area and select the heaviest one to orient an explosion in space.
+    ///     Look for grids in an area and returns them. Also selects a special grid that will be used to determine the
+    ///     orientation of an explosion in space.
     /// </summary>
     /// <remarks>
     ///     Note that even though an explosion may start ON a grid, the explosion in space may still be orientated to
     ///     match a separate grid. This is done so that if you have something like a tiny suicide-bomb shuttle exploding
     ///     near a large station, the explosion will still orient to match the station, not the tiny shuttle.
     /// </remarks>
-    public GridId? GetReferenceGrid(MapCoordinates epicenter, float totalIntensity, float slope)
+    public (List<GridId>, GridId?) GetLocalGrids(MapCoordinates epicenter, float totalIntensity, float slope, float maxIntensity)
     {
         // get the approximate explosion radius. note that if the explosion is confined in some directions but not in
         // others, the actual explosion reach further than this distance from the epicenter.
-        var radius = ApproxIntensityToRadius(totalIntensity, slope);
+        var radius = 0.5f + ApproxIntensityToRadius(totalIntensity, slope, maxIntensity);
 
-        // Above formula not super accurate for small explosions. Just fudge it for a larger lookup area
-        radius += 1;
-
-        GridId? result = null;
+        GridId? referenceGrid = null;
         float mass = 0;
 
-        // First attempt to find a grid that is relatively close to the explosion's center
-        // instead of looking in a diameter x diameter sized box, use a smaller box with radius-sized sides:
+        // First attempt to find a grid that is relatively close to the explosion's center. Instead of looking in a
+        // diameter x diameter sized box, use a smaller box with radius-sized sides:
         var box = Box2.CenteredAround(epicenter.Position, (radius, radius));
         
         foreach (var grid in _mapManager.FindGridsIntersecting(epicenter.MapId, box))
@@ -347,44 +360,54 @@ public sealed partial class ExplosionSystem : EntitySystem
             if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
             {
                 mass = physics.Mass;
-                result = grid.Index;
+                referenceGrid = grid.Index;
             }
         }
 
-        if (result != null)
-            return result;
+        // Next, we use a much larger lookup to determine all grids relevant to the explosion. This is used to ignore
+        // some grids during the grid-edge transformation steps. Basically: it means that if a grid is not in this set,
+        // the explosion can never propagate from space onto this grid.
 
-        // No grid in the immediate vicinity of the epicenter. Expand the lookup area.
-        foreach (var grid in _mapManager.FindGridsIntersecting(epicenter.MapId, box.Scale(2.5f)))
+        // As mentioned before, the `diameter` is only indicative, as an explosion that is obstructed (e.g., in a
+        // tunnel) may travel further away from the epicenter. But this is relatively rare, espc for space-traversing
+        // explosions (a tunnel made out of other grids?), so instead of using the largest possible distance that an
+        // explosion could travel and using that for the grid look up, we will just arbitrarily fudge the lookup size
+        // to be twice the diameter.
+
+        box = box.Scale(4); // box with width and height of 4*radius.
+        var mapGrids = _mapManager.FindGridsIntersecting(epicenter.MapId, box).ToList();
+        var grids = mapGrids.Select(x => x.Index).ToList();
+
+        if (referenceGrid != null)
+            return (grids, referenceGrid);
+
+        // We still don't have are reference grid. So lets also look in the enlarged region
+        foreach (var grid in mapGrids)
         {
             if (TryComp(grid.GridEntityId, out PhysicsComponent? physics) && physics.Mass > mass)
             {
                 mass = physics.Mass;
-                result = grid.Index;
+                referenceGrid = grid.Index;
             }
         }
 
-        return result;
+        return (grids, referenceGrid);
     }
 
-    public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, SpaceExplosion? spaceData, IEnumerable<GridExplosion> gridData, List<float> tileSetIntensity)
+    /// <summary>
+    ///     Constructor for the shared <see cref="ExplosionEvent"/> using the server-exclusive explosion classes.
+    /// </summary>
+    public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, Matrix3 spaceMatrix, SpaceExplosion? spaceData, IEnumerable<GridExplosion> gridData, List<float> iterationIntensity)
     {
-        Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles = new();
+        var spaceTiles = spaceData?.TileSets;
 
-        var spaceMatrix = Matrix3.Identity;
-
-        if (spaceData != null)
-        {
-            spaceMatrix = spaceData.Matrix;
-            tiles.Add(GridId.Invalid, spaceData.TileSets);
-        }
-
+        Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tileSets = new();
         foreach (var grid in gridData)
         {
-            tiles.Add(grid.GridId, grid.TileSets);
+            tileSets.Add(grid.GridId, grid.TileSets);
         }
 
-        return new ExplosionEvent(_explosionCounter, epicenter, id, tileSetIntensity, tiles, spaceMatrix);
+        return new ExplosionEvent(_explosionCounter, epicenter, id, iterationIntensity, spaceTiles, tileSets, spaceMatrix);
     }
 
     private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)
@@ -647,7 +670,8 @@ class Explosion
         SpaceExplosion? spaceData,
         List<GridExplosion> gridData,
         List<float> tileSetIntensity,
-        MapCoordinates epicenter)
+        MapCoordinates epicenter,
+        Matrix3 spaceMatrix)
     {
         _system = system;
         ExplosionType = explosionType;
@@ -668,8 +692,8 @@ class Explosion
                 MapGrid = null
             });
 
-            _spaceMatrix = spaceData.Matrix;
-            _invSpaceMatrix = Matrix3.Invert(spaceData.Matrix);
+            _spaceMatrix = spaceMatrix;
+            _invSpaceMatrix = Matrix3.Invert(spaceMatrix);
         }
 
         foreach (var grid in gridData)

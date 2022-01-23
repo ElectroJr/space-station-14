@@ -11,6 +11,9 @@ namespace Content.Server.Explosion.EntitySystems;
 
 public sealed partial class ExplosionSystem : EntitySystem
 {
+
+    // TODO EXPLOSION MAKE THESE CVARS
+
     public const ushort DefaultTileSize = 1;
 
     /// <summary>
@@ -27,10 +30,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     This is the main explosion generating function. 
     /// </summary>
-    /// <param name="map"></param>
-    /// <param name="gridId">The grid where the epicenter tile is located</param>
-    /// <param name="initialTile"> The initial "epicenter" tile.</param>
-    /// <param name="referenceGrid">This grid (if any) determines the orientation of the explosion in space.</param>
+    /// <param name="epicenter">The centre of the explosion</param>
     /// <param name="typeID">The explosion type. this determines the explosion damage</param>
     /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
     /// explosion</param>
@@ -38,9 +38,8 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <param name="maxIntensity">The maximum intensity that the explosion can have at any given tile. This
     /// effectively caps the damage that this explosion can do.</param>
     /// <returns>A list of tile-sets and a list of intensity values which describe the explosion.</returns>
-    public (List<float>, SpaceExplosion?, Dictionary<GridId, GridExplosion>)? GetExplosionTiles(
+    public (List<float>, SpaceExplosion?, Dictionary<GridId, GridExplosion>, Matrix3)? GetExplosionTiles(
         MapCoordinates epicenter,
-        Vector2i initialTile,
         string typeID,
         float totalIntensity,
         float slope,
@@ -50,8 +49,9 @@ public sealed partial class ExplosionSystem : EntitySystem
         if (totalIntensity <= 0 || slope <= 0)
             return null;
 
+        Vector2i initialTile;
         GridId? epicentreGrid = null;
-        var referenceGrid = GetReferenceGrid(epicenter, totalIntensity, slope);
+        var (localGrids, referenceGrid) = GetLocalGrids(epicenter, totalIntensity, slope, maxIntensity);
 
         // get the epicenter tile indices
         if (_mapManager.TryFindGridAt(epicenter, out var candidateGrid) &&
@@ -63,7 +63,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
         else if (referenceGrid != null)
         {
-            initialTile = _mapManager.GetGrid(referenceGrid!.Value).WorldToTile(epicenter.Position);
+            initialTile = _mapManager.GetGrid(referenceGrid.Value).WorldToTile(epicenter.Position);
         }
         else
         {
@@ -71,7 +71,6 @@ public sealed partial class ExplosionSystem : EntitySystem
                     (int) Math.Floor(epicenter.Position.X / DefaultTileSize),
                     (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));
         }
-
 
         // Main data for the exploding tiles in space and on various grids
         Dictionary<GridId, GridExplosion> gridData = new();
@@ -90,8 +89,15 @@ public sealed partial class ExplosionSystem : EntitySystem
         Dictionary<GridId, HashSet<Vector2i>> spaceToGridTiles = new();
         Dictionary<GridId, HashSet<Vector2i>> previousSpaceToGrid;
 
-        // matrix for transforming between grid and space-coordiantes
-        var SpaceMatrix = Matrix3.Identity;
+        // variables for transforming between grid and space-coordiantes
+        var spaceMatrix = Matrix3.Identity;
+        var spaceAngle = Angle.Zero;
+        if (referenceGrid != null)
+        {
+            var xform = Transform(_mapManager.GetGrid(referenceGrid.Value).GridEntityId);
+            spaceMatrix = xform.WorldMatrix;
+            spaceAngle = xform.WorldRotation;
+        }
 
         // is the explosion starting on a grid?
         if (epicentreGrid != null)
@@ -102,7 +108,17 @@ public sealed partial class ExplosionSystem : EntitySystem
             if (!_airtightMap.TryGetValue(epicentreGrid.Value, out var airtightMap))
                 airtightMap = new();
 
-            GridExplosion initialGridData = new(epicentreGrid.Value, airtightMap, maxIntensity, stepSize, typeID, _gridEdges[epicentreGrid.Value]);
+            var initialGridData = new GridExplosion(
+                epicentreGrid.Value,
+                airtightMap,
+                maxIntensity,
+                stepSize,
+                typeID,
+                _gridEdges[epicentreGrid.Value],
+                referenceGrid,
+                spaceMatrix,
+                spaceAngle);
+
             gridData[epicentreGrid.Value] = initialGridData;
 
             initialGridData.Processed.Add(initialTile);
@@ -111,7 +127,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         else
         {
             // set up the space explosion data
-            spaceData = new SpaceExplosion(this, DefaultTileSize, stepSize, epicenter.MapId, referenceGrid);
+            spaceData = new SpaceExplosion(this, stepSize, epicenter.MapId, referenceGrid, localGrids);
             spaceData.Processed.Add(initialTile);
             spaceData.TileSets[0] = new() { initialTile };
 
@@ -138,7 +154,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // Is this even a multi-tile explosion?
         if (totalIntensity < stepSize)
             // Bit anticlimactic. All that set up for nothing....
-            return (new List<float> { totalIntensity }, spaceData, gridData);
+            return (new List<float> { totalIntensity }, spaceData, gridData, spaceMatrix);
         
         // TThese variables keep track of the total intensity we have distributed
         List<int> tilesInIteration = new() { 1 };
@@ -201,8 +217,17 @@ public sealed partial class ExplosionSystem : EntitySystem
                     if (!_airtightMap.TryGetValue(grid, out var airtightMap))
                         airtightMap = new();
 
-                    data = new GridExplosion(grid, airtightMap, maxIntensity, stepSize, typeID, _gridEdges[grid]);
-                    data.SetSpaceTransform(spaceData!);
+                    data = new GridExplosion(
+                        grid,
+                        airtightMap,
+                        maxIntensity,
+                        stepSize,
+                        typeID,
+                        _gridEdges[grid],
+                        referenceGrid,
+                        spaceMatrix,
+                        spaceAngle);
+
                     gridData[grid] = data;
                 }
 
@@ -212,12 +237,11 @@ public sealed partial class ExplosionSystem : EntitySystem
 
             // if space-data is null, but some grid-based explosion reached space, we need to initialize it.
             if (spaceData == null && previousGridToSpace.Count != 0)
-                spaceData = new SpaceExplosion(this, DefaultTileSize, stepSize, epicenter.MapId, referenceGrid);
+                spaceData = new SpaceExplosion(this, stepSize, epicenter.MapId, referenceGrid, localGrids);
 
             // If the explosion has reached space, do that neighbors finding step as well.
             if (spaceData != null)
                 newTileCount += spaceData.AddNewTiles(iteration, previousGridToSpace, spaceToGridTiles);
-
 
             // Does adding these tiles bring us above the total target intensity?
             tilesInIteration.Add(newTileCount);
@@ -251,7 +275,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
         spaceData?.CleanUp();
 
-        return (iterationIntensity, spaceData, gridData);
+        return (iterationIntensity, spaceData, gridData, spaceMatrix);
     }
 }
 

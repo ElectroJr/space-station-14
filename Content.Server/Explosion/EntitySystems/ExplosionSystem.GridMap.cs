@@ -105,7 +105,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
     ///     edges all onto one grids reference frame.
     /// </summary>
-    public (Dictionary<Vector2i, GridBlockData>, Angle, Matrix3) TransformGridEdges(MapId targetMap, GridId? referenceGrid)
+    public (Dictionary<Vector2i, GridBlockData>, float) TransformGridEdges(MapId targetMap, GridId? referenceGrid, List<GridId> localGrids)
     {
         Dictionary<Vector2i, GridBlockData> transformedEdges = new();
 
@@ -133,10 +133,13 @@ public sealed partial class ExplosionSystem : EntitySystem
         //     foreach tile in our grid that touches that tile (vast majority of the time: 1 tile, but could be up to 4)
 
         HashSet<Vector2i> transformedTiles = new();
-        foreach (var (gridToTransform, edges) in _gridEdges)
+        foreach (var gridToTransform in localGrids)
         {
             // we treat the target grid separately
             if (gridToTransform == referenceGrid)
+                continue;
+
+            if (!_gridEdges.TryGetValue(gridToTransform, out var edges))
                 continue;
 
             if (!_mapManager.TryGetGrid(gridToTransform, out var grid) ||
@@ -181,10 +184,13 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         // Next we transform any diagonal edges.
         Vector2i newIndex;
-        foreach (var (gridToTransform, diagEdges) in _diagGridEdges)
+        foreach (var gridToTransform in localGrids)
         {
             // we treat the target grid separately
             if (gridToTransform == referenceGrid)
+                continue;
+
+            if (!_diagGridEdges.TryGetValue(gridToTransform, out var diagEdges))
                 continue;
 
             if (!_mapManager.TryGetGrid(gridToTransform, out var grid) ||
@@ -217,7 +223,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
 
         if (referenceGrid == null)
-            return (transformedEdges, targetAngle, targetMatrix);
+            return (transformedEdges, tileSize);
 
         // finally, we also include the blocking tiles from the reference grid.
 
@@ -248,7 +254,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             }
         }
 
-        return (transformedEdges, targetAngle, targetMatrix);
+        return (transformedEdges, tileSize);
     }
 
     /// <summary>

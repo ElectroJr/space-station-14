@@ -18,6 +18,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IEyeManager _eyeManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
 
+        public Dictionary<int, HashSet<Vector2i>>? SpaceTiles;
         public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles = new();
         public List<float> Intensity = new();
         public float TotalIntensity;
@@ -43,7 +44,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             if (Map != _eyeManager.CurrentMap)
                 return;
 
-            if (Tiles.Count == 0)
+            if (Tiles.Count == 0 && SpaceTiles == null)
                 return;
 
             switch (args.Space)
@@ -60,102 +61,117 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         private void DrawScreen(OverlayDrawArgs args)
         {
             var handle = args.ScreenHandle;
-            handle.SetTransform(Matrix3.Identity);
+            Box2 gridBounds;
 
-            foreach (var (gridId, tileSetList) in Tiles)
+            foreach (var (gridId, tileSets) in Tiles)
             {
+                if (!_mapManager.TryGetGrid(gridId, out var grid))
+                    continue;
 
-                Matrix3 matrix;
-                if (gridId.IsValid())
+                var gridXform = _entityManager.GetComponent<TransformComponent>(grid.GridEntityId);
+                gridBounds = gridXform.InvWorldMatrix.TransformBox(args.WorldBounds);
+
+                DrawText(handle, gridBounds, gridXform.WorldMatrix, tileSets);
+            }
+
+            if (SpaceTiles == null)
+                return;
+
+            gridBounds = Matrix3.Invert(SpaceMatrix).TransformBox(args.WorldBounds);
+
+            DrawText(handle, gridBounds, SpaceMatrix, SpaceTiles);
+        }
+
+        private void DrawText(
+            DrawingHandleScreen handle,
+            Box2 gridBounds,
+            Matrix3 transform,
+            Dictionary<int, HashSet<Vector2i>> tileSets)
+        {
+            for (var i = 1; i < Intensity.Count; i++)
+            {
+                if (!tileSets.TryGetValue(i, out var tiles))
+                    continue;
+
+                foreach (var tile in tiles)
                 {
-                    if (!_mapManager.TryGetGrid(gridId, out var grid))
+                    // is the center of this tile visible to the user?
+                    if (!gridBounds.Contains((Vector2) tile + 0.5f))
                         continue;
 
-                    var gridXform = _entityManager.GetComponent<TransformComponent>(grid.GridEntityId);
-                    matrix = gridXform.WorldMatrix;
+                    var worldCenter = transform.Transform((Vector2) tile + 0.5f);
+
+                    var screenCenter = _eyeManager.WorldToScreen(worldCenter);
+
+                    if (Intensity![i] > 9)
+                        screenCenter += (-12, -8);
+                    else
+                        screenCenter += (-8, -8);
+
+                    handle.DrawString(_font, screenCenter, Intensity![i].ToString("F2"));
                 }
-                else
-                {
-                    matrix = SpaceMatrix;
-                }
+            }
 
-                for (int i = 1; i < Intensity.Count; i++)
-                {
-                    if (!tileSetList.TryGetValue(i, out var tiles)) continue;
-                    foreach (var tile in tiles)
-                    {
-                        var worldCenter = matrix.Transform((Vector2) tile + 0.5f);
-
-                        // is the center of this tile visible to the user?
-                        if (!args.WorldBounds.Contains(worldCenter))
-                            continue;
-
-                        var screenCenter = _eyeManager.WorldToScreen(worldCenter);
-
-                        if (Intensity![i] > 9)
-                            screenCenter += (-12, -8);
-                        else
-                            screenCenter += (-8, -8);
-
-                        handle.DrawString(_font, screenCenter, Intensity![i].ToString("F2"));
-                    }
-                }
-
-                if (tileSetList.ContainsKey(0))
-                {
-                    var epicenter = tileSetList[0].First();
-                    var worldCenter = matrix.Transform((Vector2) epicenter + 0.5f);
-                    var screenCenter = _eyeManager.WorldToScreen(worldCenter) + (-24, -24);
-                    string text = $"{Intensity![0]:F2}\nΣ={TotalIntensity:F1}\nΔ={Slope:F1}";
-                    handle.DrawString(_font, screenCenter, text);
-                }
+            if (tileSets.ContainsKey(0))
+            {
+                var epicenter = tileSets[0].First();
+                var worldCenter = transform.Transform((Vector2) epicenter + 0.5f);
+                var screenCenter = _eyeManager.WorldToScreen(worldCenter) + (-24, -24);
+                var text = $"{Intensity![0]:F2}\nΣ={TotalIntensity:F1}\nΔ={Slope:F1}";
+                handle.DrawString(_font, screenCenter, text);
             }
         }
 
         private void DrawWorld(in OverlayDrawArgs args)
         {
             var handle = args.WorldHandle;
-            handle.SetTransform(Matrix3.Identity);
-            
-            foreach (var (gridId, tileSetList) in Tiles)
+            Box2 gridBounds;
+
+            foreach (var (gridId, tileSets) in Tiles)
             {
-                Matrix3 matrix;
-                Box2 gridBounds;
-                if (gridId.IsValid())
+                if (!_mapManager.TryGetGrid(gridId, out var grid))
+                    continue;
+
+                var gridXform = _entityManager.GetComponent<TransformComponent>(grid.GridEntityId);
+                handle.SetTransform(gridXform.WorldMatrix);
+                gridBounds = gridXform.InvWorldMatrix.TransformBox(args.WorldBounds);
+
+                DrawTiles(handle, gridBounds, tileSets);
+            }
+
+            if (SpaceTiles == null)
+                return;
+
+            gridBounds = Matrix3.Invert(SpaceMatrix).TransformBox(args.WorldBounds);
+            handle.SetTransform(SpaceMatrix);
+
+            DrawTiles(handle, gridBounds, SpaceTiles);
+        }
+
+        private void DrawTiles(
+            DrawingHandleWorld handle,
+            Box2 gridBounds,
+            Dictionary<int, HashSet<Vector2i>> tileSets)
+        {
+            for (var i = 0; i < Intensity.Count; i++)
+            {
+                var color = ColorMap(Intensity![i]);
+                var colorTransparent = color;
+                colorTransparent.A = 0.2f;
+
+
+                if (!tileSets.TryGetValue(i, out var tiles))
+                    continue;
+
+                foreach (var tile in tiles)
                 {
-                    if (!_mapManager.TryGetGrid(gridId, out var grid))
+                    // is the center of this tile visible to the user?
+                    if (!gridBounds.Contains((Vector2) tile + 0.5f))
                         continue;
 
-                    var gridXform = _entityManager.GetComponent<TransformComponent>(grid.GridEntityId);
-                    matrix = gridXform.WorldMatrix;
-                    gridBounds = gridXform.InvWorldMatrix.TransformBox(args.WorldBounds);
-                }
-                else
-                {
-                    matrix = SpaceMatrix;
-                    gridBounds = Matrix3.Invert(matrix).TransformBox(args.WorldBounds);
-                }
-
-                handle.SetTransform(matrix);
-
-                for (int i = 0; i < Intensity.Count; i++)
-                {
-                    var color = ColorMap(Intensity![i]);
-                    var colorTransparent = color;
-                    colorTransparent.A = 0.2f;
-
-
-                    if (!tileSetList.TryGetValue(i, out var tiles)) continue;
-                    foreach (var tile in tiles)
-                    {
-                        // is the center of this tile visible to the user?
-                        if (!gridBounds.Contains((Vector2) tile + 0.5f))
-                            continue;
-
-                        var box = Box2.UnitCentered.Translated((Vector2) tile + 0.5f);
-                        handle.DrawRect(box, color, false);
-                        handle.DrawRect(box, colorTransparent);
-                    }
+                    var box = Box2.UnitCentered.Translated((Vector2) tile + 0.5f);
+                    handle.DrawRect(box, color, false);
+                    handle.DrawRect(box, colorTransparent);
                 }
             }
         }

@@ -54,8 +54,16 @@ public class GridExplosion
 
     public Dictionary<Vector2i, AtmosDirection> EdgeTiles;
 
-    public GridExplosion(GridId gridId, Dictionary<Vector2i, TileData> airtightMap,
-        float maxIntensity, float intensityStepSize, string typeID, Dictionary<Vector2i, AtmosDirection> edgeTiles)
+    public GridExplosion(
+        GridId gridId,
+        Dictionary<Vector2i, TileData> airtightMap,
+        float maxIntensity,
+        float intensityStepSize,
+        string typeID,
+        Dictionary<Vector2i, AtmosDirection> edgeTiles,
+        GridId? referenceGrid,
+        Matrix3 spaceMatrix,
+        Angle spaceAngle)
     {
         GridId = gridId;
         AirtightMap = airtightMap;
@@ -77,10 +85,7 @@ public class GridExplosion
             }
         }
 
-        // we also need to include space tiles that are diagonally adjacent.
-        // note that tiles diagonally adjacent to diagonal-edges are ALWAYS directly adjacent to a pure edge tile.
-
-        // EXPLOSION TODO fix this jank. It can't be very performant
+        // EXPLOSION TODO fix this shit. It can't be very performant
         foreach (var (tile, dir) in EdgeTiles)
         {
             foreach (var diagTile in ExplosionSystem.GetDiagonalNeighbors(tile))
@@ -92,17 +97,18 @@ public class GridExplosion
                     SpaceTiles.Add(diagTile);
             }
         }
-    }
 
-    public void SetSpaceTransform(SpaceExplosion space)
-    {
+        if (referenceGrid == gridId)
+            return;
+
         NeedToTransform = true;
         var transform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(Grid.GridEntityId);
         var size = (float) Grid.TileSize;
+
         Matrix.R0C2 = size / 2;
         Matrix.R1C2 = size / 2;
-        Matrix *= transform.WorldMatrix * Matrix3.Invert(space.Matrix);
-        var relativeAngle = transform.WorldRotation - space.Angle;
+        Matrix *= transform.WorldMatrix * Matrix3.Invert(spaceMatrix);
+        var relativeAngle = transform.WorldRotation - spaceAngle;
         Offset = relativeAngle.RotateVec((size / 4, size / 4));
     }
 

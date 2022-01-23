@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Content.Shared.Atmos;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
 
@@ -13,9 +11,6 @@ namespace Content.Server.Explosion.EntitySystems;
 /// </summary>
 public class SpaceExplosion
 {
-    public Angle Angle = new();
-    public Matrix3 Matrix = Matrix3.Identity;
-
     public Dictionary<int, HashSet<Vector2i>> TileSets = new();
     public HashSet<Vector2i> Processed = new();
 
@@ -30,17 +25,13 @@ public class SpaceExplosion
 
     public float StepSize;
 
-    public SpaceExplosion(ExplosionSystem system, float tileSize, float stepSize, MapId targetMap, GridId? referenceGrid)
+    public SpaceExplosion(ExplosionSystem system, float stepSize, MapId targetMap, GridId? referenceGrid, List<GridId> localGrids)
     {
-        // TODO EXPLOSION transform only in-range grids
         // TODO EXPLOSION merge EdgeData and GridBlockMap
 
-        (GridBlockMap, Angle, var invMatrix) = system.TransformGridEdges(targetMap, referenceGrid);
-        Matrix = Matrix3.Invert(invMatrix);
-
-        system.GetUnblockedDirections(GridBlockMap, tileSize);
-
         StepSize = stepSize;
+        (GridBlockMap, var tileSize) = system.TransformGridEdges(targetMap, referenceGrid, localGrids);
+        system.GetUnblockedDirections(GridBlockMap, tileSize);
     }
 
     private AtmosDirection GetUnblocked(Vector2i tile)
@@ -89,12 +80,12 @@ public class SpaceExplosion
 
         foreach (var edge in blocker.BlockingGridEdges)
         {
-            if (!edge.Grid.IsValid()) continue;
+            if (edge.Grid == null) continue;
 
-            if (!gridTileSets.TryGetValue(edge.Grid, out var set))
+            if (!gridTileSets.TryGetValue(edge.Grid.Value, out var set))
             {
                 set = new();
-                gridTileSets[edge.Grid] = set;
+                gridTileSets[edge.Grid.Value] = set;
             }
 
             set.Add(edge.Tile);

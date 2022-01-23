@@ -97,7 +97,7 @@ public sealed class ExplosionOverlaySystem : EntitySystem
             return;
 
         // spawn in a light source at the epicenter
-        var lightEntity = EntityManager.SpawnEntity("ExplosionLight", args.Epicenter);
+        var lightEntity = Spawn("ExplosionLight", args.Epicenter);
         var light = EnsureComp<PointLightComponent>(lightEntity);
         light.Energy = light.Radius = args.Intensity.Count;
         light.Color = type.LightColor;
@@ -150,6 +150,7 @@ public sealed class ExplosionOverlaySystem : EntitySystem
 
 internal class Explosion
 {
+    public Dictionary<int, HashSet<Vector2i>>? SpaceTiles;
     public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles;
     public List<float> Intensity;
     public EntityUid LightEntity;
@@ -174,6 +175,7 @@ internal class Explosion
     internal Explosion(ExplosionEvent args, ExplosionPrototype type, EntityUid lightEntity)
     {
         Map = args.Epicenter.MapId;
+        SpaceTiles = args.SpaceTiles;
         Tiles = args.Tiles;
         Intensity = args.Intensity;
         SpaceMatrix = args.SpaceMatrix;

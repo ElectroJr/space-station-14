@@ -51,7 +51,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         }
 
         /// <summary>
-        ///     Receive explosion preview data and add a clientside explosion preview overlay
+        ///     Receive explosion preview data and add a client-side explosion preview overlay
         /// </summary>
         /// <param name="msg"></param>
         public override void HandleMessage(EuiMessageBase msg)
@@ -66,6 +66,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             }
 
             _debugOverlay.Tiles = data.Explosion.Tiles;
+            _debugOverlay.SpaceTiles = data.Explosion.SpaceTiles;
             _debugOverlay.Intensity = data.Explosion.Intensity;
             _debugOverlay.Slope = data.Slope;
             _debugOverlay.TotalIntensity = data.TotalIntensity;

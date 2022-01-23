@@ -74,43 +74,50 @@ public sealed class ExplosionOverlay : Overlay
             return;
 
         Box2 gridBounds;
-        Matrix3 worldMatrix;
-        foreach (var (gridId, tileSetList) in exp.Tiles)
+        foreach (var (gridId, tiles) in exp.Tiles)
         {
-            if (gridId.IsValid())
+            if (!_mapManager.TryGetGrid(gridId, out var grid))
+                continue;
+
+            gridBounds = grid.InvWorldMatrix.TransformBox(worldBounds);
+            drawHandle.SetTransform(grid.WorldMatrix);
+
+            DrawTiles(drawHandle, gridBounds, index, tiles, exp);
+        }
+
+        if (exp.SpaceTiles == null)
+            return;
+
+        gridBounds = Matrix3.Invert(exp.SpaceMatrix).TransformBox(worldBounds);
+        drawHandle.SetTransform(exp.SpaceMatrix);
+        
+        DrawTiles(drawHandle, gridBounds, index, exp.SpaceTiles, exp);
+    }
+
+    private void DrawTiles(
+        DrawingHandleWorld drawHandle,
+        Box2 gridBounds,
+        int index,
+        Dictionary<int, HashSet<Vector2i>> tileSets,
+        Explosion exp)
+    {
+        for (var j = 0; j < index; j++)
+        {
+            if (!tileSets.TryGetValue(j, out var tiles))
+                continue;
+
+            var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.FireFrames.Count - 1);
+            var frames = exp.FireFrames[frameIndex];
+
+            foreach (var tile in tiles)
             {
-                if (!_mapManager.TryGetGrid(gridId, out var grid))
+                Vector2 bottomLeft = (tile.X, tile.Y);
+
+                if (!gridBounds.Contains((bottomLeft + 0.5f) * 1f))
                     continue;
 
-                gridBounds = grid.InvWorldMatrix.TransformBox(worldBounds);
-                worldMatrix = grid.WorldMatrix;
-            }
-            else
-            {
-                gridBounds = Matrix3.Invert(exp.SpaceMatrix).TransformBox(worldBounds);
-                worldMatrix = exp.SpaceMatrix;
-            }
-            
-            drawHandle.SetTransform(worldMatrix);
-
-            for (var j = 0; j < index; j++)
-            {
-                if (!tileSetList.TryGetValue(j, out var tiles)) continue;
-
-                var frameIndex = (int) Math.Min(exp.Intensity[j] / IntensityPerState, exp.FireFrames.Count - 1);
-                var frames = exp.FireFrames[frameIndex];
-
-
-                foreach (var tile in tiles)
-                {
-                    Vector2 bottomLeft = (tile.X, tile.Y);
-
-                    if (!gridBounds.Contains((bottomLeft + 0.5f)*1f))
-                        continue;
-
-                    var texture = _robustRandom.Pick(frames);
-                    drawHandle.DrawTexture(texture, bottomLeft, exp.FireColor);
-                }
+                var texture = _robustRandom.Pick(frames);
+                drawHandle.DrawTexture(texture, bottomLeft, exp.FireColor);
             }
         }
     }

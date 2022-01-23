@@ -1,4 +1,3 @@
-using Content.Shared.Atmos;
 using Content.Shared.Inventory;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
@@ -39,6 +38,7 @@ public class ExplosionEvent : EntityEventArgs
 {
     public MapCoordinates Epicenter;
 
+    public Dictionary<int, HashSet<Vector2i>>? SpaceTiles;
     public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles;
 
     public List<float> Intensity;
@@ -49,9 +49,17 @@ public class ExplosionEvent : EntityEventArgs
 
     public byte ExplosionId;
 
-    public ExplosionEvent(byte explosionId, MapCoordinates epicenter, string typeID, List<float> intensity, Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles, Matrix3 spaceMatrix)
+    public ExplosionEvent(
+        byte explosionId,
+        MapCoordinates epicenter,
+        string typeID,
+        List<float> intensity,
+        Dictionary<int, HashSet<Vector2i>>? spaceTiles,
+        Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tiles,
+        Matrix3 spaceMatrix)
     {
         Epicenter = epicenter;
+        SpaceTiles = spaceTiles;
         Tiles = tiles;
         Intensity = intensity;
         TypeID = typeID;
