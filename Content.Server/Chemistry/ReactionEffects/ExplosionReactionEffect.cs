@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using Content.Server.Chemistry.Components.SolutionManager;
 using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Administration.Logs;
@@ -18,6 +19,7 @@ namespace Content.Server.Chemistry.ReactionEffects
         ///     The type of explosion. Determines damage types and tile break chance scaling.
         /// </summary>
         [DataField("explosionType", required: true, customTypeSerializer: typeof(PrototypeIdSerializer<ExplosionPrototype>))]
+        [JsonIgnore]
         public string ExplosionType = default!;
 
         /// <summary>
@@ -25,12 +27,14 @@ namespace Content.Server.Chemistry.ReactionEffects
         ///     chance.
         /// </summary>
         [DataField("maxIntensity")]
+        [JsonIgnore]
         public float MaxIntensity = 5;
         
         /// <summary>
         ///     How quickly intensity drops off as you move away from the epicenter
         /// </summary>
         [DataField("intensitySlope")]
+        [JsonIgnore]
         public float IntensitySlope = 1;
 
         /// <summary>
@@ -41,12 +45,14 @@ namespace Content.Server.Chemistry.ReactionEffects
         ///     A slope of 1 and MaxTotalIntensity of 100 corresponds to a radius of around 4.5 tiles.
         /// </remarks>
         [DataField("maxTotalIntensity")]
+        [JsonIgnore]
         public float MaxTotalIntensity = 100;
 
         /// <summary>
         ///     The intensity of the explosion per unit reaction.
         /// </summary>
         [DataField("intensityPerUnit")]
+        [JsonIgnore]
         public float IntensityPerUnit = 1;
 
         public override bool ShouldLog => true;
