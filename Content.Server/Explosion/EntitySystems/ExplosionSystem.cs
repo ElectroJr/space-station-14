@@ -20,6 +20,7 @@ using Robust.Shared.Maths;
 using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
+using Robust.Shared.Timing;
 
 namespace Content.Server.Explosion.EntitySystems;
 
@@ -32,16 +33,17 @@ public sealed partial class ExplosionSystem : EntitySystem
     [Dependency] private readonly IConfigurationManager _cfg = default!;
     [Dependency] private readonly IPlayerManager _playerManager = default!;
     [Dependency] private readonly IEntityLookup _entityLookup = default!;
+    [Dependency] private readonly IGameTiming _gameTiming = default!;
 
     [Dependency] private readonly DamageableSystem _damageableSystem = default!;
     [Dependency] private readonly ContainerSystem _containerSystem = default!;
     [Dependency] private readonly NodeGroupSystem _nodeGroupSystem = default!;
     [Dependency] private readonly CameraRecoilSystem _recoilSystem = default!;
 
-
-    // TODO EXPLOSION MAKE THESE CVARS
-
-    public const ushort DefaultTileSize = 5;
+    /// <summary>
+    ///     "Tile-size" for space when there are no nearby grids to use as a reference.
+    /// </summary>
+    public const ushort DefaultTileSize = 1;
 
     #region cvars
     public int MaxIterations { get; private set; }
@@ -157,7 +159,6 @@ public sealed partial class ExplosionSystem : EntitySystem
         return coneVolume - h * MathF.PI / 3 * MathF.Pow(h / slope, 2);
     }
 
-
     /// <summary>
     ///     Inverse formula for <see cref="RadiusToIntensity"/>
     /// </summary>
@@ -187,10 +188,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         float slope,
         float maxTileIntensity)
     {
-        if (!EntityManager.TryGetComponent(uid, out TransformComponent? transform))
-            return;
-
-        QueueExplosion(transform.MapPosition, typeId, intensity, slope, maxTileIntensity);
+        QueueExplosion(Transform(uid).MapPosition, typeId, intensity, slope, maxTileIntensity);
     }
 
     /// <summary>
@@ -231,7 +229,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         if (results == null)
             return null;
 
-        var (iterationIntensity, spaceData, gridData, spaceMatrix) = results.Value;
+        var (area, iterationIntensity, spaceData, gridData, spaceMatrix) = results.Value;
 
         RaiseNetworkEvent(GetExplosionEvent(epicenter, type.ID, spaceMatrix, spaceData, gridData.Values, iterationIntensity));
 
@@ -252,7 +250,8 @@ public sealed partial class ExplosionSystem : EntitySystem
             gridData.Values.ToList(),
             iterationIntensity,
             epicenter,
-            spaceMatrix
+            spaceMatrix,
+            area
             );
     }
 

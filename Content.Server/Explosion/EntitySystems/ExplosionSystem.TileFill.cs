@@ -23,7 +23,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <param name="maxIntensity">The maximum intensity that the explosion can have at any given tile. This
     /// effectively caps the damage that this explosion can do.</param>
     /// <returns>A list of tile-sets and a list of intensity values which describe the explosion.</returns>
-    public (List<float>, SpaceExplosion?, Dictionary<GridId, GridExplosion>, Matrix3)? GetExplosionTiles(
+    public (int, List<float>, SpaceExplosion?, Dictionary<GridId, GridExplosion>, Matrix3)? GetExplosionTiles(
         MapCoordinates epicenter,
         string typeID,
         float totalIntensity,
@@ -139,7 +139,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // Is this even a multi-tile explosion?
         if (totalIntensity < stepSize)
             // Bit anticlimactic. All that set up for nothing....
-            return (new List<float> { totalIntensity }, spaceData, gridData, spaceMatrix);
+            return (1, new List<float> { totalIntensity }, spaceData, gridData, spaceMatrix);
         
         // TThese variables keep track of the total intensity we have distributed
         List<int> tilesInIteration = new() { 1 };
@@ -260,7 +260,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
         spaceData?.CleanUp();
 
-        return (iterationIntensity, spaceData, gridData, spaceMatrix);
+        return (totalTiles, iterationIntensity, spaceData, gridData, spaceMatrix);
     }
 
     /// <summary>

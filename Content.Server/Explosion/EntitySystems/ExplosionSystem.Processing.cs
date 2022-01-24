@@ -31,6 +31,15 @@ public sealed partial class ExplosionSystem : EntitySystem
     // but then need to ignore PVS?
 
     /// <summary>
+    ///     Arbitrary definition for when an explosion is large enough to require separating the area/tile-finding and
+    ///     the processing into separate ticks.
+    /// </summary>
+    /// <remarks>
+    ///     Only used when the explosion processing is not limited by time.
+    /// </remarks>
+    public const int NukeArea = 400;
+
+    /// <summary>
     ///     Used to limit explosion processing time. See <see cref="MaxProcessingTime"/>.
     /// </summary>
     internal readonly Stopwatch Stopwatch = new();
@@ -99,7 +108,21 @@ public sealed partial class ExplosionSystem : EntitySystem
 
                 // just a lil nap
                 if (SleepNodeSys)
+                {
                     _nodeGroupSystem.Snoozing = true;
+                    // snooze grid-chunk regeneration?
+                    // snooze power network (recipients look for new suppliers as wires get destroyed).
+                }
+
+                // if this is a single-tick explosion (i.e., not severely limited by number of tiles per tick or
+                // processing time, we want to process large explosion on a tick separate from the one they were
+                // generated on.
+                if (_activeExplosion.Area > NukeArea
+                    && MaxProcessingTime >= _gameTiming.TickPeriod.TotalMilliseconds)
+                {
+                    // start processing next turn.
+                    break;
+                }
             }
 
             var processed = _activeExplosion.Proccess(tilesRemaining);
@@ -361,6 +384,8 @@ class Explosion
     private int _currentDataIndex;
     private Dictionary<IMapGrid, List<(Vector2i, Tile)>> _tileUpdateDict = new();
 
+    public int Area;
+
     private readonly ExplosionSystem _system;
 
     public Explosion(ExplosionSystem system,
@@ -369,12 +394,14 @@ class Explosion
         List<GridExplosion> gridData,
         List<float> tileSetIntensity,
         MapCoordinates epicenter,
-        Matrix3 spaceMatrix)
+        Matrix3 spaceMatrix,
+        int area)
     {
         _system = system;
         ExplosionType = explosionType;
         _tileSetIntensity = tileSetIntensity;
         Epicenter = epicenter;
+        Area = area;
 
         var entityMan = IoCManager.Resolve<IEntityManager>();
         var mapMan = IoCManager.Resolve<IMapManager>();

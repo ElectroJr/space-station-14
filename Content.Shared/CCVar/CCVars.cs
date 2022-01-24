@@ -360,7 +360,7 @@ namespace Content.Shared.CCVar
         ///     unnaturally "slow" explosions.
         /// </remarks>
         public static readonly CVarDef<int> ExplosionTilesPerTick =
-            CVarDef.Create("explosion.tilespertick", int.MaxValue, CVar.SERVERONLY);
+            CVarDef.Create("explosion.tilespertick", 100, CVar.SERVERONLY);
 
         /// <summary>
         ///     Whether or not explosions actually physics-throw entities. Disabling this will improve performance
@@ -405,7 +405,7 @@ namespace Content.Shared.CCVar
         ///     spawning cannot currently be interrupted & resumed, and may lead to exceeding this time limit.
         /// </remarks>
         public static readonly CVarDef<int> ExplosionMaxProcessingTime =
-            CVarDef.Create("explosion.maxtime", 9995, CVar.SERVERONLY);
+            CVarDef.Create("explosion.maxtime", 7, CVar.SERVERONLY);
 
         /// <summary>
         ///     If the explosion is being processed incrementally over several ticks, this variable determines whether

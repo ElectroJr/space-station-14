@@ -44,9 +44,9 @@ namespace Content.Server.Administration.UI
             if (results == null)
                 return;
 
-            var (iterationIntensity, spaceData, gridData, spaceMatrix) = results.Value;
+            var (area, iterationIntensity, spaceData, gridData, spaceMatrix) = results.Value;
 
-            Logger.Info($"Generated explosion preview in {stopwatch.Elapsed.TotalMilliseconds}ms");
+            Logger.Info($"Generated explosion preview with {area} tiles in {stopwatch.Elapsed.TotalMilliseconds}ms");
 
             // the explosion event that **would** be sent to all clients, if it were a real explosion.
             var explosion = sys.GetExplosionEvent(request.Epicenter, request.TypeId, spaceMatrix, spaceData, gridData.Values, iterationIntensity);
