@@ -2,11 +2,11 @@ using System.Collections.Generic;
 using Content.Server.Chat.Managers;
 using Content.Server.Construction.Components;
 using Content.Server.Coordinates.Helpers;
+using Content.Server.Explosion.EntitySystems;
 using Content.Server.Popups;
 using Content.Server.UserInterface;
 using Content.Shared.ActionBlocker;
 using Content.Shared.Audio;
-using Content.Shared.Body.Components;
 using Content.Shared.Containers.ItemSlots;
 using Content.Shared.Interaction;
 using Content.Shared.Interaction.Helpers;
@@ -29,7 +29,7 @@ namespace Content.Server.Nuke
         [Dependency] private readonly ActionBlockerSystem _actionBlocker = default!;
         [Dependency] private readonly ItemSlotsSystem _itemSlots = default!;
         [Dependency] private readonly PopupSystem _popups = default!;
-        [Dependency] private readonly IEntityLookup _lookup = default!;
+        [Dependency] private readonly ExplosionSystem _explosions = default!;
         [Dependency] private readonly IChatManager _chat = default!;
 
         private readonly HashSet<EntityUid> _tickingBombs = new();
@@ -406,19 +406,16 @@ namespace Content.Server.Nuke
             if (!Resolve(uid, ref component, ref transform))
                 return;
 
-            // gib anyone in a blast radius
-            // its lame, but will work for now
-            var pos = transform.Coordinates;
-            var ents = _lookup.GetEntitiesInRange(pos, component.BlastRadius);
-            foreach (var ent in ents)
-            {
-                var entUid = ent;
-                if (!EntityManager.EntityExists(entUid))
-                    continue;;
+            if (component.Exploded)
+                return;
 
-                if (EntityManager.TryGetComponent(entUid, out SharedBodyComponent? body))
-                    body.Gib();
-            }
+            component.Exploded = true;
+
+            _explosions.QueueExplosion(uid,
+                component.ExplosionType,
+                component.TotalIntensity,
+                component.IntensitySlope,
+                component.MaxIntensity);
 
             EntityManager.DeleteEntity(uid);
         }
