@@ -463,14 +463,7 @@ class Explosion
     {
         // In case the explosion terminated early last tick due to exceeding the allocated processing time, use this
         // time to update the tiles.
-        foreach (var (grid, list) in _tileUpdateDict)
-        {
-            if (list.Count > 0)
-            {
-                grid.SetTiles(list);
-            }
-        }
-        _tileUpdateDict.Clear();
+        SetTiles();
 
         int processed;
         for (processed = 0; processed < processingTarget; processed++)
@@ -520,6 +513,15 @@ class Explosion
                 break;
         }
 
+        SetTiles();
+        return processed;
+    }
+
+    private void SetTiles()
+    {
+        if (!_system.IncrementalTileBreaking && !FinishedProcessing)
+            return;
+
         foreach (var (grid, list) in _tileUpdateDict)
         {
             if (list.Count > 0)
@@ -528,8 +530,6 @@ class Explosion
             }
         }
         _tileUpdateDict.Clear();
-
-        return processed;
     }
 }
 

@@ -407,6 +407,18 @@ namespace Content.Shared.CCVar
         public static readonly CVarDef<int> ExplosionMaxProcessingTime =
             CVarDef.Create("explosion.maxtime", 9995, CVar.SERVERONLY);
 
+        /// <summary>
+        ///     If the explosion is being processed incrementally over several ticks, this variable determines whether
+        ///     updating the grid tiles should be done incrementally at the end of every tick, or only once the explosion has finished processing.
+        /// </summary>
+        /// <remarks>
+        ///     The most notable consequence of this change is that explosions will only punch a hole in the station &
+        ///     create a vacumm once they have finished exploding. So airlocks will no longer slam shut as the explosion
+        ///     expands, just suddenly at the end.
+        /// </remarks>
+        public static readonly CVarDef<bool> ExplosionIncrementalTileBreaking =
+            CVarDef.Create("explosion.incrementaltile", false, CVar.SERVERONLY);
+
         /*
          * Admin logs
          */

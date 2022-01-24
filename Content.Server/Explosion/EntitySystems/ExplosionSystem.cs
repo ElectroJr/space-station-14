@@ -50,6 +50,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     public int TilesPerTick { get; private set; }
     public bool EnablePhysicsThrow { get; private set; }
     public bool SleepNodeSys { get; private set; }
+    public bool IncrementalTileBreaking { get; private set; }
     #endregion
 
     private AudioParams _audioParams = AudioParams.Default.WithVolume(-3f);
@@ -73,6 +74,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         _cfg.OnValueChanged(CCVars.ExplosionMaxArea, value => MaxArea = value, true);
         _cfg.OnValueChanged(CCVars.ExplosionMaxIterations, value => MaxIterations = value, true);
         _cfg.OnValueChanged(CCVars.ExplosionMaxProcessingTime, value => MaxProcessingTime = value, true);
+        _cfg.OnValueChanged(CCVars.ExplosionIncrementalTileBreaking, value => IncrementalTileBreaking = value, true);
     }
 
     public override void Shutdown()
