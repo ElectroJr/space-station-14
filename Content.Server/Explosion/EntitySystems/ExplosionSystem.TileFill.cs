@@ -48,10 +48,12 @@ public sealed partial class ExplosionSystem : EntitySystem
         }
         else if (referenceGrid != null)
         {
+            // reference grid defines coordinate system that the explosion in space will use
             initialTile = _mapManager.GetGrid(referenceGrid.Value).WorldToTile(epicenter.Position);
         }
         else
         {
+            // this is a space-based explosion that (should) not touch any grids.
             initialTile = new Vector2i(
                     (int) Math.Floor(epicenter.Position.X / DefaultTileSize),
                     (int) Math.Floor(epicenter.Position.Y / DefaultTileSize));

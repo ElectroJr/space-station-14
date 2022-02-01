@@ -17,7 +17,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
 {
     [GenerateTypedNameReferences]
     [UsedImplicitly]
-    public partial class SpawnExplosionWindow : SS14Window
+    public partial class SpawnExplosionWindow : DefaultWindow
     {
         [Dependency] private readonly IClientConsoleHost _conHost = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
@@ -138,8 +138,8 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             // so assemble command arguments:
             var mapId = _mapData[MapOptions.SelectedId];
             var explosionType = _explosionTypes[ExplosionOption.SelectedId];
-            var cmd = $"explosion {MapX.Value} {MapY.Value} {Intensity.Value} {mapId} " +
-                $"{Slope.Value} {MaxIntensity.Value} {explosionType}";
+            var cmd = $"explosion {Intensity.Value} {Slope.Value} {MaxIntensity.Value} {MapX.Value} {MapY.Value} {mapId} {explosionType}";
+
             _conHost.ExecuteCommand(cmd);
         }
     }
