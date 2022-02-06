@@ -6,8 +6,6 @@ namespace Content.Shared.Inventory;
 
 public class InventoryComponent : Component
 {
-    public sealed override string Name => "Inventory";
-
     [DataField("templateId", required: true,
         customTypeSerializer: typeof(PrototypeIdSerializer<InventoryTemplatePrototype>))]
     public string TemplateId { get; } = "human";

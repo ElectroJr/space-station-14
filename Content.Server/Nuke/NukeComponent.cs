@@ -20,8 +20,6 @@ namespace Content.Server.Nuke
     [Friend(typeof(NukeSystem))]
     public class NukeComponent : Component
     {
-        public override string Name => "Nuke";
-
         /// <summary>
         ///     Default bomb timer value in seconds.
         /// </summary>
