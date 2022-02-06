@@ -150,8 +150,8 @@ public sealed class ExplosionOverlaySystem : EntitySystem
 
 internal class Explosion
 {
-    public Dictionary<int, HashSet<Vector2i>>? SpaceTiles;
-    public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles;
+    public Dictionary<int, List<Vector2i>>? SpaceTiles;
+    public Dictionary<GridId, Dictionary<int, List<Vector2i>>> Tiles;
     public List<float> Intensity;
     public EntityUid LightEntity;
     public MapId Map;

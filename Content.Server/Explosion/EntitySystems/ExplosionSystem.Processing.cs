@@ -350,7 +350,7 @@ class Explosion
     struct ExplosionData
     {
         public EntityLookupComponent Lookup;
-        public Dictionary<int, HashSet<Vector2i>> TileSets;
+        public Dictionary<int, List<Vector2i>> TileLists;
         public IMapGrid? MapGrid;
     }
 
@@ -380,7 +380,7 @@ class Explosion
     private EntityLookupComponent _currentLookup = default!;
     private IMapGrid? _currentGrid;
     private float _currentIntensity;
-    private HashSet<Vector2i>.Enumerator _currentEnumerator;
+    private List<Vector2i>.Enumerator _currentEnumerator;
     private int _currentDataIndex;
     private Dictionary<IMapGrid, List<(Vector2i, Tile)>> _tileUpdateDict = new();
 
@@ -412,7 +412,7 @@ class Explosion
 
             _explosionData.Add(new()
             {
-                TileSets = spaceData.TileSets,
+                TileLists = spaceData.TileLists,
                 Lookup = entityMan.GetComponent<EntityLookupComponent>(mapUid),
                 MapGrid = null
             });
@@ -425,7 +425,7 @@ class Explosion
         {
             _explosionData.Add(new()
             {
-                TileSets = grid.TileSets,
+                TileLists = grid.TileLists,
                 Lookup = entityMan.GetComponent<EntityLookupComponent>(grid.Grid.GridEntityId),
                 MapGrid = grid.Grid
             });
@@ -445,14 +445,14 @@ class Explosion
             while (_currentDataIndex < _explosionData.Count)
             {
                 // try get any tile hash-set corresponding to this intensity
-                var tileSets = _explosionData[_currentDataIndex].TileSets;
-                if (!tileSets.TryGetValue(CurrentIteration, out var tileSet))
+                var tileSets = _explosionData[_currentDataIndex].TileLists;
+                if (!tileSets.TryGetValue(CurrentIteration, out var tileList))
                 {
                     _currentDataIndex++;
                     continue;
                 }
 
-                _currentEnumerator = tileSet.GetEnumerator();
+                _currentEnumerator = tileList.GetEnumerator();
                 _currentLookup = _explosionData[_currentDataIndex].Lookup;
                 _currentGrid = _explosionData[_currentDataIndex].MapGrid;
 

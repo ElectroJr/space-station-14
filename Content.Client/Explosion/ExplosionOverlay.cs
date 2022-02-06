@@ -98,7 +98,7 @@ public sealed class ExplosionOverlay : Overlay
         DrawingHandleWorld drawHandle,
         Box2 gridBounds,
         int index,
-        Dictionary<int, HashSet<Vector2i>> tileSets,
+        Dictionary<int, List<Vector2i>> tileSets,
         Explosion exp)
     {
         for (var j = 0; j < index; j++)

@@ -1,61 +1,42 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Content.Shared.Atmos;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 
 namespace Content.Server.Explosion.EntitySystems;
 
-public class GridExplosion
+internal sealed class GridExplosion : TileExplosion
 {
-    public GridId GridId;
     public IMapGrid Grid;
-    public bool NeedToTransform = false;
+    private bool _needToTransform = false;
 
-    public Matrix3 Matrix = Matrix3.Identity;
-    public Vector2 Offset;
+    private Matrix3 _matrix = Matrix3.Identity;
+    private Vector2 _offset;
 
-    public Dictionary<int, HashSet<Vector2i>> TileSets = new();
+    private HashSet<Vector2i> _processedSpaceTiles = new();
 
     // Tiles which neighbor an exploding tile, but have not yet had the explosion spread to them due to an
     // airtight entity on the exploding tile that prevents the explosion from spreading in that direction. These
     // will be added as a neighbor after some delay, once the explosion on that tile is sufficiently strong to
     // destroy the airtight entity.
-    public Dictionary<int, List<(Vector2i, AtmosDirection)>> DelayedNeighbors = new();
+    private Dictionary<int, List<(Vector2i, AtmosDirection)>> _delayedNeighbors = new();
 
-    // This is a tile which is currently exploding, but has not yet started to spread the explosion to
-    // surrounding tiles. This happens if the explosion attempted to enter this tile, and there was some
-    // airtight entity on this tile blocking explosions from entering from that direction. Once the explosion is
-    // strong enough to destroy this airtight entity, it will begin to spread the explosion to neighbors.
-    // This maps an iteration index to a list of delayed spreaders that begin spreading at that iteration.
-    public SortedDictionary<int, HashSet<Vector2i>> DelayedSpreaders = new();
+    private Dictionary<Vector2i, TileData> _airtightMap;
 
-    // What iteration each delayed spreader originally belong to
-    public Dictionary<Vector2i, int> DelayedSpreaderIteration = new();
-
-    // List of all tiles in the explosion.
-    // Used to avoid explosions looping back in on themselves.
-    public HashSet<Vector2i> Processed = new();
-
-    public Dictionary<Vector2i, TileData> AirtightMap;
-
-    public float MaxIntensity;
-    public float IntensityStepSize;
-    public string TypeID;
+    private float _maxIntensity;
+    private float _intensityStepSize;
+    private string _typeID;
 
     /// <summary>
     ///     Tiles on this grid that are not actually on this grid.... uhh ... yeah.... look its faster than checking
     ///     atmos directions every iteration.
     /// </summary>
-    public HashSet<Vector2i> SpaceTiles = new();
+    private HashSet<Vector2i> _spaceTiles = new();
 
-    public Dictionary<Vector2i, AtmosDirection> EdgeTiles;
+    public HashSet<Vector2i> SpaceJump = new();
+
+    private Dictionary<Vector2i, AtmosDirection> _edgeTiles;
 
     public GridExplosion(
-        GridId gridId,
+        IMapGrid grid,
         Dictionary<Vector2i, TileData> airtightMap,
         float maxIntensity,
         float intensityStepSize,
@@ -65,211 +46,217 @@ public class GridExplosion
         Matrix3 spaceMatrix,
         Angle spaceAngle)
     {
-        GridId = gridId;
-        AirtightMap = airtightMap;
-        MaxIntensity = maxIntensity;
-        IntensityStepSize = intensityStepSize;
-        TypeID = typeID;
-        EdgeTiles = edgeTiles;
-
-        Grid = IoCManager.Resolve<IMapManager>().GetGrid(gridId);
+        Grid = grid;
+        _airtightMap = airtightMap;
+        _maxIntensity = maxIntensity;
+        _intensityStepSize = intensityStepSize;
+        _typeID = typeID;
+        _edgeTiles = edgeTiles;
 
         // initialise SpaceTiles
-        foreach (var (tile, dir) in EdgeTiles)
+        foreach (var (tile, dir) in _edgeTiles)
         {
             for (var i = 0; i < Atmospherics.Directions; i++)
             {
                 var direction = (AtmosDirection) (1 << i);
                 if (dir.IsFlagSet(direction))
-                    SpaceTiles.Add(tile.Offset(direction));
+                    _spaceTiles.Add(tile.Offset(direction));
             }
         }
 
-        // EXPLOSION TODO fix this shit. It can't be very performant
-        foreach (var (tile, dir) in EdgeTiles)
+        // TODO EXPLOSIONS fix this shit.
+        foreach (var tile in _edgeTiles.Keys)
         {
             foreach (var diagTile in ExplosionSystem.GetDiagonalNeighbors(tile))
             {
-                if (SpaceTiles.Contains(diagTile))
+                if (_spaceTiles.Contains(diagTile))
                     continue;
 
                 if (!Grid.TryGetTileRef(diagTile, out var tileRef) || tileRef.Tile.IsEmpty)
-                    SpaceTiles.Add(diagTile);
+                    _spaceTiles.Add(diagTile);
             }
         }
 
-        if (referenceGrid == gridId)
+        if (referenceGrid == Grid.Index)
             return;
 
-        NeedToTransform = true;
+        _needToTransform = true;
         var transform = IoCManager.Resolve<IEntityManager>().GetComponent<TransformComponent>(Grid.GridEntityId);
         var size = (float) Grid.TileSize;
 
-        Matrix.R0C2 = size / 2;
-        Matrix.R1C2 = size / 2;
-        Matrix *= transform.WorldMatrix * Matrix3.Invert(spaceMatrix);
+        _matrix.R0C2 = size / 2;
+        _matrix.R1C2 = size / 2;
+        _matrix *= transform.WorldMatrix * Matrix3.Invert(spaceMatrix);
         var relativeAngle = transform.WorldRotation - spaceAngle;
-        Offset = relativeAngle.RotateVec((size / 4, size / 4));
+        _offset = relativeAngle.RotateVec((size / 4, size / 4));
     }
 
-    public int AddNewTiles(int iteration, HashSet<Vector2i>? inputGridTiles, HashSet<Vector2i> outputSpaceTiles)
+    public int AddNewTiles(int iteration, HashSet<Vector2i>? gridJump)
     {
-        HashSet<Vector2i> newTiles = new();
-        var newTileCount = 0;
+        SpaceJump = new();
+        NewTiles = new();
+        NewBlockedTiles = new();
 
-        // Use GetNewTiles to enumerate over neighbors of tiles that were recently added to tileSetList.
-        foreach (var (newTile, direction) in GetNewTiles(iteration, inputGridTiles))
+        // Mark tiles as entered if any were just freed due to airtight/explosion blockers being destroyed.
+        if (FreedTileLists.TryGetValue(iteration, out var freed))
         {
-            var blockedDirections = AtmosDirection.Invalid;
-            float sealIntegrity = 0;
+            freed.ExceptWith(EnteredBlockedTiles);
+            EnteredBlockedTiles.UnionWith(freed);
+            NewFreedTiles = freed;
+        }
+        else
+            NewFreedTiles = new();
 
-            // is this a space tile?
-            if (ProcessSpace(newTile, outputSpaceTiles))
-                continue;
+        // Add adjacent tiles
+        if (TileLists.TryGetValue(iteration - 2, out var adjacent))
+            AddNewAdjacentTiles(iteration, adjacent, false);
+        if (FreedTileLists.TryGetValue(iteration - 2, out var delayedAdjacent))
+            AddNewAdjacentTiles(iteration, delayedAdjacent, true);
 
-            if (AirtightMap.TryGetValue(newTile, out var tileData))
+        // Add diagonal tiles
+        if (TileLists.TryGetValue(iteration - 3, out var diagonal))
+            AddNewDiagonalTiles(iteration, diagonal, false);
+        if (FreedTileLists.TryGetValue(iteration - 3, out var delayedDiagonal))
+            AddNewDiagonalTiles(iteration, delayedDiagonal, true);
+
+        // Add delayed tiles
+        AddDelayedNeighbors(iteration);
+
+        // Tiles from Spaaaace
+        if (gridJump != null)
+        {
+            foreach (var tile in gridJump)
             {
-                blockedDirections = tileData.BlockedDirections;
-                if (!tileData.ExplosionTolerance.TryGetValue(TypeID, out sealIntegrity))
-                    sealIntegrity = float.MaxValue; // indestructible airtight entity
+                ProcessNewTile(iteration, tile, AtmosDirection.Invalid);
             }
+        }
 
-            // If the explosion is entering this new tile from an unblocked direction, we add it directly
-            if (blockedDirections == AtmosDirection.Invalid || // no blocked directions
-               direction == AtmosDirection.Invalid && (blockedDirections & EdgeTiles[newTile]) == 0 || // coming from space
-               direction != AtmosDirection.Invalid && !blockedDirections.IsFlagSet(direction.GetOpposite()) ) // just unblocked
-            {
-                Processed.Add(newTile);
-                newTiles.Add(newTile);
+        // Store new tiles
+        if (NewTiles.Count != 0)
+            TileLists[iteration] = NewTiles;
+        if (NewBlockedTiles.Count != 0)
+            BlockedTileLists[iteration] = NewBlockedTiles;
 
-                if (!DelayedSpreaderIteration.ContainsKey(newTile))
-                {
-                    newTileCount++;
-                }
+        return NewTiles.Count + NewBlockedTiles.Count;
+    }
 
-                continue;
-            }
+    protected override void ProcessNewTile(int iteration, Vector2i tile, AtmosDirection entryDirections)
+    {
+        // Is there an airtight blocker on this tile?
+        if (!_airtightMap.TryGetValue(tile, out var tileData))
+        {
+            // No blocker. Ezy. Though maybe this a space tile?
 
-            // the explosion is trying to enter from a blocked direction. Are we already attempting to enter
-            // this tile from another blocked direction?
-            if (DelayedSpreaderIteration.ContainsKey(newTile))
-                continue;
+            if (_spaceTiles.Contains(tile))
+                JumpToSpace(tile);
+            else if (ProcessedTiles.Add(tile))
+                NewTiles.Add(tile);
 
-            // If this tile is blocked from all directions. then there is no way to snake around and spread
-            // out from it without first breaking the blocker. So we can already mark it as processed for future iterations.
-            if (blockedDirections == AtmosDirection.All)
-                Processed.Add(newTile);
+            return;
+        }
+
+        // If the explosion is entering this new tile from an unblocked direction, we add it directly. Note that because
+        // for space -> grid jumps, we don't have a direction from which the explosion came, we will only assume it is
+        // unblocked if all space-facing directions are unblocked. Though this could eventually be done properly.
+
+        bool blocked;
+        var blockedDirections = tileData.BlockedDirections;
+        if (entryDirections == AtmosDirection.Invalid) // is coming from space?
+        {
+            var spaceDirections = _edgeTiles[tile];
+            blocked = (blockedDirections & spaceDirections) != 0; // at least one space direction is blocked.
+        }
+        else
+            blocked = (blockedDirections & entryDirections) == entryDirections;// **ALL** entry directions are blocked
+
+        if (blocked)
+        {
+            // was this tile already entered from some other direction?
+            if (EnteredBlockedTiles.Contains(tile))
+                return;
+
+            // Did the explosion already attempt to enter this tile from some other direction? 
+            if (!UnenteredBlockedTiles.Add(tile))
+                return;
+
+            NewBlockedTiles.Add(tile);
 
             // At what explosion iteration would this blocker be destroyed?
-            var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / IntensityStepSize);
-            if (DelayedSpreaders.TryGetValue(clearIteration, out var list))
-                list.Add(newTile);
+
+            if (!tileData.ExplosionTolerance.TryGetValue(_typeID, out var sealIntegrity))
+                sealIntegrity = float.MaxValue; // indestructible airtight entity
+
+            var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / _intensityStepSize);
+            if (FreedTileLists.TryGetValue(clearIteration, out var list))
+                list.Add(tile);
             else
-                DelayedSpreaders[clearIteration] = new() { newTile };
+                FreedTileLists[clearIteration] = new() { tile };
 
-            DelayedSpreaderIteration[newTile] = iteration;
-            newTileCount++;
+            return;
         }
 
-        // might be empty, but we will fill this during Cleanup()
-        if (newTileCount != 0)
-            TileSets.Add(iteration, newTiles);
+        // was this tile already entered from some other direction?
+        if (EnteredBlockedTiles.Add(tile))
+            return;
 
-        return newTileCount;
-    }
-
-    private bool ProcessSpace(Vector2i newTile, HashSet<Vector2i> outputSpaceTiles)
-    {
-        // is this a space tile?
-        if (!SpaceTiles.Contains(newTile))
-            return false;
-
-        Processed.Add(newTile);
-
-        if (!NeedToTransform)
-            outputSpaceTiles.Add(newTile);
-        else
+        // Did the explosion already attempt to enter this tile from some other direction? 
+        if (UnenteredBlockedTiles.Contains(tile))
         {
-            var center = Matrix.Transform(newTile);
-            outputSpaceTiles.Add(new((int) MathF.Floor(center.X + Offset.X), (int) MathF.Floor(center.Y + Offset.Y)));
-            outputSpaceTiles.Add(new((int) MathF.Floor(center.X - Offset.Y), (int) MathF.Floor(center.Y + Offset.X)));
-            outputSpaceTiles.Add(new((int) MathF.Floor(center.X - Offset.X), (int) MathF.Floor(center.Y - Offset.Y)));
-            outputSpaceTiles.Add(new((int) MathF.Floor(center.X + Offset.Y), (int) MathF.Floor(center.Y - Offset.X)));
+            NewFreedTiles.Add(tile);
+            return;
         }
 
-        return true;
+        // This is a completely new tile, and we just so happened to enter it from an unblocked direction.
+        NewTiles.Add(tile);
     }
 
-    // Get all of the new tiles that the explosion will cover in this new iteration.
-    public IEnumerable<(Vector2i, AtmosDirection)> GetNewTiles(int iteration, HashSet<Vector2i>? inputGridTiles)
+    private void JumpToSpace(Vector2i tile)
     {
-        // firstly, if any delayed spreaders were cleared, add them to processed tiles to avoid unnecessary
-        // calculations
-        if (DelayedSpreaders.TryGetValue(iteration, out var clearedSpreaders))
-            Processed.UnionWith(clearedSpreaders);
+        // Did we already jump/process this tile?
+        if (!_processedSpaceTiles.Add(tile))
+            return;
 
-        // construct our enumerable from several other iterators
-        var enumerable = Enumerable.Empty<(Vector2i, AtmosDirection)>();
-
-        if (TileSets.TryGetValue(iteration - 2, out var adjacent))
-            enumerable = enumerable.Concat(GetNewAdjacentTiles(iteration, adjacent));
-
-        if (TileSets.TryGetValue(iteration - 3, out var diagonal))
-            enumerable = enumerable.Concat(GetNewDiagonalTiles(diagonal));
-
-        if (DelayedSpreaders.TryGetValue(iteration - 2, out var delayedAdjacent))
-            enumerable = enumerable.Concat(GetNewAdjacentTiles(iteration, delayedAdjacent, true));
-
-        if (DelayedSpreaders.TryGetValue(iteration - 3, out var delayedDiagonal))
-            enumerable = enumerable.Concat(GetNewDiagonalTiles(delayedDiagonal, true));
-
-        enumerable = enumerable.Concat(GetDelayedNeighbors(iteration));
-
-        return (inputGridTiles == null) ? enumerable : enumerable.Concat(IterateSpaceInterface(inputGridTiles));
-    }
-
-    public IEnumerable<(Vector2i, AtmosDirection)> IterateSpaceInterface(HashSet<Vector2i> inputGridTiles)
-    {
-        foreach (var tile in inputGridTiles)
+        if (!_needToTransform)
         {
-            if (!Processed.Contains(tile))
-                yield return (tile, AtmosDirection.Invalid);
+            SpaceJump.Add(tile);
+            return;
         }
+
+        var center = _matrix.Transform(tile);
+        SpaceJump.Add(new((int) MathF.Floor(center.X + _offset.X), (int) MathF.Floor(center.Y + _offset.Y)));
+        SpaceJump.Add(new((int) MathF.Floor(center.X - _offset.Y), (int) MathF.Floor(center.Y + _offset.X)));
+        SpaceJump.Add(new((int) MathF.Floor(center.X - _offset.X), (int) MathF.Floor(center.Y - _offset.Y)));
+        SpaceJump.Add(new((int) MathF.Floor(center.X + _offset.Y), (int) MathF.Floor(center.Y - _offset.X)));
     }
 
-    IEnumerable<(Vector2i, AtmosDirection)> GetDelayedNeighbors(int iteration)
+    private void AddDelayedNeighbors(int iteration)
     {
-        if (!DelayedNeighbors.TryGetValue(iteration, out var delayed))
-            yield break;
+        if (!_delayedNeighbors.TryGetValue(iteration, out var delayed))
+            return;
 
-        foreach (var tile in delayed)
+        foreach (var (tile, direction) in delayed)
         {
-            if (!Processed.Contains(tile.Item1))
-                yield return tile;
+            ProcessNewTile(iteration, tile, direction);
         }
 
-        DelayedNeighbors.Remove(iteration);
+        _delayedNeighbors.Remove(iteration);
     }
 
     // Gets the tiles that are directly adjacent to other tiles. If a currently exploding tile has an airtight entity
     // that blocks the explosion from propagating in some direction, those tiles are added to a list of delayed tiles
     // that will be added to the explosion in some future iteration.
-    IEnumerable<(Vector2i, AtmosDirection)> GetNewAdjacentTiles(
-        int iteration,
-        IEnumerable<Vector2i> tiles,
-        bool ignoreTileBlockers = false)
+    private void AddNewAdjacentTiles(int iteration, IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
     {
-        Vector2i newTile;
         foreach (var tile in tiles)
         {
             var blockedDirections = AtmosDirection.Invalid;
             float sealIntegrity = 0;
 
             // Note that if (grid, tile) is not a valid key, then airtight.BlockedDirections will default to 0 (no blocked directions)
-            if (AirtightMap.TryGetValue(tile, out var tileData))
+            if (_airtightMap.TryGetValue(tile, out var tileData))
             {
                 blockedDirections = tileData.BlockedDirections;
-                if (!tileData.ExplosionTolerance.TryGetValue(TypeID, out sealIntegrity))
+                if (!tileData.ExplosionTolerance.TryGetValue(_typeID, out sealIntegrity))
                     sealIntegrity = float.MaxValue; // indestructible airtight entity
             }
 
@@ -279,9 +266,7 @@ public class GridExplosion
                 var direction = (AtmosDirection) (1 << i);
                 if (ignoreTileBlockers || !blockedDirections.IsFlagSet(direction))
                 {
-                    newTile = tile.Offset(direction);
-                    if (!Processed.Contains(newTile))
-                        yield return (newTile, direction);
+                    ProcessNewTile(iteration, tile.Offset(direction), direction.GetOpposite());
                 }
             }
 
@@ -289,132 +274,35 @@ public class GridExplosion
             if (ignoreTileBlockers || blockedDirections == AtmosDirection.Invalid)
                 continue;
 
-            // At what explosion iteration would this blocker be destroyed?
-            var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / IntensityStepSize);
-
             // This tile has one or more airtight entities anchored to it blocking the explosion from traveling in
             // some directions. First, check whether this blocker can even be destroyed by this explosion?
-            if (sealIntegrity > MaxIntensity || float.IsNaN(sealIntegrity))
+            if (sealIntegrity > _maxIntensity || float.IsNaN(sealIntegrity))
                 continue;
 
-            // We will add this neighbor to delayedTiles instead of yielding it directly during this iteration
-            if (!DelayedNeighbors.TryGetValue(clearIteration, out var list))
+            // At what explosion iteration would this blocker be destroyed?
+            var clearIteration = iteration + (int) MathF.Ceiling(sealIntegrity / _intensityStepSize);
+
+            // Get the delayed neighbours list
+            if (!_delayedNeighbors.TryGetValue(clearIteration, out var list))
             {
                 list = new();
-                DelayedNeighbors[clearIteration] = list;
+                _delayedNeighbors[clearIteration] = list;
             }
 
-            // Check which directions are blocked and add them to the delayed tiles list
+            // Check which directions are blocked, and add them to the list.
             for (var i = 0; i < Atmospherics.Directions; i++)
             {
                 var direction = (AtmosDirection) (1 << i);
                 if (blockedDirections.IsFlagSet(direction))
                 {
-                    newTile = tile.Offset(direction);
-                    if (!Processed.Contains(newTile))
-                        list.Add((tile.Offset(direction), direction));
+                    list.Add((tile.Offset(direction), direction.GetOpposite()));
                 }
             }
         }
     }
 
-    // Get the tiles that are diagonally adjacent to some tiles. Note that if there are ANY air blockers in some
-    // direction, that diagonal tiles is not added. The explosion will have to propagate along cardinal
-    // directions.
-    IEnumerable<(Vector2i, AtmosDirection)> GetNewDiagonalTiles(IEnumerable<Vector2i> tiles, bool ignoreTileBlockers = false)
+    protected override AtmosDirection GetUnblockedDirectionOrAll(Vector2i tile)
     {
-        Vector2i newTile;
-        AtmosDirection direction;
-        foreach (var tile in tiles)
-        {
-            // Note that if a (grid,tile) is not a valid key, airtight.BlockedDirections defaults to 0 (no blocked directions).
-            var airtight = AirtightMap.GetValueOrDefault(tile);
-            var freeDirections = ignoreTileBlockers
-                ? AtmosDirection.All
-                : ~airtight.BlockedDirections;
-
-            // Get the free directions of the directly adjacent tiles
-            var freeDirectionsN = ~AirtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.North)).BlockedDirections;
-            var freeDirectionsE = ~AirtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.East)).BlockedDirections;
-            var freeDirectionsS = ~AirtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.South)).BlockedDirections;
-            var freeDirectionsW = ~AirtightMap.GetValueOrDefault(tile.Offset(AtmosDirection.West)).BlockedDirections;
-
-            // North East
-            if (freeDirections.IsFlagSet(AtmosDirection.NorthEast))
-            {
-                direction = AtmosDirection.Invalid;
-                if (freeDirectionsN.IsFlagSet(AtmosDirection.SouthEast))
-                    direction |= AtmosDirection.East;
-                if (freeDirectionsE.IsFlagSet(AtmosDirection.NorthWest))
-                    direction |= AtmosDirection.North;
-
-                newTile = tile + (1, 1);
-                if (direction != AtmosDirection.Invalid && !Processed.Contains(newTile))
-                    yield return (newTile, direction);
-            }
-
-            // North West
-            if (freeDirections.IsFlagSet(AtmosDirection.NorthWest))
-            {
-                direction = AtmosDirection.Invalid;
-                if (freeDirectionsN.IsFlagSet(AtmosDirection.SouthWest))
-                    direction |= AtmosDirection.West;
-                if (freeDirectionsW.IsFlagSet(AtmosDirection.NorthEast))
-                    direction |= AtmosDirection.North;
-
-                newTile = tile + (-1, 1);
-                if (direction != AtmosDirection.Invalid && !Processed.Contains(newTile))
-                    yield return (newTile, direction);
-            }
-
-            // South East
-            if (freeDirections.IsFlagSet(AtmosDirection.SouthEast))
-            {
-                direction = AtmosDirection.Invalid;
-                if (freeDirectionsS.IsFlagSet(AtmosDirection.NorthEast))
-                    direction |= AtmosDirection.East;
-                if (freeDirectionsE.IsFlagSet(AtmosDirection.SouthWest))
-                    direction |= AtmosDirection.South;
-
-                newTile = tile + (1, -1);
-                if (direction != AtmosDirection.Invalid && !Processed.Contains(newTile))
-                    yield return (newTile, direction);
-            }
-
-            // South West
-            if (freeDirections.IsFlagSet(AtmosDirection.SouthWest))
-            {
-                direction = AtmosDirection.Invalid;
-                if (freeDirectionsS.IsFlagSet(AtmosDirection.NorthWest))
-                    direction |= AtmosDirection.West;
-                if (freeDirectionsW.IsFlagSet(AtmosDirection.SouthEast))
-                    direction |= AtmosDirection.South;
-
-                newTile = tile + (-1, -1);
-                if (direction != AtmosDirection.Invalid && !Processed.Contains(newTile))
-                    yield return (newTile, direction);
-            }
-        }
-    }
-
-    internal void CleanUp()
-    {
-        // final cleanup. Here we add delayedSpreaders to tileSetList.
-        // TODO EXPLOSION don't do this? If an explosion was not able to "enter" a tile, just damage the blocking
-        // entity, and not general entities on that tile.
-        foreach (var (tile, index) in DelayedSpreaderIteration)
-        {
-            TileSets[index].Add(tile);
-        }
-
-        // Next, we remove duplicate tiles. Currently this can happen when a delayed spreader was circumvented.
-        // E.g., a win-door blocked the explosion, but the explosion snaked around and added the tile before the
-        // win-door broke.
-        Processed.Clear();
-        foreach (var tileSet in TileSets.Values)
-        {
-            tileSet.ExceptWith(Processed);
-            Processed.UnionWith(tileSet);
-        }
+        return ~_airtightMap.GetValueOrDefault(tile).BlockedDirections;
     }
 }

@@ -2,11 +2,7 @@ using JetBrains.Annotations;
 using Robust.Client.Graphics;
 using Robust.Client.ResourceManagement;
 using Robust.Shared.Enums;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Content.Client.Administration.UI.SpawnExplosion
@@ -18,8 +14,8 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         [Dependency] private readonly IEyeManager _eyeManager = default!;
         [Dependency] private readonly IMapManager _mapManager = default!;
 
-        public Dictionary<int, HashSet<Vector2i>>? SpaceTiles;
-        public Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> Tiles = new();
+        public Dictionary<int, List<Vector2i>>? SpaceTiles;
+        public Dictionary<GridId, Dictionary<int, List<Vector2i>>> Tiles = new();
         public List<float> Intensity = new();
         public float TotalIntensity;
         public float Slope;
@@ -86,7 +82,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
             DrawingHandleScreen handle,
             Box2 gridBounds,
             Matrix3 transform,
-            Dictionary<int, HashSet<Vector2i>> tileSets)
+            Dictionary<int, List<Vector2i>> tileSets)
         {
             for (var i = 1; i < Intensity.Count; i++)
             {
@@ -151,7 +147,7 @@ namespace Content.Client.Administration.UI.SpawnExplosion
         private void DrawTiles(
             DrawingHandleWorld handle,
             Box2 gridBounds,
-            Dictionary<int, HashSet<Vector2i>> tileSets)
+            Dictionary<int, List<Vector2i>> tileSets)
         {
             for (var i = 0; i < Intensity.Count; i++)
             {

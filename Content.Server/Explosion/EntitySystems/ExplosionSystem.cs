@@ -258,17 +258,17 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     Constructor for the shared <see cref="ExplosionEvent"/> using the server-exclusive explosion classes.
     /// </summary>
-    public ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, Matrix3 spaceMatrix, SpaceExplosion? spaceData, IEnumerable<GridExplosion> gridData, List<float> iterationIntensity)
+    internal ExplosionEvent GetExplosionEvent(MapCoordinates epicenter, string id, Matrix3 spaceMatrix, SpaceExplosion? spaceData, IEnumerable<GridExplosion> gridData, List<float> iterationIntensity)
     {
-        var spaceTiles = spaceData?.TileSets;
+        var spaceTiles = spaceData?.TileLists;
 
-        Dictionary<GridId, Dictionary<int, HashSet<Vector2i>>> tileSets = new();
+        Dictionary<GridId, Dictionary<int, List<Vector2i>>> tileLists = new();
         foreach (var grid in gridData)
         {
-            tileSets.Add(grid.GridId, grid.TileSets);
+            tileLists.Add(grid.Grid.Index, grid.TileLists);
         }
 
-        return new ExplosionEvent(_explosionCounter, epicenter, id, iterationIntensity, spaceTiles, tileSets, spaceMatrix);
+        return new ExplosionEvent(_explosionCounter, epicenter, id, iterationIntensity, spaceTiles, tileLists, spaceMatrix);
     }
 
     private void CameraShake(float range, MapCoordinates epicenter, float totalIntensity)
