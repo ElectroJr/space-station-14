@@ -92,7 +92,7 @@
       maxIntensity: 5
       intensityPerUnit: 0.5
       intensitySlope: 2
-      maxTotalIntensity: 40
+      maxTotalIntensity: 30
 
 - type: reaction
   id: Smoke
