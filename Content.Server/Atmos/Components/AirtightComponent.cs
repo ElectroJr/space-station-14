@@ -13,7 +13,7 @@ using System.Collections.Generic;
 namespace Content.Server.Atmos.Components
 {
     [RegisterComponent]
-    public class AirtightComponent : Component
+    public sealed class AirtightComponent : Component
     {
         public (GridId Grid, Vector2i Tile) LastPosition { get; set; }
 

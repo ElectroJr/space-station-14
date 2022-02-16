@@ -4,7 +4,7 @@ using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototy
 
 namespace Content.Shared.Inventory;
 
-public class InventoryComponent : Component
+public abstract class InventoryComponent : Component
 {
     [DataField("templateId", required: true,
         customTypeSerializer: typeof(PrototypeIdSerializer<InventoryTemplatePrototype>))]
