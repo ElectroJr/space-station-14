@@ -105,7 +105,10 @@ internal sealed class GridExplosion : TileExplosion
             NewFreedTiles = freed;
         }
         else
+        {
             NewFreedTiles = new();
+            FreedTileLists[iteration] = NewFreedTiles;
+        }
 
         // Add adjacent tiles
         if (TileLists.TryGetValue(iteration - 2, out var adjacent))
@@ -196,7 +199,7 @@ internal sealed class GridExplosion : TileExplosion
         }
 
         // was this tile already entered from some other direction?
-        if (EnteredBlockedTiles.Add(tile))
+        if (!EnteredBlockedTiles.Add(tile))
             return;
 
         // Did the explosion already attempt to enter this tile from some other direction? 

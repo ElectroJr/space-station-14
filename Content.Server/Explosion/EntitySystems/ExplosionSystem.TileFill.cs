@@ -232,6 +232,9 @@ public sealed partial class ExplosionSystem : EntitySystem
             iteration += 1;
         }
 
+        if (totalTiles >= MaxArea) 
+            Logger.Info("Whooooo! MAXCAP!");
+
         // Neighbor finding is done. Perform final clean up and return.
         foreach (var grid in gridData.Values)
         {

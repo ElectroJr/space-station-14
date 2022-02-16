@@ -386,10 +386,13 @@ namespace Content.Shared.CCVar
 
         /// <summary>
         ///     Upper limit on the total area that an explosion can affect before the neighbor-finding algorithm just
-        ///     stops. Defaults to a 50-rile radius explosion.
+        ///     stops. Defaults to a 60-rile radius explosion.
         /// </summary>
+        /// <remarks>
+        ///     Actual area may be larger, as it currently doesn't terminate mid neighbor finding. I.e., area may be that of a ~51 tile radius circle instead.
+        /// </remarks>
         public static readonly CVarDef<int> ExplosionMaxArea =
-            CVarDef.Create("explosion.maxarea", (int) 3.14f * 2500, CVar.SERVERONLY);
+            CVarDef.Create("explosion.maxarea", (int) 3.14f * 50 * 50, CVar.SERVERONLY);
 
         /// <summary>
         ///     Upper limit on the number of neighbor finding steps for the explosion system neighbor-finding algorithm.
@@ -399,7 +402,7 @@ namespace Content.Shared.CCVar
         ///     instances, <see cref="ExplosionMaxArea"/> will likely be hit before this becomes a limiting factor.
         /// </remarks>
         public static readonly CVarDef<int> ExplosionMaxIterations =
-            CVarDef.Create("explosion.maxiterations", 100, CVar.SERVERONLY);
+            CVarDef.Create("explosion.maxiterations", 150, CVar.SERVERONLY);
 
         /// <summary>
         ///     Max Time in milliseconds to spend processing explosions every tick.

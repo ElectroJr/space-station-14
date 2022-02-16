@@ -22,7 +22,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </remarks>
     private byte _explosionCounter = 0;
     // maybe should just use a UID/explosion-entity and a state to convey information?
-    // but then need to ignore PVS?
+    // but then need to ignore PVS? uhhh this works well enough for now.
 
     /// <summary>
     ///     Arbitrary definition for when an explosion is large enough to require separating the area/tile-finding and
