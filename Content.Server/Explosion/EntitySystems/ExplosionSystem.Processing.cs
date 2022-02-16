@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using Content.Server.Explosion.Components;
 using Content.Server.Throwing;
@@ -7,11 +5,7 @@ using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.Maps;
 using Content.Shared.Physics;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 using Robust.Shared.Physics;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
@@ -163,7 +157,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     /// <remarks>
     ///     Used for a variation of <see cref="TurfHelpers.IsBlockedTurf()"/> that makes use of the fact that we have
-    ///     already done an entity lookup and don't need to do so again.
+    ///     already done an entity lookup on a tile, and don't need to do so again.
     /// </remarks>
     public bool IsBlockingTurf(EntityUid uid)
     {
@@ -184,13 +178,13 @@ public sealed partial class ExplosionSystem : EntitySystem
         IMapGrid grid,
         Vector2i tile,
         float intensity,
+        float throwForce,
         DamageSpecifier damage,
         MapCoordinates epicenter,
         HashSet<EntityUid> processed,
         string id)
     {
         var gridBox = new Box2(tile * grid.TileSize, (tile + 1) * grid.TileSize);
-        var throwForce = 10 * MathF.Sqrt(intensity);
 
         // get the entities on a tile. Note that we cannot process them directly, or we get
         // enumerator-changed-while-enumerating errors.
@@ -215,7 +209,7 @@ public sealed partial class ExplosionSystem : EntitySystem
         // from windows will be flung outwards, and not stay where they spawned. This is however somewhat
         // unnecessary, and a prime candidate for computational cost-cutting.
         // TODO EXPLOSIONS PERFORMANCE keep this?
-        if (!EnablePhysicsThrow)
+        if (throwForce <= 0)
             return !tileBlocked;
 
         list.Clear();
@@ -239,13 +233,13 @@ public sealed partial class ExplosionSystem : EntitySystem
         Matrix3 invSpaceMatrix,
         Vector2i tile,
         float intensity,
+        float throwForce,
         DamageSpecifier damage,
         MapCoordinates epicenter,
         HashSet<EntityUid> processed,
         string id)
     {
         var gridBox = new Box2(tile * DefaultTileSize, (DefaultTileSize, DefaultTileSize));
-        var throwForce = 10 * MathF.Sqrt(intensity);
         var worldBox = spaceMatrix.TransformBox(gridBox);
         List<EntityUid> list = new();
 
@@ -262,7 +256,7 @@ public sealed partial class ExplosionSystem : EntitySystem
             ProcessEntity(entity, epicenter, processed, damage, throwForce, id, false);
         }
 
-        if (!EnablePhysicsThrow)
+        if (throwForce <= 0)
             return;
 
         list.Clear();
@@ -296,7 +290,7 @@ public sealed partial class ExplosionSystem : EntitySystem
 
         // throw
         if (!anchored
-            && EnablePhysicsThrow
+            && throwForce > 0
             && !EntityManager.IsQueuedForDeletion(uid)
             && HasComp<ExplosionLaunchedComponent>(uid)
             && TryComp(uid, out TransformComponent? transform))
@@ -380,6 +374,7 @@ class Explosion
     private EntityLookupComponent _currentLookup = default!;
     private IMapGrid? _currentGrid;
     private float _currentIntensity;
+    private float _currentThrowForce;
     private List<Vector2i>.Enumerator _currentEnumerator;
     private int _currentDataIndex;
     private Dictionary<IMapGrid, List<(Vector2i, Tile)>> _tileUpdateDict = new();
@@ -440,6 +435,7 @@ class Explosion
         {
             _currentIntensity = _tileSetIntensity[CurrentIteration];
             _currentDamage = ExplosionType.DamagePerIntensity * _currentIntensity;
+            _currentThrowForce = Area > _system.ThrowLimit ? 0 : 10 * MathF.Sqrt(_currentIntensity);
 
             // for each grid/space tile set
             while (_currentDataIndex < _explosionData.Count)
@@ -515,6 +511,7 @@ class Explosion
                     _currentGrid,
                     _currentEnumerator.Current,
                     _currentIntensity,
+                    _currentThrowForce,
                     _currentDamage,
                     Epicenter,
                     ProcessedEntities,
@@ -530,6 +527,7 @@ class Explosion
                     _invSpaceMatrix,
                     _currentEnumerator.Current,
                     _currentIntensity,
+                    _currentThrowForce,
                     _currentDamage,
                     Epicenter,
                     ProcessedEntities,

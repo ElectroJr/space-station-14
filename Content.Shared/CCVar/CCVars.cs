@@ -363,10 +363,15 @@ namespace Content.Shared.CCVar
             CVarDef.Create("explosion.tilespertick", 100, CVar.SERVERONLY);
 
         /// <summary>
-        ///     Whether or not explosions actually physics-throw entities. Disabling this will improve performance
+        ///     Upper limit on the size of an explosion before physics-throwing is disabled.
         /// </summary>
-        public static readonly CVarDef<bool> ExplosionPhysicsThrow =
-            CVarDef.Create("explosion.throw", true, CVar.SERVERONLY);
+        /// <remarks>
+        ///     Large nukes tend to generate a lot of shrapnel that flies through space. This can functionally cripple
+        ///     the server TPS for a while after an explosion (or even during, if the explosion is processed
+        ///     incrementally. 
+        /// </remarks>
+        public static readonly CVarDef<int> ExplosionThrowLimit =
+            CVarDef.Create("explosion.throwlimit", 400, CVar.SERVERONLY);
 
         /// <summary>
         ///     If this is true, explosion processing will pause the NodeGroupSystem to pause updating.
@@ -404,8 +409,8 @@ namespace Content.Shared.CCVar
         ///     due to queued entity deletions, which happen outside of the system update code. Secondly, explosion
         ///     spawning cannot currently be interrupted & resumed, and may lead to exceeding this time limit.
         /// </remarks>
-        public static readonly CVarDef<int> ExplosionMaxProcessingTime =
-            CVarDef.Create("explosion.maxtime", 7, CVar.SERVERONLY);
+        public static readonly CVarDef<float> ExplosionMaxProcessingTime =
+            CVarDef.Create("explosion.maxtime", 7f, CVar.SERVERONLY);
 
         /// <summary>
         ///     If the explosion is being processed incrementally over several ticks, this variable determines whether

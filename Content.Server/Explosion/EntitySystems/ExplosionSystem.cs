@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using Content.Server.Atmos.Components;
 using Content.Server.Explosion.Components;
@@ -12,11 +10,7 @@ using Robust.Server.Containers;
 using Robust.Server.Player;
 using Robust.Shared.Audio;
 using Robust.Shared.Configuration;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
@@ -50,7 +44,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     public int MaxArea { get; private set; }
     public float MaxProcessingTime { get; private set; }
     public int TilesPerTick { get; private set; }
-    public bool EnablePhysicsThrow { get; private set; }
+    public int ThrowLimit { get; private set; }
     public bool SleepNodeSys { get; private set; }
     public bool IncrementalTileBreaking { get; private set; }
     #endregion
@@ -70,20 +64,36 @@ public sealed partial class ExplosionSystem : EntitySystem
         // handled in ExplosionSystemAirtight.cs
         SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnAirtightDamaged);
 
-        _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, value => TilesPerTick = value, true);
-        _cfg.OnValueChanged(CCVars.ExplosionPhysicsThrow, value => EnablePhysicsThrow = value, true);
-        _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, value => SleepNodeSys = value, true);
-        _cfg.OnValueChanged(CCVars.ExplosionMaxArea, value => MaxArea = value, true);
-        _cfg.OnValueChanged(CCVars.ExplosionMaxIterations, value => MaxIterations = value, true);
-        _cfg.OnValueChanged(CCVars.ExplosionMaxProcessingTime, value => MaxProcessingTime = value, true);
-        _cfg.OnValueChanged(CCVars.ExplosionIncrementalTileBreaking, value => IncrementalTileBreaking = value, true);
+        _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, SetTilesPerTick, true);
+        _cfg.OnValueChanged(CCVars.ExplosionThrowLimit, SetThrowLimit, true);
+        _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, SetSleepNodeSys, true);
+        _cfg.OnValueChanged(CCVars.ExplosionMaxArea, SetMaxArea, true);
+        _cfg.OnValueChanged(CCVars.ExplosionMaxIterations, SetMaxIterations, true);
+        _cfg.OnValueChanged(CCVars.ExplosionMaxProcessingTime, SetMaxProcessingTime, true);
+        _cfg.OnValueChanged(CCVars.ExplosionIncrementalTileBreaking, SetIncrementalTileBreaking, true);
     }
 
     public override void Shutdown()
     {
         base.Shutdown();
         _mapManager.TileChanged -= MapManagerOnTileChanged;
+
+        _cfg.UnsubValueChanged(CCVars.ExplosionTilesPerTick, SetTilesPerTick);
+        _cfg.UnsubValueChanged(CCVars.ExplosionThrowLimit, SetThrowLimit);
+        _cfg.UnsubValueChanged(CCVars.ExplosionSleepNodeSys, SetSleepNodeSys);
+        _cfg.UnsubValueChanged(CCVars.ExplosionMaxArea, SetMaxArea);
+        _cfg.UnsubValueChanged(CCVars.ExplosionMaxIterations, SetMaxIterations);
+        _cfg.UnsubValueChanged(CCVars.ExplosionMaxProcessingTime, SetMaxProcessingTime);
+        _cfg.UnsubValueChanged(CCVars.ExplosionIncrementalTileBreaking, SetIncrementalTileBreaking);
     }
+
+    private void SetTilesPerTick(int value) => TilesPerTick = value;
+    private void SetThrowLimit(int value) => ThrowLimit = value;
+    private void SetSleepNodeSys(bool value) => SleepNodeSys = value;
+    private void SetMaxArea(int value) => MaxArea = value;
+    private void SetMaxIterations(int value) => MaxIterations = value;
+    private void SetMaxProcessingTime(float value) => MaxProcessingTime = value;
+    private void SetIncrementalTileBreaking(bool value) => IncrementalTileBreaking = value;
 
     private void OnGetResistance(EntityUid uid, ExplosionResistanceComponent component, GetExplosionResistanceEvent args)
     {
