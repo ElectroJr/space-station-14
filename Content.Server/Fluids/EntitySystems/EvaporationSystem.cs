@@ -1,4 +1,4 @@
-﻿using Content.Server.Chemistry.EntitySystems;
+using Content.Server.Chemistry.EntitySystems;
 using Content.Server.Fluids.Components;
 using Content.Shared.FixedPoint;
 using JetBrains.Annotations;
@@ -34,12 +34,6 @@ namespace Content.Server.Fluids.EntitySystems
 
                 evaporationComponent.Accumulator -= evaporationComponent.EvaporateTime;
 
-                if (evaporationComponent.EvaporationToggle == true)
-                {
-                    _solutionContainerSystem.SplitSolution(uid, solution,
-                        FixedPoint2.Min(FixedPoint2.New(1), solution.CurrentVolume)); // removes 1 unit, or solution current volume, whichever is lower.
-                }
-
                 if (solution.CurrentVolume <= 0)
                 {
                     EntityManager.QueueDeleteEntity(uid);
@@ -50,6 +44,12 @@ namespace Content.Server.Fluids.EntitySystems
                     evaporationComponent.EvaporationToggle = false; // pause evaporation
                 }
                 else evaporationComponent.EvaporationToggle = true; // unpause evaporation, e.g. if a puddle previously above evaporation UpperLimit was brought down below evaporation UpperLimit via mopping.
+
+                if (evaporationComponent.EvaporationToggle == true)
+                {
+                    _solutionContainerSystem.SplitSolution(uid, solution,
+                        FixedPoint2.Min(FixedPoint2.New(1), solution.CurrentVolume)); // removes 1 unit, or solution current volume, whichever is lower.
+                }
             }
 
             foreach (var evaporationComponent in queueDelete)

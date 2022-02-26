@@ -64,9 +64,14 @@
   description: A puddle of liquid.
   components:
   - type: Sprite
-    sprite: Fluids/smear.rsi # Placeholder
-    state: smear-0
     netsync: false
+    sprite: Fluids/smear.rsi # Placeholder
+    layers:
+    - state: smear-0
+    - sprite: Fluids/wet_floor_sparkles.rsi
+      state: sparkles
+      visible: false
+      map: [ "enum.PuddleLayers.Sparkles" ]
   - type: Puddle
   - type: Appearance
     visuals:
@@ -80,9 +85,14 @@
   description: A puddle of liquid.
   components:
   - type: Sprite
-    sprite: Fluids/splatter.rsi # Placeholder
-    state: splatter-0
     netsync: false
+    sprite: Fluids/splatter.rsi # Placeholder
+    layers:
+    - state: splatter-0
+    - sprite: Fluids/wet_floor_sparkles.rsi
+      state: sparkles
+      visible: false
+      map: [ "enum.PuddleLayers.Sparkles" ]
   - type: Puddle
   - type: Appearance
     visuals:
@@ -128,6 +138,8 @@
           Quantity: 5
         - ReagentId: Water
           Quantity: 5
+  - type: Evaporation
+    upperLimit: 5.01
   - type: Appearance
     visuals:
     - type: PuddleVisualizer
@@ -151,6 +163,8 @@
           Quantity: 5
         - ReagentId: Water
           Quantity: 5
+  - type: Evaporation
+    upperLimit: 5.01
   - type: Appearance
     visuals:
     - type: PuddleVisualizer

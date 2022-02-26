@@ -72,17 +72,28 @@ namespace Content.Client.Fluids
             if (forceWetFloorSprite)
             {
                 //Change the puddle's sprite to the wet floor sprite
-                spriteComponent.LayerSetRSI(0, "Fluids/wet_floor_sparkles.rsi");
-                spriteComponent.LayerSetState(0, "sparkles");
+                spriteComponent.LayerSetVisible(0, false);
                 spriteComponent.Color = spriteComponent.Color.WithAlpha(0.25f); //should be mostly transparent.
+
+                if (spriteComponent.LayerMapTryGet(PuddleLayers.Sparkles, out var layer))
+                    spriteComponent.LayerSetVisible(layer, true);
+                else
+                {
+                    layer = spriteComponent.LayerMapReserveBlank(PuddleLayers.Sparkles);
+                    spriteComponent.LayerSetState(layer, "sparkles", "Fluids/wet_floor_sparkles.rsi");
+                }
             }
             else
             {
-                spriteComponent.LayerSetRSI(0, "Fluids/smear.rsi");
-                spriteComponent.LayerSetState(0, "smear-0"); // TODO: need a way to implement the random smears again when the mop creates new puddles.
+                spriteComponent.LayerSetVisible(0, true);
+                if (spriteComponent.LayerMapTryGet(PuddleLayers.Sparkles, out var layer))
+                    spriteComponent.LayerSetVisible(layer, false);
             }
-
         }
     }
 
+    public enum PuddleLayers
+    {
+        Sparkles
+    }
 }

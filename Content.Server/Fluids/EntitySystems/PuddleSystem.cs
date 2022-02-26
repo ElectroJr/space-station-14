@@ -49,16 +49,18 @@ namespace Content.Server.Fluids.EntitySystems
 
             // Opacity based on level of fullness to overflow
             // Hard-cap lower bound for visibility reasons
-            var volumeScale = puddleComponent.CurrentVolume.Float() / puddleComponent.OverflowVolume.Float() * puddleComponent.OpacityModifier;
+            var curVolume = puddleComponent.CurrentVolume;
+            var volumeScale = curVolume.Float() / puddleComponent.OverflowVolume.Float() * puddleComponent.OpacityModifier;
             var puddleSolution = _solutionContainerSystem.EnsureSolution(uid, puddleComponent.SolutionName);
 
 
             bool hasEvaporationComponent = EntityManager.TryGetComponent<EvaporationComponent>(uid, out var evaporationComponent);
             bool canEvaporate = (hasEvaporationComponent &&
-                                (evaporationComponent.LowerLimit == 0 || puddleComponent.CurrentVolume > evaporationComponent.LowerLimit));
+                                (evaporationComponent.LowerLimit == 0 || curVolume > evaporationComponent.LowerLimit)
+                                && curVolume < evaporationComponent.UpperLimit);
 
             // "Does this puddle's sprite need changing to the wet floor effect sprite?"
-            bool changeToWetFloor = (puddleComponent.CurrentVolume <= puddleComponent.WetFloorEffectThreshold
+            bool changeToWetFloor = (curVolume <= puddleComponent.WetFloorEffectThreshold
                                     && canEvaporate);
 
             appearanceComponent.SetData(PuddleVisuals.VolumeScale, volumeScale);
