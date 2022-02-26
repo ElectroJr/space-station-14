@@ -1,9 +1,6 @@
 using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Explosion;
-using Robust.Shared.GameObjects;
-using Robust.Shared.Serialization.Manager.Attributes;
 using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype;
-using Robust.Shared.ViewVariables;
 
 namespace Content.Server.Explosion.Components;
 
@@ -16,7 +13,7 @@ namespace Content.Server.Explosion.Components;
 ///      component still determines the explosion type and other properties.
 /// </remarks>
 [RegisterComponent]
-public class ExplosiveComponent : Component
+public sealed class ExplosiveComponent : Component
 {
     public override string Name => "Explosive";
 

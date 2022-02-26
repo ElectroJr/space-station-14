@@ -1,15 +1,11 @@
-using System;
 using Content.Shared.Damage;
 using Content.Shared.Sound;
-using Robust.Shared.Log;
-using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
-using Robust.Shared.Serialization.Manager.Attributes;
 
 namespace Content.Shared.Explosion;
 
 [Prototype("explosion")]
-public class ExplosionPrototype : IPrototype
+public sealed class ExplosionPrototype : IPrototype
 {
     [DataField("id", required: true)]
     public string ID { get; } = default!;

@@ -1,11 +1,6 @@
 using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Explosion;
-using Robust.Shared.Analyzers;
-using Robust.Shared.GameObjects;
-using Robust.Shared.Serialization.Manager.Attributes;
 using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype.Dictionary;
-using Robust.Shared.ViewVariables;
-using System.Collections.Generic;
 
 namespace Content.Server.Explosion.Components;
 
@@ -17,9 +12,8 @@ namespace Content.Server.Explosion.Components;
 ///     significantly reduce the damage, but shouldn't be silly overpowered in regular combat.
 /// </remarks>
 [RegisterComponent]
-[ComponentProtoName("ExplosionResistance")]
 [Friend(typeof(ExplosionSystem))]
-public class ExplosionResistanceComponent : Component
+public sealed class ExplosionResistanceComponent : Component
 {
     /// <summary>
     ///     The resistance values for this component, This fraction is added to the total resistance.

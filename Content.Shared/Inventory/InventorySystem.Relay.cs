@@ -3,7 +3,6 @@ using Content.Shared.Electrocution;
 using Content.Shared.Explosion;
 using Content.Shared.Movement.EntitySystems;
 using Content.Shared.Slippery;
-using Robust.Shared.GameObjects;
 
 namespace Content.Shared.Inventory;
 

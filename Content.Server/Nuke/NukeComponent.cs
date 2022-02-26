@@ -104,7 +104,6 @@ namespace Content.Server.Nuke
         public bool Exploded;
         #endregion
 
-
         /// <summary>
         ///     Time until explosion in seconds.
         /// </summary>

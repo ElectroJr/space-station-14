@@ -1,62 +1,12 @@
-using System;
-using System.Collections.Generic;
 using Content.Shared.Atmos;
-using Robust.Shared.GameObjects;
-using Robust.Shared.Log;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 
 namespace Content.Server.Explosion.EntitySystems;
 
-/// <summary>
-///     AAAAAAAAAAA
-/// </summary>
-public struct GridEdgeData : IEquatable<GridEdgeData>
-{
-    public Vector2i Tile;
-    public GridId? Grid;
-    public Box2Rotated Box;
-
-    public GridEdgeData(Vector2i tile, GridId? grid, Vector2 center, Angle angle, float size)
-    {
-        Tile = tile;
-        Grid = grid;
-        Box = new(Box2.CenteredAround(center, (size, size)), angle, center);
-    }
-
-    /// <inheritdoc />
-    public bool Equals(GridEdgeData other)
-    {
-        return Tile.Equals(other.Tile) && Grid.Equals(other.Grid);
-    }
-
-    /// <inheritdoc />
-    public override int GetHashCode()
-    {
-        unchecked
-        {
-            return (Tile.GetHashCode() * 397) ^ Grid.GetHashCode();
-        }
-    }
-}
-
-public record GridBlockData
-{
-    /// <summary>
-    ///     What directions of this tile are not blocked by some other grid?
-    /// </summary>
-    public AtmosDirection UnblockedDirections = AtmosDirection.All;
-
-    /// <summary>
-    ///     Hashset contains information about the edge-tiles, which belong to some other grid(s), that are blocking
-    ///     this tile.
-    /// </summary>
-    public HashSet<GridEdgeData> BlockingGridEdges = new();
-}
-
 // This partial part of the explosion system has all of the functions used to facilitate explosions moving across grids.
-// A good portion of it is focused around keeping track of what tile-indices on a grid correspond to tiles that border space.
-// AFAIK no other system needs to track these "edge-tiles". If they do, this should probably be a property of the grid itself?
+// A good portion of it is focused around keeping track of what tile-indices on a grid correspond to tiles that border
+// space. AFAIK no other system currently needs to track these "edge-tiles". If they do, this should probably be a
+// property of the grid itself?
 public sealed partial class ExplosionSystem : EntitySystem
 {
     /// <summary>
@@ -105,13 +55,13 @@ public sealed partial class ExplosionSystem : EntitySystem
     ///     Take our map of grid edges, where each is defined in their own grid's reference frame, and map those
     ///     edges all onto one grids reference frame.
     /// </summary>
-    public (Dictionary<Vector2i, GridBlockData>, float) TransformGridEdges(MapId targetMap, GridId? referenceGrid, List<GridId> localGrids)
+    public (Dictionary<Vector2i, GridBlockData>, ushort) TransformGridEdges(MapId targetMap, GridId? referenceGrid, List<GridId> localGrids)
     {
         Dictionary<Vector2i, GridBlockData> transformedEdges = new();
 
         var targetMatrix = Matrix3.Identity;
         Angle targetAngle = new();
-        float tileSize = DefaultTileSize;
+        ushort tileSize = DefaultTileSize;
 
         // if the explosion is centered on some grid (and not just space), get the transforms.
         if (referenceGrid != null)
@@ -258,13 +208,13 @@ public sealed partial class ExplosionSystem : EntitySystem
     }
 
     /// <summary>
-    ///     Given an grid-edge blocking map, check if the blockers are allowed to propagate to each other through gaps.
+    ///     Given an grid-edge blocking map, check if the blockers are allowed to propagate to each other through gaps in grids.
     /// </summary>
     /// <remarks>
     ///     After grid edges were transformed into the reference frame of some other grid, this function figures out
     ///     which of those edges are actually blocking explosion propagation.
     /// </remarks>
-    public void GetUnblockedDirections(Dictionary<Vector2i, GridBlockData> transformedEdges, float tileSize)
+    public void GetUnblockedDirections(Dictionary<Vector2i, GridBlockData> transformedEdges, ushort tileSize)
     {
         foreach (var (tile, data) in transformedEdges)
         {
@@ -303,15 +253,14 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     When a tile is updated, we might need to update the grid edge maps.
     /// </summary>
-    private void MapManagerOnTileChanged(object? sender, TileChangedEventArgs e)
+    private void OnTileChanged(object? sender, TileChangedEventArgs e)
     {
         // only need to update the grid-edge map if the tile changed from space to not-space.
-        if (e.NewTile.Tile.IsEmpty || e.OldTile.IsEmpty)
-            OnTileChanged(e.NewTile);
-    }
+        if (!e.NewTile.Tile.IsEmpty && !e.OldTile.IsEmpty)
+            return;
 
-    private void OnTileChanged(TileRef tileRef)
-    {
+        var tileRef = e.NewTile;
+
         if (!_mapManager.TryGetGrid(tileRef.GridIndex, out var grid))
             return;
 
@@ -433,15 +382,57 @@ public sealed partial class ExplosionSystem : EntitySystem
         return false;
     }
 
-    // TODO EXPLOSION move this elsewhere
     /// <summary>
     ///     Enumerate over diagonally adjacent tiles.
     /// </summary>
-    public static IEnumerable<Vector2i> GetDiagonalNeighbors(Vector2i pos)
+    internal static IEnumerable<Vector2i> GetDiagonalNeighbors(Vector2i pos)
     {
         yield return pos + (1, 1);
         yield return pos + (-1, -1);
         yield return pos + (1, -1);
         yield return pos + (-1, 1);
     }
+}
+
+public struct GridEdgeData : IEquatable<GridEdgeData>
+{
+    public Vector2i Tile;
+    public GridId? Grid;
+    public Box2Rotated Box;
+
+    public GridEdgeData(Vector2i tile, GridId? grid, Vector2 center, Angle angle, float size)
+    {
+        Tile = tile;
+        Grid = grid;
+        Box = new(Box2.CenteredAround(center, (size, size)), angle, center);
+    }
+
+    /// <inheritdoc />
+    public bool Equals(GridEdgeData other)
+    {
+        return Tile.Equals(other.Tile) && Grid.Equals(other.Grid);
+    }
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            return (Tile.GetHashCode() * 397) ^ Grid.GetHashCode();
+        }
+    }
+}
+
+public record GridBlockData
+{
+    /// <summary>
+    ///     What directions of this tile are not blocked by some other grid?
+    /// </summary>
+    public AtmosDirection UnblockedDirections = AtmosDirection.All;
+
+    /// <summary>
+    ///     Hashset contains information about the edge-tiles, which belong to some other grid(s), that are blocking
+    ///     this tile.
+    /// </summary>
+    public HashSet<GridEdgeData> BlockingGridEdges = new();
 }

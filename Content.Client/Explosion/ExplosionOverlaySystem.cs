@@ -2,12 +2,8 @@ using Content.Shared.Explosion;
 using Robust.Client.GameObjects;
 using Robust.Client.Graphics;
 using Robust.Client.ResourceManagement;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
-using System.Collections.Generic;
 
 namespace Content.Client.Explosion;
 
@@ -148,7 +144,7 @@ public sealed class ExplosionOverlaySystem : EntitySystem
     }
 }
 
-internal class Explosion
+internal sealed class Explosion
 {
     public Dictionary<int, List<Vector2i>>? SpaceTiles;
     public Dictionary<GridId, Dictionary<int, List<Vector2i>>> Tiles;

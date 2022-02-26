@@ -173,7 +173,7 @@ namespace Content.Server.AME
             {
                 radius += MasterController.InjectionAmount;
             }
-            
+
             radius *= 2;
             radius = Math.Min(radius, 8);
             EntitySystem.Get<ExplosionSystem>().TriggerExplosive(MasterController.Owner, radius: radius, delete: false);

@@ -5,8 +5,6 @@ using Content.Shared.Administration;
 using Content.Shared.Explosion;
 using Robust.Server.Player;
 using Robust.Shared.Console;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
 using Robust.Shared.Prototypes;
 using System.Linq;

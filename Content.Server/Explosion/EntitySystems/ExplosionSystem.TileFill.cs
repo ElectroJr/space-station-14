@@ -14,7 +14,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// <summary>
     ///     This is the main explosion generating function. 
     /// </summary>
-    /// <param name="epicenter">The centre of the explosion</param>
+    /// <param name="epicenter">The center of the explosion</param>
     /// <param name="typeID">The explosion type. this determines the explosion damage</param>
     /// <param name="totalIntensity">The final sum of the tile intensities. This governs the overall size of the
     /// explosion</param>
@@ -277,9 +277,9 @@ public sealed partial class ExplosionSystem : EntitySystem
             }
         }
 
-        // Next, we use a much larger lookup to determine all grids relevant to the explosion. This is used to ignore
-        // some grids during the grid-edge transformation steps. Basically: it means that if a grid is not in this set,
-        // the explosion can never propagate from space onto this grid.
+        // Next, we use a much larger lookup to determine all grids relevant to the explosion. This is used to determine
+        // what grids should be includes during the grid-edge transformation steps. This means that if a grid is not in
+        // this set, the explosion can never propagate from space onto this grid.
 
         // As mentioned before, the `diameter` is only indicative, as an explosion that is obstructed (e.g., in a
         // tunnel) may travel further away from the epicenter. But this should be very rare for space-traversing

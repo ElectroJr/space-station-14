@@ -3,7 +3,6 @@ using Content.Server.Atmos.Components;
 using Content.Server.Explosion.Components;
 using Content.Server.NodeContainer.EntitySystems;
 using Content.Shared.Camera;
-using Content.Shared.CCVar;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Robust.Server.Containers;
@@ -39,16 +38,6 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     public const ushort DefaultTileSize = 1;
 
-    #region cvars
-    public int MaxIterations { get; private set; }
-    public int MaxArea { get; private set; }
-    public float MaxProcessingTime { get; private set; }
-    public int TilesPerTick { get; private set; }
-    public int ThrowLimit { get; private set; }
-    public bool SleepNodeSys { get; private set; }
-    public bool IncrementalTileBreaking { get; private set; }
-    #endregion
-
     private AudioParams _audioParams = AudioParams.Default.WithVolume(-3f);
 
     public override void Initialize()
@@ -59,41 +48,19 @@ public sealed partial class ExplosionSystem : EntitySystem
         SubscribeLocalEvent<GridRemovalEvent>(OnGridRemoved);
         SubscribeLocalEvent<GridStartupEvent>(OnGridStartup);
         SubscribeLocalEvent<ExplosionResistanceComponent, GetExplosionResistanceEvent>(OnGetResistance);
-        _mapManager.TileChanged += MapManagerOnTileChanged;
+        _mapManager.TileChanged += OnTileChanged;
 
         // handled in ExplosionSystemAirtight.cs
         SubscribeLocalEvent<AirtightComponent, DamageChangedEvent>(OnAirtightDamaged);
-
-        _cfg.OnValueChanged(CCVars.ExplosionTilesPerTick, SetTilesPerTick, true);
-        _cfg.OnValueChanged(CCVars.ExplosionThrowLimit, SetThrowLimit, true);
-        _cfg.OnValueChanged(CCVars.ExplosionSleepNodeSys, SetSleepNodeSys, true);
-        _cfg.OnValueChanged(CCVars.ExplosionMaxArea, SetMaxArea, true);
-        _cfg.OnValueChanged(CCVars.ExplosionMaxIterations, SetMaxIterations, true);
-        _cfg.OnValueChanged(CCVars.ExplosionMaxProcessingTime, SetMaxProcessingTime, true);
-        _cfg.OnValueChanged(CCVars.ExplosionIncrementalTileBreaking, SetIncrementalTileBreaking, true);
+        SubscribeCvars();
     }
 
     public override void Shutdown()
     {
         base.Shutdown();
-        _mapManager.TileChanged -= MapManagerOnTileChanged;
-
-        _cfg.UnsubValueChanged(CCVars.ExplosionTilesPerTick, SetTilesPerTick);
-        _cfg.UnsubValueChanged(CCVars.ExplosionThrowLimit, SetThrowLimit);
-        _cfg.UnsubValueChanged(CCVars.ExplosionSleepNodeSys, SetSleepNodeSys);
-        _cfg.UnsubValueChanged(CCVars.ExplosionMaxArea, SetMaxArea);
-        _cfg.UnsubValueChanged(CCVars.ExplosionMaxIterations, SetMaxIterations);
-        _cfg.UnsubValueChanged(CCVars.ExplosionMaxProcessingTime, SetMaxProcessingTime);
-        _cfg.UnsubValueChanged(CCVars.ExplosionIncrementalTileBreaking, SetIncrementalTileBreaking);
+        _mapManager.TileChanged -= OnTileChanged;
+        UnsubscribeCvars();
     }
-
-    private void SetTilesPerTick(int value) => TilesPerTick = value;
-    private void SetThrowLimit(int value) => ThrowLimit = value;
-    private void SetSleepNodeSys(bool value) => SleepNodeSys = value;
-    private void SetMaxArea(int value) => MaxArea = value;
-    private void SetMaxIterations(int value) => MaxIterations = value;
-    private void SetMaxProcessingTime(float value) => MaxProcessingTime = value;
-    private void SetIncrementalTileBreaking(bool value) => IncrementalTileBreaking = value;
 
     private void OnGetResistance(EntityUid uid, ExplosionResistanceComponent component, GetExplosionResistanceEvent args)
     {
@@ -154,7 +121,8 @@ public sealed partial class ExplosionSystem : EntitySystem
         // course, as the explosions are not perfectly circular, this formula isn't perfect, but the formula works
         // reasonably well.
 
-        // TODO EXPLOSION I guess this should actually use the formula for the volume of a distorted octagonal frustum?
+        // This should actually use the formula for the volume of a distorted octagonal frustum. But this is good
+        // enough.
 
         var coneVolume = slope * MathF.PI / 3 * MathF.Pow(radius, 3);
 

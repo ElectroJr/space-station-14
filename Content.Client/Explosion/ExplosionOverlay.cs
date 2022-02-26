@@ -1,13 +1,9 @@
 using JetBrains.Annotations;
 using Robust.Client.Graphics;
 using Robust.Shared.Enums;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
-using System;
-using System.Collections.Generic;
 
 namespace Content.Client.Explosion;
 

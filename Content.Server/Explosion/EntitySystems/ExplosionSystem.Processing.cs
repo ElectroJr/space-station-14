@@ -22,7 +22,7 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </remarks>
     private byte _explosionCounter = 0;
     // maybe should just use a UID/explosion-entity and a state to convey information?
-    // but then need to ignore PVS? uhhh this works well enough for now.
+    // but then need to ignore PVS? Eeehh this works well enough for now.
 
     /// <summary>
     ///     Arbitrary definition for when an explosion is large enough to require separating the area/tile-finding and
@@ -205,10 +205,14 @@ public sealed partial class ExplosionSystem : EntitySystem
             tileBlocked |= IsBlockingTurf(entity);
         }
 
-        // Next, we get the intersecting entities AGAIN, but purely for throwing. This way, glass shards spawned
-        // from windows will be flung outwards, and not stay where they spawned. This is however somewhat
-        // unnecessary, and a prime candidate for computational cost-cutting.
-        // TODO EXPLOSIONS PERFORMANCE keep this?
+        // Next, we get the intersecting entities AGAIN, but purely for throwing. This way, glass shards spawned from
+        // windows will be flung outwards, and not stay where they spawned. This is however somewhat unnecessary, and a
+        // prime candidate for computational cost-cutting. Alternatively, it would be nice if there was just some sort
+        // of spawned-on-destruction event that could be used to automatically assemble a list of new entities that need
+        // to be thrown.
+        //
+        // All things considered, until entity spawning & destruction is sped up, this isn't all that time consuming.
+        // (unless its a REALLY big explosion)
         if (throwForce <= 0)
             return !tileBlocked;
 
@@ -339,7 +343,12 @@ public sealed partial class ExplosionSystem : EntitySystem
 ///     This is a data class that stores information about the area affected by an explosion, for processing by <see
 ///     cref="ExplosionSystem"/>.
 /// </summary>
-class Explosion
+/// <remarks>
+///     This is basically the output of <see cref="ExplosionSystem.GetExplosionTiles()"/>, but wrapped in an enumerator
+///     to iterate over the tiles, along with the ability to keep track of what entities have already been damaged by
+///     this explosion.
+/// </remarks>
+sealed class Explosion
 {
     struct ExplosionData
     {

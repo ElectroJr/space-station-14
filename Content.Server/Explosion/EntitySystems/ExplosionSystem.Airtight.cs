@@ -1,38 +1,27 @@
-using System;
-using System.Collections.Generic;
 using Content.Server.Atmos.Components;
 using Content.Server.Destructible;
 using Content.Shared.Atmos;
 using Content.Shared.Damage;
 using Content.Shared.Explosion;
 using Content.Shared.FixedPoint;
-using Robust.Shared.GameObjects;
-using Robust.Shared.IoC;
 using Robust.Shared.Map;
-using Robust.Shared.Maths;
 
 namespace Content.Server.Explosion.EntitySystems;
 
 public sealed partial class ExplosionSystem : EntitySystem
 {
-
     [Dependency] private readonly DestructibleSystem _destructibleSystem = default!;
 
     // The explosion intensity required to break an entity depends on the explosion type. So it is stored in a
     // Dictionary<string, float>
     //
-    // Hence, each tile has a (Dictionary<string, float>, AtmosDirection) value. This specifies what directions are
+    // Hence, each tile has a tuple (Dictionary<string, float>, AtmosDirection). This specifies what directions are
     // blocked, and how intense a given explosion type needs to be in order to destroy ALL airtight entities on that
     // tile. This is the TileData struct.
     //
-    // We then need this data for every tile on a grid. So this mess of a variable maps the Grid ID and Vector2i
-    // grid
-    // indices to this tile-data.
-    //
-    // Indexing a Dictionary with Vector2ikeys is faster than using a TileRef or (GridId, Vector2i) tuple key. So, AFAIK
-    // a nested dictionary is just the best option here performance wise?
+    // We then need this data for every tile on a grid. So this mess of a variable maps the Grid ID and Vector2i grid
+    // indices to this tile-data struct.
     private Dictionary<GridId, Dictionary<Vector2i, TileData>> _airtightMap = new();
-    // EXPLOSION TODO fix shit code
 
     public void UpdateAirtightMap(GridId gridId, Vector2i tile)
     {
@@ -64,8 +53,7 @@ public sealed partial class ExplosionSystem : EntitySystem
                 continue;
 
             blockedDirections |= airtight.AirBlockedDirection;
-            airtight.ExplosionTolerance ??= GetExplosionTolerance(uid);
-            foreach (var (type, value) in airtight.ExplosionTolerance)
+            foreach (var (type, value) in GetExplosionTolerance(uid))
             {
                 if (!tolerance.TryAdd(type, value))
                     tolerance[type] = Math.Max(tolerance[type], value);
@@ -83,13 +71,13 @@ public sealed partial class ExplosionSystem : EntitySystem
     /// </summary>
     private void OnAirtightDamaged(EntityUid uid, AirtightComponent airtight, DamageChangedEvent args)
     {
-        airtight.ExplosionTolerance = GetExplosionTolerance(uid);
-
         // do we need to update our explosion blocking map?
         if (!airtight.AirBlocked)
             return;
+
         if (!EntityManager.TryGetComponent(uid, out TransformComponent transform) || !transform.Anchored)
             return;
+
         if (!_mapManager.TryGetGrid(transform.GridID, out var grid))
             return;
 
@@ -138,9 +126,9 @@ public sealed partial class ExplosionSystem : EntitySystem
 }
 
 /// <summary>
-///     Internal data struct that describes the explosion-blocking airtight entities on a tile.
+///     Data struct that describes the explosion-blocking airtight entities on a tile.
 /// </summary>
-public struct TileData
+internal struct TileData
 {
     public TileData(Dictionary<string, float> explosionTolerance, AtmosDirection blockedDirections)
     {
