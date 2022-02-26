@@ -47,6 +47,9 @@
         - type: PipeColorVisualizer
         - type: VentPumpVisualizer
     - type: GasVentPump
+    - type: Construction
+      graph: GasUnary
+      node: ventpump
 
 - type: entity
   parent: GasUnaryBase
@@ -71,6 +74,9 @@
       visuals:
         - type: PipeColorVisualizer
     - type: GasPassiveVent
+    - type: Construction
+      graph: GasUnary
+      node: passivevent
 
 - type: entity
   parent: GasUnaryBase
@@ -105,6 +111,9 @@
         - type: ScrubberVisualizer
     - type: AtmosDevice
     - type: GasVentScrubber
+    - type: Construction
+      graph: GasUnary
+      node: ventscrubber
 
 - type: entity
   parent: GasUnaryBase
@@ -127,12 +136,14 @@
       visuals:
         - type: PipeColorVisualizer
     - type: GasOutletInjector
+    - type: Construction
+      graph: GasUnary
+      node: outletinjector
 
 - type: entity
   parent: BaseMachinePowered
   id: BaseGasThermoMachine
   name: thermomachine
-  description: Heats or cools gas in connected pipes.
   abstract: true
   placement:
     mode: SnapgridCenter
@@ -148,6 +159,19 @@
     - type: GasThermoMachine
     - type: AtmosPipeColor
     - type: AtmosDevice
+    - type: UserInterface
+      interfaces:
+      - key: enum.ThermomachineUiKey.Key
+        type: GasThermomachineBoundUserInterface
+    - type: ActivatableUI
+      inHandsOnly: false
+      key: enum.ThermomachineUiKey.Key
+    - type: Construction
+      graph: Machine
+      node: machine
+    - type: Wires
+      BoardName: "Thermomachine"
+      LayoutId: Thermomachine
     - type: NodeContainer
       nodes:
         pipe:
@@ -159,6 +183,7 @@
   parent: BaseGasThermoMachine
   id: GasThermoMachineFreezer
   name: freezer
+  description: Cools gas in connected pipes.
   placement:
     mode: SnapgridCenter
   components:
@@ -177,11 +202,14 @@
     - type: GasThermoMachine
       mode: Freezer
       minTemperature: 73.15
+    - type: Machine
+      board: ThermomachineFreezerMachineCircuitBoard
 
 - type: entity
   parent: BaseGasThermoMachine
   id: GasThermoMachineHeater
   name: heater
+  description: Heats gas in connected pipes.
   placement:
     mode: SnapgridCenter
   components:
@@ -200,3 +228,5 @@
     - type: GasThermoMachine
       mode: Heater
       maxTemperature: 573.15 # This is changed when parts are refreshed.
+    - type: Machine
+      board: ThermomachineHeaterMachineCircuitBoard

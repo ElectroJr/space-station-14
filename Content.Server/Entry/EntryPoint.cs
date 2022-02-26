@@ -112,7 +112,6 @@ namespace Content.Server.Entry
             }
             else
             {
-                IoCManager.Resolve<ISandboxManager>().Initialize();
                 IoCManager.Resolve<RecipeManager>().Initialize();
                 IoCManager.Resolve<ActionManager>().Initialize();
                 IoCManager.Resolve<BlackboardManager>().Initialize();
@@ -126,6 +125,7 @@ namespace Content.Server.Entry
                 IoCManager.Resolve<IGameMapManager>().Initialize();
                 IoCManager.Resolve<IEntitySystemManager>().GetEntitySystem<GameTicker>().PostInitialize();
                 IoCManager.Resolve<IBqlQueryManager>().DoAutoRegistrations();
+                IoCManager.Resolve<RoleBanManager>().Initialize();
             }
         }
 
