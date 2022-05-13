@@ -70,12 +70,12 @@ namespace Content.Client.IconSmoothing
         protected override void Startup()
         {
             base.Startup();
-
-            if (_entMan.GetComponent<TransformComponent>(Owner).Anchored)
+            var xform = _entMan.GetComponent<TransformComponent>(Owner);
+            if (xform.Anchored)
             {
                 // ensures lastposition initial value is populated on spawn. Just calling
                 // the hook here would cause a dirty event to fire needlessly
-                UpdateLastPosition();
+                UpdateLastPosition(xform);
                 EntitySystem.Get<IconSmoothSystem>().UpdateSmoothing(Owner, this);
             }
 
@@ -93,10 +93,8 @@ namespace Content.Client.IconSmoothing
             }
         }
 
-        private void UpdateLastPosition()
+        private void UpdateLastPosition(TransformComponent transform)
         {
-            var transform = _entMan.GetComponent<TransformComponent>(Owner);
-
             if (_mapManager.TryGetGrid(transform.GridID, out var grid))
             {
                 LastPosition = (transform.GridID, grid.TileIndicesFor(transform.Coordinates));
@@ -109,13 +107,11 @@ namespace Content.Client.IconSmoothing
             }
         }
 
-        internal virtual void CalculateNewSprite()
+        internal virtual void CalculateNewSprite(TransformComponent transform, var smoothQuery)
         {
-            var transform = _entMan.GetComponent<TransformComponent>(Owner);
-
             if (!transform.Anchored)
             {
-                CalculateNewSprite(null);
+                CalculateNewSprite(transform, null, smoothQuery);
                 return;
             }
 
@@ -124,18 +120,18 @@ namespace Content.Client.IconSmoothing
                 Logger.Error($"Failed to calculate IconSmoothComponent sprite in {Owner} because grid {transform.GridID} was missing.");
                 return;
             }
-            CalculateNewSprite(grid);
+            CalculateNewSprite(transform, grid, smoothQuery);
         }
 
-        internal virtual void CalculateNewSprite(IMapGrid? grid)
+        internal virtual void CalculateNewSprite(TransformComponent xform, IMapGrid? grid, var smoothQuery)
         {
             switch (Mode)
             {
                 case IconSmoothingMode.Corners:
-                    CalculateNewSpriteCorners(grid);
+                    CalculateNewSpriteCorners(xform, grid, smoothQuery);
                     break;
                 case IconSmoothingMode.CardinalFlags:
-                    CalculateNewSpriteCardinal(grid);
+                    CalculateNewSpriteCardinal(xform, grid, smoothQuery);
                     break;
                 case IconSmoothingMode.NoSprite:
                     break;
@@ -144,7 +140,7 @@ namespace Content.Client.IconSmoothing
             }
         }
 
-        private void CalculateNewSpriteCardinal(IMapGrid? grid)
+        private void CalculateNewSpriteCardinal(TransformComponent xform, IMapGrid? grid, var xformQuery, var smoothQuery)
         {
             if (Sprite == null)
             {
@@ -159,27 +155,27 @@ namespace Content.Client.IconSmoothing
                 return;
             }
 
-            var position = _entMan.GetComponent<TransformComponent>(Owner).Coordinates;
-            if (MatchingEntity(grid.GetInDir(position, Direction.North)))
+            var position = xform.Coordinates;
+            if (MatchingEntity(grid.GetInDir(position, Direction.North), smoothQuery))
                 dirs |= CardinalConnectDirs.North;
-            if (MatchingEntity(grid.GetInDir(position, Direction.South)))
+            if (MatchingEntity(grid.GetInDir(position, Direction.South), smoothQuery))
                 dirs |= CardinalConnectDirs.South;
-            if (MatchingEntity(grid.GetInDir(position, Direction.East)))
+            if (MatchingEntity(grid.GetInDir(position, Direction.East), smoothQuery))
                 dirs |= CardinalConnectDirs.East;
-            if (MatchingEntity(grid.GetInDir(position, Direction.West)))
+            if (MatchingEntity(grid.GetInDir(position, Direction.West), smoothQuery))
                 dirs |= CardinalConnectDirs.West;
 
             Sprite.LayerSetState(0, $"{StateBase}{(int) dirs}");
         }
 
-        private void CalculateNewSpriteCorners(IMapGrid? grid)
+        private void CalculateNewSpriteCorners(TransformComponent xform, IMapGrid? grid, var xformQuery, var smoothQuery)
         {
             if (Sprite == null)
             {
                 return;
             }
 
-            var (cornerNE, cornerNW, cornerSW, cornerSE) = CalculateCornerFill(grid);
+            var (cornerNE, cornerNW, cornerSW, cornerSE) = CalculateCornerFill(xform, grid);
 
             Sprite.LayerSetState(CornerLayers.NE, $"{StateBase}{(int) cornerNE}");
             Sprite.LayerSetState(CornerLayers.SE, $"{StateBase}{(int) cornerSE}");
@@ -187,22 +183,22 @@ namespace Content.Client.IconSmoothing
             Sprite.LayerSetState(CornerLayers.NW, $"{StateBase}{(int) cornerNW}");
         }
 
-        protected (CornerFill ne, CornerFill nw, CornerFill sw, CornerFill se) CalculateCornerFill(IMapGrid? grid)
+        protected (CornerFill ne, CornerFill nw, CornerFill sw, CornerFill se) CalculateCornerFill(TransformComponent xform, IMapGrid? grid)
         {
             if (grid == null)
             {
                 return (CornerFill.None, CornerFill.None, CornerFill.None, CornerFill.None);
             }
 
-            var position = _entMan.GetComponent<TransformComponent>(Owner).Coordinates;
-            var n = MatchingEntity(grid.GetInDir(position, Direction.North));
-            var ne = MatchingEntity(grid.GetInDir(position, Direction.NorthEast));
-            var e = MatchingEntity(grid.GetInDir(position, Direction.East));
-            var se = MatchingEntity(grid.GetInDir(position, Direction.SouthEast));
-            var s = MatchingEntity(grid.GetInDir(position, Direction.South));
-            var sw = MatchingEntity(grid.GetInDir(position, Direction.SouthWest));
-            var w = MatchingEntity(grid.GetInDir(position, Direction.West));
-            var nw = MatchingEntity(grid.GetInDir(position, Direction.NorthWest));
+            var position = xform.Coordinates;
+            var n = MatchingEntity(grid.GetInDir(position, Direction.North), smoothQuery);
+            var ne = MatchingEntity(grid.GetInDir(position, Direction.NorthEast), smoothQuery);
+            var e = MatchingEntity(grid.GetInDir(position, Direction.East), smoothQuery);
+            var se = MatchingEntity(grid.GetInDir(position, Direction.SouthEast), smoothQuery);
+            var s = MatchingEntity(grid.GetInDir(position, Direction.South), smoothQuery);
+            var sw = MatchingEntity(grid.GetInDir(position, Direction.SouthWest), smoothQuery);
+            var w = MatchingEntity(grid.GetInDir(position, Direction.West), smoothQuery);
+            var nw = MatchingEntity(grid.GetInDir(position, Direction.NorthWest), smoothQuery);
 
             // ReSharper disable InconsistentNaming
             var cornerNE = CornerFill.None;
@@ -256,7 +252,7 @@ namespace Content.Client.IconSmoothing
             }
 
             // Local is fine as we already know it's parented to the grid (due to the way anchoring works).
-            switch (_entMan.GetComponent<TransformComponent>(Owner).LocalRotation.GetCardinalDir())
+            switch (xform.LocalRotation.GetCardinalDir())
             {
                 case Direction.North:
                     return (cornerSW, cornerSE, cornerNE, cornerNW);
@@ -278,19 +274,12 @@ namespace Content.Client.IconSmoothing
         }
 
         [System.Diagnostics.Contracts.Pure]
-        protected bool MatchingEntity(IEnumerable<EntityUid> candidates)
+        protected bool MatchingEntity(IEnumerable<EntityUid> candidates, var smoothQuery)
         {
             foreach (var entity in candidates)
             {
-                if (!_entMan.TryGetComponent(entity, out IconSmoothComponent? other))
-                {
-                    continue;
-                }
-
-                if (other.SmoothKey == SmoothKey)
-                {
+                if (smoothQuery.TryGet(entity, out var? other) && other.SmoothKey == SmoothKey)
                     return true;
-                }
             }
 
             return false;

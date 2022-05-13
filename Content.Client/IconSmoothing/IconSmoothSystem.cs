@@ -38,10 +38,14 @@ namespace Content.Client.IconSmoothing
 
             _generation += 1;
 
+
+            var xformQuery = GetEntityQuery<TransformComponent>();
+            var smoothQuery = GetEntityQuery<IconSmoothComponent>();
+
             // Performance: This could be spread over multiple updates, or made parallel.
             while (_dirtyEntities.Count > 0)
             {
-                CalculateNewSprite(_dirtyEntities.Dequeue());
+                CalculateNewSprite(_dirtyEntities.Dequeue(), xformQuery, smoothQuery);
             }
         }
 
@@ -103,19 +107,18 @@ namespace Content.Client.IconSmoothing
             }
         }
 
-        private void CalculateNewSprite(EntityUid euid)
+        private void CalculateNewSprite(EntityUid euid, var xformQuery, var smoothQuery)
         {
             // The generation check prevents updating an entity multiple times per tick.
             // As it stands now, it's totally possible for something to get queued twice.
             // Generation on the component is set after an update so we can cull updates that happened this generation.
-            if (!EntityManager.EntityExists(euid)
-                || !EntityManager.TryGetComponent(euid, out IconSmoothComponent? smoothing)
+            if (!smoothQuery.TryGet(euid, out var? smoothing)
                 || smoothing.UpdateGeneration == _generation)
             {
                 return;
             }
 
-            smoothing.CalculateNewSprite();
+            smoothing.CalculateNewSprite(xformQuery, smoothQuery);
 
             smoothing.UpdateGeneration = _generation;
         }
