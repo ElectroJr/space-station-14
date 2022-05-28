@@ -24,7 +24,7 @@ public sealed class ChameleonOverlay : Overlay
 
     protected override void Draw(in OverlayDrawArgs args)
     {
-        if (args.Viewport.Eye == null || ScreenTexture == null)
+        if (ScreenTexture == null)
             return;
 
         _shader.SetParameter("SCREEN_TEXTURE", ScreenTexture);
@@ -36,7 +36,7 @@ public sealed class ChameleonOverlay : Overlay
         // So we're having the chameleon effect be relative to the world position
         // but that means the effect breaks whenever the  grid is moving.... uhhh...
 
-        var frame = args.Viewport.WorldToLocal(args.Viewport.Eye.Position.Position);
+        var frame = args.Viewport.WorldToLocal(Vector2.Zero);
         frame.Y = args.Viewport.Size.Y - frame.Y;
         _shader.SetParameter("reference_frame", frame);
 
