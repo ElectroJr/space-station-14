@@ -1,4 +1,4 @@
-﻿namespace Content.Shared.DragDrop;
+namespace Content.Shared.DragDrop;
 
 /// <summary>
 /// Event that gets send to the target of a drag drop action

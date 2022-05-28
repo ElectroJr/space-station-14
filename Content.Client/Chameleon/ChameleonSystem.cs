@@ -28,7 +28,7 @@ public sealed class ChameleonSystem : EntitySystem
         var shader = _protoMan.Index<ShaderPrototype>("Chameleon").InstanceUnique();
         shader.StencilRef = ChameleonStencilRef;
 
-        _overlay = new(OverlaySpace.WorldSpaceBelowFOV, shader, true);
+        _overlay = new(OverlaySpace.WorldSpace, shader, true);
         _overlayMan.AddOverlay(_overlay);
 
         SubscribeLocalEvent<ChameleonComponent, ComponentInit>(OnAdd);

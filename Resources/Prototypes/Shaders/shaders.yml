@@ -49,11 +49,3 @@
   stencil:
     op: Keep
     func: Equal
-
-- type: shader
-  id: StencilDraw
-  kind: canvas
-  stencil:
-    ref: 1
-    op: Keep
-    func: NotEqual

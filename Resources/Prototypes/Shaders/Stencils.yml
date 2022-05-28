@@ -6,6 +6,7 @@
     ref: 0
     op: Replace
     func: Always
+    writeMask: 1
 
 - type: shader
   id: StencilMask
@@ -15,6 +16,7 @@
     ref: 1
     op: Replace
     func: Always
+    writeMask: 1
 
 - type: shader
   id: StencilDraw
