@@ -1,5 +1,4 @@
 using Content.Client.Interactable.Components;
-using Content.Client.GenericOverlay;
 using Robust.Client.GameObjects;
 using Robust.Client.Graphics;
 using Robust.Shared.Enums;
@@ -13,9 +12,9 @@ public sealed class ChameleonSystem : EntitySystem
     [Dependency] private readonly IOverlayManager _overlayMan = default!;
 
 
-    public static ushort ChameleonStencilRef = 2;
+    public static ushort ChameleonStencilRef = 4;
     private ShaderInstance _stencilShader = default!;
-    private GenericShaderOverlay _overlay = default!;
+    private ChameleonOverlay _overlay = default!;
 
     public override void Initialize()
     {
@@ -25,11 +24,7 @@ public sealed class ChameleonSystem : EntitySystem
         _stencilShader.StencilWriteMask = ChameleonStencilRef;
         _stencilShader.MakeImmutable();
 
-        // Set up overlay shader
-        var shader = _protoMan.Index<ShaderPrototype>("Chameleon").InstanceUnique();
-        shader.StencilRef = ChameleonStencilRef;
-
-        _overlay = new(OverlaySpace.WorldSpaceBelowFOV, shader, true);
+        _overlay = new(_protoMan);
         _overlayMan.AddOverlay(_overlay);
 
         SubscribeLocalEvent<ChameleonComponent, ComponentInit>(OnAdd);

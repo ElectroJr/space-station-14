@@ -1,3 +1,5 @@
+light_mode unshaded;
+
 void fragment() {
     // Bypasses zTexture because only alpha is queried.
     if (texture2D(TEXTURE, UV).a == 0.0) {
