@@ -13,7 +13,7 @@ public sealed class ChameleonSystem : EntitySystem
     [Dependency] private readonly IOverlayManager _overlayMan = default!;
 
 
-    public static ushort ChameleonStencilRef = 0xCA; // CAmmo?
+    public static ushort ChameleonStencilRef = 2;
     private ShaderInstance _stencilShader = default!;
     private GenericShaderOverlay _overlay = default!;
 
@@ -22,13 +22,14 @@ public sealed class ChameleonSystem : EntitySystem
         // Set up stencil shader
         _stencilShader = _protoMan.Index<ShaderPrototype>("StencilMask").InstanceUnique();
         _stencilShader.StencilRef = ChameleonStencilRef;
+        _stencilShader.StencilWriteMask = ChameleonStencilRef;
         _stencilShader.MakeImmutable();
 
         // Set up overlay shader
         var shader = _protoMan.Index<ShaderPrototype>("Chameleon").InstanceUnique();
         shader.StencilRef = ChameleonStencilRef;
 
-        _overlay = new(OverlaySpace.WorldSpace, shader, true);
+        _overlay = new(OverlaySpace.WorldSpaceBelowFOV, shader, true);
         _overlayMan.AddOverlay(_overlay);
 
         SubscribeLocalEvent<ChameleonComponent, ComponentInit>(OnAdd);
