@@ -66,14 +66,14 @@ public abstract class SharedActionsSystem : EntitySystem
         Dirty(action);
     }
 
-    public void SetEnabled(ActionType action, bool enabled)
-    {
-        if (action.Enabled == enabled)
-            return;
+public void SetEnabled(ActionType action, bool enabled)
+{
+if (action.Enabled == enabled)
+    return;
 
-        action.Enabled = enabled;
-        Dirty(action);
-    }
+action.Enabled = enabled;
+Dirty(action);
+}
 
     public void SetCharges(ActionType action, int? charges)
     {
