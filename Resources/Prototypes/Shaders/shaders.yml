@@ -40,3 +40,20 @@
     pixelSize: 32, 32
     alphaCutoff: 0
     removeTransparency: false
+
+# cloaking distortion effect
+- type: shader
+  id: Chameleon
+  kind: source
+  path: "/Textures/Shaders/chameleon.swsl"
+  stencil:
+    op: Keep
+    func: Equal
+
+- type: shader
+  id: StencilDraw
+  kind: canvas
+  stencil:
+    ref: 1
+    op: Keep
+    func: NotEqual

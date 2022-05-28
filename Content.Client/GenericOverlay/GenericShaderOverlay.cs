@@ -1,7 +1,7 @@
 using Robust.Client.Graphics;
 using Robust.Shared.Enums;
 
-namespace Content.Client.Overlay;
+namespace Content.Client.GenericOverlay;
 
 /// <summary>
 ///     Simple overlay that simply draws to the screen using some shader.

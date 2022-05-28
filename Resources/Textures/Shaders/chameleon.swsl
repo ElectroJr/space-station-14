@@ -1,0 +1,7 @@
+
+uniform sampler2D SCREEN_TEXTURE;
+
+void fragment() {
+    COLOR = zTextureSpec(SCREEN_TEXTURE, FRAGCOORD.xy * SCREEN_PIXEL_SIZE );
+    //COLOR = vec4(1,0,0,1);
+}

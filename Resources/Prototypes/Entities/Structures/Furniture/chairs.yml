@@ -55,6 +55,7 @@
   - type: Construction
     graph: Seat
     node: chair
+  - type: Chameleon
 
 - type: entity
   name: stool
