@@ -45,3 +45,9 @@
     pixelSize: 32, 32
     alphaCutoff: 0
     removeTransparency: false
+
+# cloaking distortion effect
+- type: shader
+  id: Chameleon
+  kind: source
+  path: "/Textures/Shaders/chameleon.swsl"

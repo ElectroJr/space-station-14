@@ -30,6 +30,7 @@ namespace Content.Server.Entry
             "CableVisualizer",
             "PotencyVisuals",
             "PaperVisuals",
+            "Chameleon",
             "SurveillanceCameraVisuals",
         };
     }
