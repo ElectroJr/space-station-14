@@ -236,10 +236,11 @@ namespace Content.Shared.Movement.Systems
             float friction;
             float weightlessModifier;
             float accel;
+            var noInput = total == Vector2.Zero;
 
             if (weightless)
             {
-                if (worldTotal != Vector2.Zero && touching)
+                if (!noInput && touching)
                     friction = moveSpeedComponent?.WeightlessFriction ?? MovementSpeedModifierComponent.DefaultWeightlessFriction;
                 else
                     friction = moveSpeedComponent?.WeightlessFrictionNoInput ?? MovementSpeedModifierComponent.DefaultWeightlessFrictionNoInput;
@@ -249,7 +250,7 @@ namespace Content.Shared.Movement.Systems
             }
             else
             {
-                if (worldTotal != Vector2.Zero || moveSpeedComponent?.FrictionNoInput == null)
+                if (!noInput || moveSpeedComponent?.FrictionNoInput == null)
                 {
                     friction = moveSpeedComponent?.Friction ?? MovementSpeedModifierComponent.DefaultFriction;
                 }
@@ -265,7 +266,7 @@ namespace Content.Shared.Movement.Systems
             var minimumFrictionSpeed = moveSpeedComponent?.MinimumFrictionSpeed ?? MovementSpeedModifierComponent.DefaultMinimumFrictionSpeed;
             Friction(minimumFrictionSpeed, frameTime, friction, ref velocity);
 
-            if (worldTotal != Vector2.Zero)
+            if (!noInput)
             {
                 // This should have its event run during island solver soooo
                 xform.DeferUpdates = true;
