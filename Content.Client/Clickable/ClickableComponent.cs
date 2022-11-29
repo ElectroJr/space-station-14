@@ -77,8 +77,17 @@ namespace Content.Client.Clickable
 
                 // convert to layer-local coordinates
                 layer.GetLayerDrawMatrix(dir, out var matrix);
-                var inverseMatrix = Matrix3.Invert(matrix);
-                var layerLocal = inverseMatrix.Transform(localPos);
+                Vector2 layerLocal = default;
+                try
+                {
+
+                    var inverseMatrix = Matrix3.Invert(matrix);
+                    layerLocal = inverseMatrix.Transform(localPos);
+                }
+                catch
+                {
+                    layer.GetLayerDrawMatrix(dir, out var aaaa);
+                }
 
                 // Convert to image coordinates
                 var layerImagePos = (Vector2i) (layerLocal * EyeManager.PixelsPerMeter * (1, -1) + rsiState.Size / 2f);

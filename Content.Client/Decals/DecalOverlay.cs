@@ -81,9 +81,9 @@ namespace Content.Client.Decals
                         var angle = decal.Angle - cardinal;
 
                         if (angle.Equals(Angle.Zero))
-                            handle.DrawTexture(texture, decal.Coordinates, decal.Color);
+                            handle.DrawTexture(texture, decal.Coordinates, decal.Color ?? Color.White);
                         else
-                            handle.DrawTexture(texture, decal.Coordinates, angle, decal.Color);
+                            handle.DrawTexture(texture, decal.Coordinates, angle, decal.Color ?? Color.White);
                     }
                 }
             }
