@@ -14,7 +14,7 @@ namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators;
 public abstract class NPCCombatOperator : HTNOperator
 {
     [Dependency] protected readonly IEntityManager EntManager = default!;
-    private FactionSystem _factions = default!;
+    private NPCFactionSystem _factions = default!;
     protected InteractionSystem Interaction = default!;
     private PathfindingSystem _pathfinding = default!;
 
@@ -37,7 +37,7 @@ public abstract class NPCCombatOperator : HTNOperator
     {
         base.Initialize(sysManager);
         sysManager.GetEntitySystem<ExamineSystemShared>();
-        _factions = sysManager.GetEntitySystem<FactionSystem>();
+        _factions = sysManager.GetEntitySystem<NPCFactionSystem>();
         Interaction = sysManager.GetEntitySystem<InteractionSystem>();
         _pathfinding = sysManager.GetEntitySystem<PathfindingSystem>();
     }

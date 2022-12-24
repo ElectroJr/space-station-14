@@ -380,7 +380,7 @@ public sealed partial class NPCSteeringSystem
     {
         var detectionRadius = agentRadius + 0.1f;
         var ourVelocity = body.LinearVelocity;
-        var factionQuery = GetEntityQuery<FactionComponent>();
+        var factionQuery = GetEntityQuery<NPCFactionComponent>();
         factionQuery.TryGetComponent(uid, out var ourFaction);
 
         foreach (var ent in _lookup.GetEntitiesInRange(uid, detectionRadius, LookupFlags.Dynamic))

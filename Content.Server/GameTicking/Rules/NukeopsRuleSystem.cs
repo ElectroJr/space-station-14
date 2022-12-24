@@ -43,7 +43,7 @@ public sealed class NukeopsRuleSystem : GameRuleSystem
     [Dependency] private readonly IChatManager _chatManager = default!;
     [Dependency] private readonly IMapManager _mapManager = default!;
     [Dependency] private readonly IPlayerManager _playerSystem = default!;
-    [Dependency] private readonly FactionSystem _faction = default!;
+    [Dependency] private readonly NPCFactionSystem _faction = default!;
     [Dependency] private readonly StationSpawningSystem _stationSpawningSystem = default!;
     [Dependency] private readonly StationSystem _stationSystem = default!;
     [Dependency] private readonly ShuttleSystem _shuttleSystem = default!;

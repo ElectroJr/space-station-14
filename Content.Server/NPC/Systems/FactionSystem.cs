@@ -7,7 +7,7 @@ namespace Content.Server.NPC.Systems
     /// <summary>
     ///     Outlines faction relationships with each other.
     /// </summary>
-    public sealed class FactionSystem : EntitySystem
+    public sealed class NPCFactionSystem : EntitySystem
     {
         [Dependency] private readonly IPrototypeManager _protoManager = default!;
         [Dependency] private readonly EntityLookupSystem _lookup = default!;
@@ -23,7 +23,7 @@ namespace Content.Server.NPC.Systems
         {
             base.Initialize();
             _sawmill = Logger.GetSawmill("faction");
-            SubscribeLocalEvent<FactionComponent, ComponentStartup>(OnFactionStartup);
+            SubscribeLocalEvent<NPCFactionComponent, ComponentStartup>(OnFactionStartup);
             _protoManager.PrototypesReloaded += OnProtoReload;
             RefreshFactions();
         }
@@ -39,7 +39,7 @@ namespace Content.Server.NPC.Systems
             RefreshFactions();
         }
 
-        private void OnFactionStartup(EntityUid uid, FactionComponent component, ComponentStartup args)
+        private void OnFactionStartup(EntityUid uid, NPCFactionComponent component, ComponentStartup args)
         {
             RefreshFactions(component);
         }
@@ -47,7 +47,7 @@ namespace Content.Server.NPC.Systems
         /// <summary>
         /// Refreshes the cached factions for this component.
         /// </summary>
-        private void RefreshFactions(FactionComponent component)
+        private void RefreshFactions(NPCFactionComponent component)
         {
             foreach (var faction in component.Factions)
             {
@@ -65,13 +65,13 @@ namespace Content.Server.NPC.Systems
         /// </summary>
         public void AddFaction(EntityUid uid, string faction, bool dirty = true)
         {
-            if (!_protoManager.HasIndex<FactionPrototype>(faction))
+            if (!_protoManager.HasIndex<NPCFactionPrototype>(faction))
             {
                 _sawmill.Error($"Unable to find faction {faction}");
                 return;
             }
 
-            var comp = EnsureComp<FactionComponent>(uid);
+            var comp = EnsureComp<NPCFactionComponent>(uid);
             if (!comp.Factions.Add(faction))
                 return;
 
@@ -86,13 +86,13 @@ namespace Content.Server.NPC.Systems
         /// </summary>
         public void RemoveFaction(EntityUid uid, string faction, bool dirty = true)
         {
-            if (!_protoManager.HasIndex<FactionPrototype>(faction))
+            if (!_protoManager.HasIndex<NPCFactionPrototype>(faction))
             {
                 _sawmill.Error($"Unable to find faction {faction}");
                 return;
             }
 
-            if (!TryComp<FactionComponent>(uid, out var component))
+            if (!TryComp<NPCFactionComponent>(uid, out var component))
                 return;
 
             if (!component.Factions.Remove(faction))
@@ -104,7 +104,7 @@ namespace Content.Server.NPC.Systems
             }
         }
 
-        public IEnumerable<EntityUid> GetNearbyHostiles(EntityUid entity, float range, FactionComponent? component = null)
+        public IEnumerable<EntityUid> GetNearbyHostiles(EntityUid entity, float range, NPCFactionComponent? component = null)
         {
             if (!Resolve(entity, ref component, false))
                 return Array.Empty<EntityUid>();
@@ -112,7 +112,7 @@ namespace Content.Server.NPC.Systems
             return GetNearbyFactions(entity, range, component.HostileFactions);
         }
 
-        public IEnumerable<EntityUid> GetNearbyFriendlies(EntityUid entity, float range, FactionComponent? component = null)
+        public IEnumerable<EntityUid> GetNearbyFriendlies(EntityUid entity, float range, NPCFactionComponent? component = null)
         {
             if (!Resolve(entity, ref component, false))
                 return Array.Empty<EntityUid>();
@@ -127,7 +127,7 @@ namespace Content.Server.NPC.Systems
             if (!xformQuery.TryGetComponent(entity, out var entityXform))
                 yield break;
 
-            foreach (var comp in _lookup.GetComponentsInRange<FactionComponent>(entityXform.MapPosition, range))
+            foreach (var comp in _lookup.GetComponentsInRange<NPCFactionComponent>(entityXform.MapPosition, range))
             {
                 if (comp.Owner == entity)
                     continue;
@@ -139,7 +139,7 @@ namespace Content.Server.NPC.Systems
             }
         }
 
-        public bool IsFriendly(EntityUid uidA, EntityUid uidB, FactionComponent? factionA = null, FactionComponent? factionB = null)
+        public bool IsFriendly(EntityUid uidA, EntityUid uidB, NPCFactionComponent? factionA = null, NPCFactionComponent? factionB = null)
         {
             if (!Resolve(uidA, ref factionA, false) || !Resolve(uidB, ref factionB, false))
                 return false;
@@ -173,7 +173,7 @@ namespace Content.Server.NPC.Systems
         {
             _factions.Clear();
 
-            foreach (var faction in _protoManager.EnumeratePrototypes<FactionPrototype>())
+            foreach (var faction in _protoManager.EnumeratePrototypes<NPCFactionPrototype>())
             {
                 _factions[faction.ID] = new FactionData()
                 {
@@ -182,7 +182,7 @@ namespace Content.Server.NPC.Systems
                 };
             }
 
-            foreach (var comp in EntityQuery<FactionComponent>(true))
+            foreach (var comp in EntityQuery<NPCFactionComponent>(true))
             {
                 comp.FriendlyFactions.Clear();
                 comp.HostileFactions.Clear();
