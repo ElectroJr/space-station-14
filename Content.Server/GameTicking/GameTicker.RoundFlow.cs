@@ -66,9 +66,6 @@ namespace Content.Server.GameTicking
             }
         }
 
-        [ViewVariables]
-        public int RoundId { get; private set; }
-
         /// <summary>
         /// Returns true if the round's map is eligible to be updated.
         /// </summary>
