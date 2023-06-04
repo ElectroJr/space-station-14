@@ -11,6 +11,9 @@ using Robust.Client.State;
 using Robust.Shared.Console;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
+using Robust.Shared.Replays;
+using Robust.Shared.Serialization.Markdown.Mapping;
+using Robust.Shared.Serialization.Markdown.Value;
 using Robust.Shared.Utility;
 
 namespace Content.Client.Replay.Observer;
@@ -34,6 +37,9 @@ public sealed partial class ReplayObserverSystem : EntitySystem
     [Dependency] private readonly IBaseClient _client = default!;
     [Dependency] private readonly SharedContentEyeSystem _eye = default!;
     [Dependency] private readonly IReplayPlaybackManager _replayPlayback = default!;
+    [Dependency] private readonly IReplayRecordingManager _replayRecording = default!;
+
+    public const string Recorder = "recorder";
 
     private ObserverData? _oldPosition;
 
@@ -52,19 +58,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         _replayPlayback.AfterSetTick += OnAfterSetTick;
         _replayPlayback.ReplayPlaybackStarted += OnPlaybackStarted;
         _replayPlayback.ReplayPlaybackStopped += OnPlaybackStopped;
-    }
-
-    private void OnPlaybackStarted()
-    {
-        InitializeMovement();
-        SetObserverPosition(default);
-    }
-
-    private void OnAfterSetTick()
-    {
-        if (_oldPosition != null)
-            SetObserverPosition(_oldPosition.Value);
-        _oldPosition = null;
+        _replayRecording.RecordingStarted += OnRecordingStarted;
     }
 
     public override void Shutdown()
@@ -75,6 +69,34 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         _replayPlayback.AfterSetTick -= OnAfterSetTick;
         _replayPlayback.ReplayPlaybackStarted -= OnPlaybackStarted;
         _replayPlayback.ReplayPlaybackStopped -= OnPlaybackStopped;
+        _replayRecording.RecordingStarted -= OnRecordingStarted;
+    }
+
+    private void OnRecordingStarted(MappingDataNode metadata, List<object> events)
+    {
+        // Add information about the user doing the recording. This is used to set the default replay observer position
+        // when playing back the replay.
+        if (_player.LocalPlayer != null)
+            metadata[Recorder] = new ValueDataNode(_player.LocalPlayer.UserId.UserId.ToString());
+    }
+
+    private void OnPlaybackStarted(MappingDataNode yamlMappingNode, List<object> objects)
+    {
+        if (yamlMappingNode.TryGet(new ValueDataNode(Recorder), out ValueDataNode? node)
+            && Guid.TryParse(node.Value, out var guid))
+        {
+            aaaaaaaa
+
+        }
+        InitializeMovement();
+        SetObserverPosition(default);
+    }
+
+    private void OnAfterSetTick()
+    {
+        if (_oldPosition != null)
+            SetObserverPosition(_oldPosition.Value);
+        _oldPosition = null;
     }
 
     private void OnPlaybackStopped()

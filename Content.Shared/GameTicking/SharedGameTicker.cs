@@ -31,9 +31,9 @@ namespace Content.Shared.GameTicking
             _replay.RecordingStarted -= OnRecordingStart;
         }
 
-        private void OnRecordingStart((MappingDataNode, List<object>) data)
+        private void OnRecordingStart(MappingDataNode metadata, List<object> events)
         {
-            data.Item1["roundId"] = new ValueDataNode(RoundId.ToString());
+            metadata["roundId"] = new ValueDataNode(RoundId.ToString());
         }
     }
 
