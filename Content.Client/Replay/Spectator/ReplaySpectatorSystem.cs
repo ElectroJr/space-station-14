@@ -11,12 +11,10 @@ using Robust.Client.State;
 using Robust.Shared.Console;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
-using Robust.Shared.Replays;
 using Robust.Shared.Serialization.Markdown.Mapping;
-using Robust.Shared.Serialization.Markdown.Value;
 using Robust.Shared.Utility;
 
-namespace Content.Client.Replay.Observer;
+namespace Content.Client.Replay.Spectator;
 
 /// <summary>
 /// This system handles spawning replay observer ghosts and maintaining their positions when traveling through time.
@@ -27,7 +25,7 @@ namespace Content.Client.Replay.Observer;
 /// exist, where should the observer go? This attempts to maintain their position and eye rotation or just re-spawns
 /// them as needed.
 /// </remarks>
-public sealed partial class ReplayObserverSystem : EntitySystem
+public sealed partial class ReplaySpectatorSystem : EntitySystem
 {
     [Dependency] private readonly IPlayerManager _player = default!;
     [Dependency] private readonly IConsoleHost _conHost = default!;
@@ -37,59 +35,45 @@ public sealed partial class ReplayObserverSystem : EntitySystem
     [Dependency] private readonly IBaseClient _client = default!;
     [Dependency] private readonly SharedContentEyeSystem _eye = default!;
     [Dependency] private readonly IReplayPlaybackManager _replayPlayback = default!;
-    [Dependency] private readonly IReplayRecordingManager _replayRecording = default!;
-
-    public const string Recorder = "recorder";
 
     private ObserverData? _oldPosition;
+    public const string SpectateCmd = "spectate";
 
     public override void Initialize()
     {
         base.Initialize();
 
         SubscribeLocalEvent<GetVerbsEvent<AlternativeVerb>>(OnGetAlternativeVerbs);
-        SubscribeLocalEvent<ReplayObserverComponent, EntityTerminatingEvent>(OnTerminating);
-        SubscribeLocalEvent<ReplayObserverComponent, PlayerDetachedEvent>(OnDetached);
+        SubscribeLocalEvent<ReplaySpectatorComponent, EntityTerminatingEvent>(OnTerminating);
+        SubscribeLocalEvent<ReplaySpectatorComponent, PlayerDetachedEvent>(OnDetached);
 
         InitializeBlockers();
-        _conHost.RegisterCommand("observe", ObserveCommand);
+        _conHost.RegisterCommand(SpectateCmd, SpectateCommand);
 
         _replayPlayback.BeforeSetTick += OnBeforeSetTick;
         _replayPlayback.AfterSetTick += OnAfterSetTick;
         _replayPlayback.ReplayPlaybackStarted += OnPlaybackStarted;
         _replayPlayback.ReplayPlaybackStopped += OnPlaybackStopped;
-        _replayRecording.RecordingStarted += OnRecordingStarted;
     }
 
     public override void Shutdown()
     {
         base.Shutdown();
-        _conHost.UnregisterCommand("observe");
+        _conHost.UnregisterCommand(SpectateCmd);
         _replayPlayback.BeforeSetTick -= OnBeforeSetTick;
         _replayPlayback.AfterSetTick -= OnAfterSetTick;
         _replayPlayback.ReplayPlaybackStarted -= OnPlaybackStarted;
         _replayPlayback.ReplayPlaybackStopped -= OnPlaybackStopped;
-        _replayRecording.RecordingStarted -= OnRecordingStarted;
-    }
-
-    private void OnRecordingStarted(MappingDataNode metadata, List<object> events)
-    {
-        // Add information about the user doing the recording. This is used to set the default replay observer position
-        // when playing back the replay.
-        if (_player.LocalPlayer != null)
-            metadata[Recorder] = new ValueDataNode(_player.LocalPlayer.UserId.UserId.ToString());
     }
 
     private void OnPlaybackStarted(MappingDataNode yamlMappingNode, List<object> objects)
     {
-        if (yamlMappingNode.TryGet(new ValueDataNode(Recorder), out ValueDataNode? node)
-            && Guid.TryParse(node.Value, out var guid))
-        {
-            aaaaaaaa
-
-        }
         InitializeMovement();
-        SetObserverPosition(default);
+
+        if (_replayPlayback.TryGetRecorderEntity(out var recorder))
+            SpectateEntity(recorder.Value);
+        else
+            SetObserverPosition(default);
     }
 
     private void OnAfterSetTick()
@@ -109,7 +93,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         _oldPosition = GetObserverPosition();
     }
 
-    private void OnDetached(EntityUid uid, ReplayObserverComponent component, PlayerDetachedEvent args)
+    private void OnDetached(EntityUid uid, ReplaySpectatorComponent component, PlayerDetachedEvent args)
     {
         if (uid.IsClientSide())
             QueueDel(uid);
@@ -127,17 +111,17 @@ public sealed partial class ReplayObserverSystem : EntitySystem
 
         if (observer.Local != null && observer.Local.Value.Coords.IsValid(EntityManager))
         {
-            var newXform = SpawnObserverGhost(observer.Local.Value.Coords, false);
+            var newXform = SpawnSpectatorGhost(observer.Local.Value.Coords, false);
             newXform.LocalRotation = observer.Local.Value.Rot;
         }
         else if (observer.World != null && observer.World.Value.Coords.IsValid(EntityManager))
         {
-            var newXform = SpawnObserverGhost(observer.World.Value.Coords, true);
+            var newXform = SpawnSpectatorGhost(observer.World.Value.Coords, true);
             newXform.LocalRotation = observer.World.Value.Rot;
         }
         else if (TryFindFallbackSpawn(out var coords))
         {
-            var newXform = SpawnObserverGhost(coords, true);
+            var newXform = SpawnSpectatorGhost(coords, true);
             newXform.LocalRotation = 0;
         }
         else
@@ -155,7 +139,15 @@ public sealed partial class ReplayObserverSystem : EntitySystem
 
     private bool TryFindFallbackSpawn(out EntityCoordinates coords)
     {
-        var uid = EntityQuery<MapGridComponent>().OrderByDescending(x => x.LocalAABB.Size.LengthSquared).FirstOrDefault()?.Owner;
+        if (_replayPlayback.TryGetRecorderEntity(out var recorder))
+        {
+            coords = new EntityCoordinates(recorder.Value, default);
+            return true;
+        }
+
+        var uid = EntityQuery<MapGridComponent>()
+            .OrderByDescending(x => x.LocalAABB.Size.LengthSquared)
+            .FirstOrDefault()?.Owner;
         coords = new EntityCoordinates(uid ?? default, default);
         return uid != null;
     }
@@ -186,7 +178,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         return obs;
     }
 
-    private void OnTerminating(EntityUid uid, ReplayObserverComponent component, ref EntityTerminatingEvent args)
+    private void OnTerminating(EntityUid uid, ReplaySpectatorComponent component, ref EntityTerminatingEvent args)
     {
         if (uid != _player.LocalPlayer?.ControlledEntity)
             return;
@@ -195,7 +187,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         if (xform.MapUid == null || Terminating(xform.MapUid.Value))
             return;
 
-        SpawnObserverGhost(new EntityCoordinates(xform.MapUid.Value, default), true);
+        SpawnSpectatorGhost(new EntityCoordinates(xform.MapUid.Value, default), true);
     }
 
     private void OnGetAlternativeVerbs(GetVerbsEvent<AlternativeVerb> ev)
@@ -228,25 +220,24 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         if (old == target)
         {
             // un-visit
-            SpawnObserverGhost(Transform(target).Coordinates, true);
+            SpawnSpectatorGhost(Transform(target).Coordinates, true);
             return;
         }
 
         _player.LocalPlayer.AttachEntity(target, EntityManager, _client);
-        EnsureComp<ReplayObserverComponent>(target);
+        EnsureComp<ReplaySpectatorComponent>(target);
 
+        _stateMan.RequestStateChange<ReplaySpectateEntityState>();
         if (old == null)
             return;
 
         if (old.Value.IsClientSide())
             Del(old.Value);
         else
-            RemComp<ReplayObserverComponent>(old.Value);
-
-        _stateMan.RequestStateChange<ReplaySpectateEntityState>();
+            RemComp<ReplaySpectatorComponent>(old.Value);
     }
 
-    public TransformComponent SpawnObserverGhost(EntityCoordinates coords, bool gridAttach)
+    public TransformComponent SpawnSpectatorGhost(EntityCoordinates coords, bool gridAttach)
     {
         if (_player.LocalPlayer == null)
             throw new InvalidOperationException();
@@ -255,7 +246,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
 
         var ent = Spawn("MobObserver", coords);
         _eye.SetMaxZoom(ent, Vector2.One * 5);
-        EnsureComp<ReplayObserverComponent>(ent);
+        EnsureComp<ReplaySpectatorComponent>(ent);
 
         var xform = Transform(ent);
 
@@ -269,7 +260,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
             if (old.Value.IsClientSide())
                 QueueDel(old.Value);
             else
-                RemComp<ReplayObserverComponent>(old.Value);
+                RemComp<ReplaySpectatorComponent>(old.Value);
         }
 
         _stateMan.RequestStateChange<ReplayGhostState>();
@@ -277,12 +268,12 @@ public sealed partial class ReplayObserverSystem : EntitySystem
         return xform;
     }
 
-    private void ObserveCommand(IConsoleShell shell, string argStr, string[] args)
+    private void SpectateCommand(IConsoleShell shell, string argStr, string[] args)
     {
         if (args.Length == 0)
         {
             if (_player.LocalPlayer?.ControlledEntity is { } current)
-                SpawnObserverGhost(new EntityCoordinates(current, default), true);
+                SpawnSpectatorGhost(new EntityCoordinates(current, default), true);
             return;
         }
 
@@ -292,7 +283,7 @@ public sealed partial class ReplayObserverSystem : EntitySystem
             return;
         }
 
-        if (!TryComp(uid, out TransformComponent? xform))
+        if (!Exists(uid))
         {
             shell.WriteError(Loc.GetString("cmd-parse-failure-entity-exist", ("arg", args[0])));
             return;
