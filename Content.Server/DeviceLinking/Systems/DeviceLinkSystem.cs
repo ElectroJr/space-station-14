@@ -56,7 +56,7 @@ public sealed class DeviceLinkSystem : SharedDeviceLinkSystem
 
         foreach (var (sinkUid, links) in outputs)
         {
-            SaveLinks(null, sourceUid, sinkUid, links, sourceComponent);
+            SaveLinks(null, sourceUid, sinkUid, links, sourceComponent, checkRange:false);
         }
 
         RemCompDeferred<SignalTransmitterComponent>(sourceUid);

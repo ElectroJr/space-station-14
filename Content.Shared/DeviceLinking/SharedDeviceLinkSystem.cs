@@ -302,7 +302,8 @@ public abstract class SharedDeviceLinkSystem : EntitySystem
         EntityUid sinkUid,
         List<(string source, string sink)> links,
         DeviceLinkSourceComponent? sourceComponent = null,
-        DeviceLinkSinkComponent? sinkComponent = null)
+        DeviceLinkSinkComponent? sinkComponent = null,
+        bool checkRange = true)
     {
         if (!Resolve(sourceUid, ref sourceComponent) || !Resolve(sinkUid, ref sinkComponent))
             return;
@@ -310,7 +311,7 @@ public abstract class SharedDeviceLinkSystem : EntitySystem
         if (sourceComponent.Ports == null || sinkComponent.Ports == null)
             return;
 
-        if (!InRange(sourceUid, sinkUid, sourceComponent.Range))
+        if (checkRange && !InRange(sourceUid, sinkUid, sourceComponent.Range))
         {
             if (userId != null)
                 _popupSystem.PopupCursor(Loc.GetString("signal-linker-component-out-of-range"), userId.Value);
