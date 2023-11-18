@@ -1,3 +1,4 @@
+using System.Linq;
 using Content.Server.Atmos.Components;
 using Content.Server.Atmos.Piping.Components;
 using Content.Server.NodeContainer.NodeGroups;
@@ -41,7 +42,11 @@ namespace Content.Server.Atmos.EntitySystems
             var (owner, atmosphere) = ent;
             if (!atmosphere.ProcessingPaused)
             {
-                atmosphere.CurrentRunInvalidatedCoordinates = new Queue<Vector2i>(atmosphere.InvalidatedCoords);
+                atmosphere.CurrentRunInvalidatedCoordinates.Clear();
+                foreach (var tile in atmosphere.InvalidatedCoords)
+                {
+                    atmosphere.CurrentRunInvalidatedCoordinates.Enqueue(tile);
+                }
                 atmosphere.InvalidatedCoords.Clear();
             }
 
