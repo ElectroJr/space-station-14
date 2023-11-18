@@ -310,15 +310,16 @@ namespace Content.Server.Atmos.EntitySystems
                             if (!otherTile.AdjacentBits.IsFlagSet(direction))
                                 continue;
 
-                            var otherTile2 = otherTile.AdjacentTiles[k];
-
                             if (taker.MonstermosInfo.MoleDelta >= 0)
                                 break; // We're done here now. Let's not do more work than needed.
 
-                            if (otherTile2 == null || otherTile2.AdjacentBits == 0 || otherTile2.MonstermosInfo.LastQueueCycle != queueCycle)
+                            var otherTile2 = otherTile.AdjacentTiles[k]!;
+                            DebugTools.AssertNotNull(otherTile2);
+                            DebugTools.Assert(otherTile2.AdjacentBits.IsFlagSet(direction.GetOpposite()));
+
+                            if (otherTile2.MonstermosInfo.LastQueueCycle != queueCycle)
                                 continue;
 
-                            DebugTools.Assert(otherTile2.AdjacentBits.IsFlagSet(direction.GetOpposite()));
                             if (otherTile2.MonstermosInfo.LastSlowQueueCycle == queueCycleSlow)
                                 continue;
 
