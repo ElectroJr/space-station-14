@@ -24,7 +24,7 @@ public sealed partial class AtmosphereSystem
         SubscribeLocalEvent<GridAtmosphereComponent, GetTileMixtureMethodEvent>(GridGetTileMixture);
         SubscribeLocalEvent<GridAtmosphereComponent, GetTileMixturesMethodEvent>(GridGetTileMixtures);
         SubscribeLocalEvent<GridAtmosphereComponent, ReactTileMethodEvent>(GridReactTile);
-        SubscribeLocalEvent<GridAtmosphereComponent, IsTileAirBlockedMethodEvent>(GridIsTileAirBlocked);
+        SubscribeLocalEvent<IsTileAirBlockedMethodEvent>(GridIsTileAirBlocked);
         SubscribeLocalEvent<GridAtmosphereComponent, IsTileSpaceMethodEvent>(GridIsTileSpace);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAdjacentTilesMethodEvent>(GridGetAdjacentTiles);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAdjacentTileMixturesMethodEvent>(GridGetAdjacentTileMixtures);
@@ -218,17 +218,12 @@ public sealed partial class AtmosphereSystem
         args.Handled = true;
     }
 
-    private void GridIsTileAirBlocked(EntityUid uid, GridAtmosphereComponent component,
-        ref IsTileAirBlockedMethodEvent args)
+    private void GridIsTileAirBlocked(ref IsTileAirBlockedMethodEvent args)
     {
         if (args.Handled)
             return;
 
         var mapGridComp = args.MapGridComponent;
-
-        if (!Resolve(uid, ref mapGridComp))
-            return;
-
         var directions = AtmosDirection.Invalid;
 
         var enumerator = GetObstructingComponentsEnumerator(mapGridComp, args.Tile);
@@ -360,11 +355,11 @@ public sealed partial class AtmosphereSystem
 
             // Pass in MapGridComponent so we don't have to resolve it for every adjacent direction.
             var tileBlockedEv = new IsTileAirBlockedMethodEvent(uid, tile.GridIndices, direction, mapGridComp);
-            GridIsTileAirBlocked(uid, component, ref tileBlockedEv);
+            GridIsTileAirBlocked(ref tileBlockedEv);
 
             var adjacentBlockedEv =
                 new IsTileAirBlockedMethodEvent(uid, adjacent.GridIndices, oppositeDirection, mapGridComp);
-            GridIsTileAirBlocked(uid, component, ref adjacentBlockedEv);
+            GridIsTileAirBlocked(ref adjacentBlockedEv);
 
             if (!adjacent.BlockedAirflow.IsFlagSet(oppositeDirection) && !tileBlockedEv.Result)
             {

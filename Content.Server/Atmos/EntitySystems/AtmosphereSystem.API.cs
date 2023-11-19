@@ -192,7 +192,7 @@ public partial class AtmosphereSystem
     public bool IsTileAirBlocked(EntityUid gridUid, Vector2i tile, AtmosDirection directions = AtmosDirection.All, MapGridComponent? mapGridComp = null)
     {
         var ev = new IsTileAirBlockedMethodEvent(gridUid, tile, directions, mapGridComp);
-        RaiseLocalEvent(gridUid, ref ev);
+        RaiseLocalEvent(ref ev);
 
         // If nothing handled the event, it'll default to true.
         return ev.Result;
@@ -245,7 +245,7 @@ public partial class AtmosphereSystem
 
         return ev.Result ?? Enumerable.Empty<GasMixture>();
     }
-    
+
     public void HotspotExpose(EntityUid gridUid, Vector2i tile, float exposedTemperature, float exposedVolume,
         EntityUid? sparkSourceUid = null, bool soh = false)
     {
