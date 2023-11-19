@@ -358,37 +358,20 @@ public sealed partial class AtmosphereSystem
                 AddActiveTile(component, adjacent);
 
             var oppositeDirection = direction.GetOpposite();
+            adjacent.BlockedAirflow = GetBlockedDirections((uid, mapGridComp), adjacent.GridIndices).Blocked;
 
-            adjacent.BlockedAirflow = GetBlockedDirections(mapGridComp, adjacent.GridIndices).Blocked;
-
-            // Pass in MapGridComponent so we don't have to resolve it for every adjacent direction.
-            var tileBlockedEv = new IsTileAirBlockedMethodEvent(uid, tile.GridIndices, direction, mapGridComp);
-            GridIsTileAirBlocked(ref tileBlockedEv);
-
-            var adjacentBlockedEv =
-                new IsTileAirBlockedMethodEvent(uid, adjacent.GridIndices, oppositeDirection, mapGridComp);
-            GridIsTileAirBlocked(ref adjacentBlockedEv);
-
-            if (!adjacent.BlockedAirflow.IsFlagSet(oppositeDirection) && !tileBlockedEv.Result)
+            if (!adjacent.BlockedAirflow.IsFlagSet(oppositeDirection) && !tile.BlockedAirflow.IsFlagSet(direction))
             {
                 adjacent.AdjacentBits |= oppositeDirection;
-                adjacent.AdjacentTiles[oppositeDirection.ToIndex()] = tile;
-            }
-            else
-            {
-                adjacent.AdjacentBits &= ~oppositeDirection;
-                adjacent.AdjacentTiles[oppositeDirection.ToIndex()] = null;
-            }
-
-            DebugTools.AssertEqual(direction.ToIndex(), i);
-            if (!tile.BlockedAirflow.IsFlagSet(direction) && !adjacentBlockedEv.Result)
-            {
                 tile.AdjacentBits |= direction;
+                adjacent.AdjacentTiles[oppositeDirection.ToIndex()] = tile;
                 tile.AdjacentTiles[i] = adjacent;
             }
             else
             {
+                adjacent.AdjacentBits &= ~oppositeDirection;
                 tile.AdjacentBits &= ~direction;
+                adjacent.AdjacentTiles[oppositeDirection.ToIndex()] = null;
                 tile.AdjacentTiles[i] = null;
             }
 
