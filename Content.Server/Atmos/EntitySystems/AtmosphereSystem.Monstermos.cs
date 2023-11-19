@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Numerics;
 using Content.Server.Atmos.Components;
 using Content.Server.Doors.Systems;
@@ -588,9 +587,11 @@ namespace Content.Server.Atmos.EntitySystems
                 _physics.ApplyAngularImpulse(owner, Vector2Helpers.Cross(tile.GridIndices - gridPhysics.LocalCenter, direction) * totalMolesRemoved, body: gridPhysics);
             }
 
-            if(tileCount > 10 && (totalMolesRemoved / tileCount) > 10)
+            if (tileCount > 10 && (totalMolesRemoved / tileCount) > 10)
+            {
                 _adminLog.Add(LogType.ExplosiveDepressurization, LogImpact.High,
                     $"Explosive depressurization removed {totalMolesRemoved} moles from {tileCount} tiles starting from position {tile.GridIndices:position} on grid ID {tile.GridUid:grid}");
+            }
 
             Array.Clear(_depressurizeTiles, 0, Atmospherics.MonstermosHardTileLimit);
             Array.Clear(_depressurizeSpaceTiles, 0, Atmospherics.MonstermosHardTileLimit);
@@ -603,17 +604,17 @@ namespace Content.Server.Atmos.EntitySystems
         {
             var reconsiderAdjacent = false;
 
-            foreach (var entity in ent.Comp3.GetAnchoredEntities(tile.GridIndices))
+            foreach (var entity in _map.GetAnchoredEntities(ent.Owner, ent.Comp3, tile.GridIndices))
             {
-                if (!TryComp(entity, out FirelockComponent? firelock))
+                if (!_firelockQuery.TryGetComponent(entity, out var firelock))
                     continue;
 
                 reconsiderAdjacent |= _firelockSystem.EmergencyPressureStop(entity, firelock);
             }
 
-            foreach (var entity in ent.Comp3.GetAnchoredEntities(other.GridIndices))
+            foreach (var entity in _map.GetAnchoredEntities(ent.Owner, ent.Comp3, other.GridIndices))
             {
-                if (!TryComp(entity, out FirelockComponent? firelock))
+                if (!_firelockQuery.TryGetComponent(entity, out var firelock))
                     continue;
 
                 reconsiderAdjacent |= _firelockSystem.EmergencyPressureStop(entity, firelock);
