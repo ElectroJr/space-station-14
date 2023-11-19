@@ -149,7 +149,7 @@ public sealed class TemperatureSystem : EntitySystem
         if (transform.MapUid == null)
             return;
 
-        var position = _transform.GetGridIndices((uid, transform));
+        var position = _transform.GetGridTilePositionOrDefault((uid, transform));
         var temperatureDelta = args.GasMixture.Temperature - temperature.CurrentTemperature;
         var tileHeatCapacity =
             _atmosphere.GetTileHeatCapacity(transform.GridUid, transform.MapUid.Value, position);

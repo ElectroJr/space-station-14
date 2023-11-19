@@ -124,10 +124,10 @@ namespace Content.Server.Atmos.EntitySystems
             if (!xform.Anchored || !TryComp(xform.GridUid, out MapGridComponent? grid))
                 return;
 
-            var indices = _transform.GetGridIndices((ent, xform), grid);
+            var indices = _transform.GetGridTilePositionOrDefault((ent, xform), grid);
             airtight.LastPosition = (xform.GridUid.Value, indices);
-            var fixVacum = airtight.FixVacuum && !airtight.AirBlocked;
-            InvalidatePosition((xform.GridUid.Value, grid), indices, fixVacum);
+            var fixVacuum = airtight.FixVacuum && !airtight.AirBlocked;
+            InvalidatePosition((xform.GridUid.Value, grid), indices, fixVacuum);
         }
 
         public void InvalidatePosition(Entity<MapGridComponent?> grid, Vector2i pos, bool fixVacuum = false)

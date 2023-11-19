@@ -132,7 +132,7 @@ public partial class AtmosphereSystem
         if (!Resolve(entity.Owner, ref entity.Comp))
             return null;
 
-        var indices = _transformSystem.GetGridIndices(entity);
+        var indices = _transformSystem.GetGridTilePositionOrDefault(entity);
         return GetTileMixture(entity.Comp.GridUid, entity.Comp.MapUid, indices, excite);
     }
 
