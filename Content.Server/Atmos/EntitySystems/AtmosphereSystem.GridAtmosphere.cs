@@ -318,14 +318,18 @@ public sealed partial class AtmosphereSystem
 
     private void GridUpdateAdjacent(ref UpdateAdjacentMethodEvent args)
     {
+        if (args.Grid.Comp1.Tiles.TryGetValue(args.Tile, out var tile))
+            GridUpdateAdjacent(tile, ref args);
+    }
+
+    private void GridUpdateAdjacent(TileAtmosphere tile, ref UpdateAdjacentMethodEvent args)
+    {
+        DebugTools.AssertEqual(args.Grid.Comp1.Tiles[args.Tile], tile);
         if (args.Handled)
             return;
 
         var (uid, component, mapGridComp, xform) = args.Grid;
         var mapUid = xform.MapUid;
-
-        if (!component.Tiles.TryGetValue(args.Tile, out var tile))
-            return;
 
         tile.AdjacentBits = AtmosDirection.Invalid;
         tile.BlockedAirflow = GetBlockedDirections(mapGridComp, tile.GridIndices);
@@ -557,10 +561,10 @@ public sealed partial class AtmosphereSystem
 
         // Gotta do this afterwards so we can properly update adjacent tiles.
         var ent2 = new Entity<GridAtmosphereComponent, MapGridComponent, TransformComponent>(ent, ent.Comp1, ent.Comp3, ent.Comp4);
-        foreach (var (position, _) in gridAtmosphere.Tiles.ToArray())
+        foreach (var (position, tile) in gridAtmosphere.Tiles.ToArray())
         {
             var ev = new UpdateAdjacentMethodEvent(ent2, position);
-            GridUpdateAdjacent(ref ev);
+            GridUpdateAdjacent(tile, ref ev);
             InvalidateVisuals(uid, position, ent.Comp2);
         }
     }

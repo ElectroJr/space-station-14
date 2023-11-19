@@ -73,7 +73,7 @@ namespace Content.Server.Atmos.EntitySystems
 
                 var oldBlocked = tile.BlockedAirflow;
                 var updateAdjacentEv = new UpdateAdjacentMethodEvent((ent.Owner, ent.Comp1, ent.Comp3, ent.Comp4), indices);
-                GridUpdateAdjacent(ref updateAdjacentEv);
+                GridUpdateAdjacent(tile, ref updateAdjacentEv);
 
                 // Blocked airflow changed, rebuild excited groups!
                 if (tile.Excited && tile.BlockedAirflow != oldBlocked)

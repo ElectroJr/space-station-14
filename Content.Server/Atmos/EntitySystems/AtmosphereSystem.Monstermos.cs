@@ -625,8 +625,8 @@ namespace Content.Server.Atmos.EntitySystems
             var ent2 = new Entity<GridAtmosphereComponent, MapGridComponent, TransformComponent>(ent.Owner, ent.Comp1, ent.Comp3, ent.Comp4);
             var tileEv = new UpdateAdjacentMethodEvent(ent2, tile.GridIndices);
             var otherEv = new UpdateAdjacentMethodEvent(ent2, other.GridIndices);
-            GridUpdateAdjacent(ref tileEv);
-            GridUpdateAdjacent(ref otherEv);
+            GridUpdateAdjacent(tile, ref tileEv);
+            GridUpdateAdjacent(other, ref otherEv);
             InvalidateVisuals(tile.GridUid, tile.GridIndices, ent.Comp2);
             InvalidateVisuals(other.GridUid, other.GridIndices, ent.Comp2);
         }
