@@ -41,20 +41,6 @@ public partial class AtmosphereSystem
         _gasTileOverlaySystem.Invalidate(gridUid, tile, comp);
     }
 
-    public bool NeedsVacuumFixing(MapGridComponent mapGrid, Vector2i indices)
-    {
-        var value = false;
-
-        var enumerator = GetObstructingComponentsEnumerator(mapGrid, indices);
-
-        while (enumerator.MoveNext(out var airtight))
-        {
-            value |= airtight.FixVacuum;
-        }
-
-        return value;
-    }
-
     /// <summary>
     ///     Gets the volume in liters for a number of tiles, on a specific grid.
     /// </summary>
@@ -66,41 +52,29 @@ public partial class AtmosphereSystem
         return Atmospherics.CellVolume * mapGrid.TileSize * tiles;
     }
 
-    /// <summary>
-    ///     Gets all obstructing <see cref="AirtightComponent"/> instances in a specific tile.
-    /// </summary>
-    /// <param name="mapGrid">The grid where to get the tile.</param>
-    /// <param name="tile">The indices of the tile.</param>
-    /// <returns>The enumerator for the airtight components.</returns>
-    public AtmosObstructionEnumerator GetObstructingComponentsEnumerator(MapGridComponent mapGrid, Vector2i tile)
-    {
-        var ancEnumerator = mapGrid.GetAnchoredEntitiesEnumerator(tile);
-        var airQuery = GetEntityQuery<AirtightComponent>();
-
-        var enumerator = new AtmosObstructionEnumerator(ancEnumerator, airQuery);
-        return enumerator;
-    }
-
-    private  (AtmosDirection Blocked, bool NoAir) GetBlockedDirections(MapGridComponent mapGrid, Vector2i indices)
+    private  (AtmosDirection Blocked, bool NoAir, bool FixVacuum) GetBlockedDirections(Entity<MapGridComponent> grid, Vector2i indices)
     {
         var directions = AtmosDirection.Invalid;
         var noAir = false;
+        var fixVacuum = false;
 
-        var enumerator = GetObstructingComponentsEnumerator(mapGrid, indices);
-
-        while (enumerator.MoveNext(out var airtight))
+        foreach (var ent in _map.GetAnchoredEntities(grid.Owner, grid.Comp, indices))
         {
+            if (!_airtightQuery.TryGetComponent(ent, out var airtight))
+                continue;
+
             if(!airtight.AirBlocked)
                 continue;
 
             directions |= airtight.AirBlockedDirection;
             noAir |= airtight.NoAirWhenFullyAirBlocked;
+            fixVacuum |= airtight.FixVacuum;
 
-            if (directions == AtmosDirection.All && noAir)
+            if (directions == AtmosDirection.All && noAir && fixVacuum)
                 break;
         }
 
-        return (directions, noAir);
+        return (directions, noAir, fixVacuum);
     }
 
     /// <summary>

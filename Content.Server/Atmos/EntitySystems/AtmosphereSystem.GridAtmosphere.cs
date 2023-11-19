@@ -230,10 +230,11 @@ public sealed partial class AtmosphereSystem
         var mapGridComp = args.MapGridComponent ?? Comp<MapGridComponent>(args.Grid);
         var directions = AtmosDirection.Invalid;
 
-        var enumerator = GetObstructingComponentsEnumerator(mapGridComp, args.Tile);
-
-        while (enumerator.MoveNext(out var obstructingComponent))
+        foreach (var ent in _map.GetAnchoredEntities(args.Grid, mapGridComp, args.Tile))
         {
+            if (!_airtightQuery.TryGetComponent(ent, out var obstructingComponent))
+                continue;
+
             if (!obstructingComponent.AirBlocked)
                 continue;
 
@@ -331,7 +332,7 @@ public sealed partial class AtmosphereSystem
         var mapUid = xform.MapUid;
 
         tile.AdjacentBits = AtmosDirection.Invalid;
-        tile.BlockedAirflow = blocked ?? GetBlockedDirections(mapGridComp, tile.GridIndices).Blocked;
+        tile.BlockedAirflow = blocked ?? GetBlockedDirections((uid, mapGridComp), tile.GridIndices).Blocked;
 
         for (var i = 0; i < Atmospherics.Directions; i++)
         {
