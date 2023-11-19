@@ -44,16 +44,15 @@ public sealed partial class AtmosphereSystem : SharedAtmosphereSystem
 
         UpdatesAfter.Add(typeof(NodeGroupSystem));
 
+        _airtightQuery = GetEntityQuery<AirtightComponent>();
+        _firelockQuery = GetEntityQuery<FirelockComponent>();
+
         InitializeBreathTool();
         InitializeGases();
         InitializeCommands();
         InitializeCVars();
         InitializeGridAtmosphere();
         InitializeMap();
-
-
-        _airtightQuery = new EntityQuery<AirtightComponent>();
-        _firelockQuery = new EntityQuery<FirelockComponent>();
         SubscribeLocalEvent<TileChangedEvent>(OnTileChanged);
 
     }
