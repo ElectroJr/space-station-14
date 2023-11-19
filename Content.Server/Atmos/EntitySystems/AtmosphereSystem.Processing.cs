@@ -74,11 +74,6 @@ namespace Content.Server.Atmos.EntitySystems
                 var updateAdjacentEv = new UpdateAdjacentMethodEvent((ent.Owner, ent.Comp1, ent.Comp3, ent.Comp4), indices);
                 GridUpdateAdjacent(tile, ref updateAdjacentEv, blocked: blocked);
 
-                // Blocked airflow changed, rebuild excited groups!
-                if (tile.Excited && tile.BlockedAirflow != oldBlocked)
-                {
-                    RemoveActiveTile(atmosphere, tile);
-                }
 
                 // Call this instead of the grid method as the map has a say on whether the tile is space or not.
                 if ((!mapGridComp.TryGetTileRef(indices, out var t) || t.IsSpace(_tileDefinitionManager)) && !isAirBlocked)
@@ -119,26 +114,29 @@ namespace Content.Server.Atmos.EntitySystems
                     tile.MolesArchived ??= new float[Atmospherics.AdjustedNumberOfGases];
                 }
 
-                // We activate the tile.
-                AddActiveTile(atmosphere, tile);
+                if (tile.Excited && tile.BlockedAirflow != oldBlocked && tile.ExcitedGroup != null)
+                {
+                    ExcitedGroupDispose(atmosphere, tile.ExcitedGroup);
+                }
 
                 // TODO ATMOS: Query all the contents of this tile (like walls) and calculate the correct thermal conductivity and heat capacity
                 var tileDef = mapGridComp.TryGetTileRef(indices, out var tileRef)
                     ? tileRef.GetContentTileDefinition(_tileDefinitionManager)
                     : null;
+                if (tile.Air == null)
+                {
+                    tile.Excited = true;
+                    atmosphere.ActiveTiles.Add(tile);
+                }
+                else
+                {
+                    tile.Excited = false;
+                    atmosphere.ActiveTiles.Remove(tile);
+                }
 
                 tile.ThermalConductivity = tileDef?.ThermalConductivity ?? 0.5f;
                 tile.HeatCapacity = tileDef?.HeatCapacity ?? float.PositiveInfinity;
                 InvalidateVisuals(owner, indices, ent.Comp2);
-
-                for (var i = 0; i < Atmospherics.Directions; i++)
-                {
-                    var direction = (AtmosDirection) (1 << i);
-                    var otherIndices = indices.Offset(direction);
-
-                    if (atmosphere.Tiles.TryGetValue(otherIndices, out var otherTile))
-                        AddActiveTile(atmosphere, otherTile);
-                }
 
                 if (number++ < InvalidCoordinatesLagCheckIterations)
                     continue;

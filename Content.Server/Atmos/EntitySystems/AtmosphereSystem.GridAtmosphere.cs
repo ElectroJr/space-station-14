@@ -317,7 +317,7 @@ public sealed partial class AtmosphereSystem
             GridUpdateAdjacent(tile, ref args);
     }
 
-    private void GridUpdateAdjacent(TileAtmosphere tile, ref UpdateAdjacentMethodEvent args, AtmosDirection? blocked = null)
+    private void GridUpdateAdjacent(TileAtmosphere tile, ref UpdateAdjacentMethodEvent args,  bool addActive = false, AtmosDirection? blocked = null)
     {
         DebugTools.AssertEqual(args.Grid.Comp1.Tiles[args.Tile], tile);
         if (args.Handled)
@@ -348,6 +348,9 @@ public sealed partial class AtmosphereSystem
                     adjacent.MolesArchived = adjacent.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
                 }
             }
+
+            if (addActive)
+                AddActiveTile(component, adjacent);
 
             var oppositeDirection = direction.GetOpposite();
 
