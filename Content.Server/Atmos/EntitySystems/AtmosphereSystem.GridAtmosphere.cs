@@ -170,11 +170,11 @@ public sealed partial class AtmosphereSystem
         if (args.Handled)
             return;
 
-        if (!component.Tiles.TryGetValue(args.Tile, out var tile))
+        if (!component.Tiles.TryGetValue(args.GridTile, out var tile))
             return; // Do NOT handle the event if we don't have that tile, the map will handle it instead.
 
         if (args.Excite)
-            component.InvalidatedCoords.Add(args.Tile);
+            component.InvalidatedCoords.Add(args.GridTile);
 
         args.Mixture = tile.Air;
         args.Handled = true;
@@ -261,7 +261,7 @@ public sealed partial class AtmosphereSystem
             return;
 
         // We don't have that tile, so let the map handle it.
-        if (!component.Tiles.TryGetValue(args.Tile, out var tile))
+        if (!component.Tiles.TryGetValue(args.GridTile, out var tile))
             return;
 
         args.Result = tile.Space;

@@ -136,9 +136,9 @@ public partial class AtmosphereSystem
         return GetTileMixture(entity.Comp.GridUid, entity.Comp.MapUid, indices, excite);
     }
 
-    public GasMixture? GetTileMixture(EntityUid? gridUid, EntityUid? mapUid, Vector2i gridIndices, bool excite = false)
+    public GasMixture? GetTileMixture(EntityUid? gridUid, EntityUid? mapUid, Vector2i gridTile, bool excite = false)
     {
-        var ev = new GetTileMixtureMethodEvent(gridUid, mapUid, gridIndices, excite);
+        var ev = new GetTileMixtureMethodEvent(gridUid, mapUid, gridTile, excite);
 
         // If we've been passed a grid, try to let it handle it.
         if(gridUid.HasValue)
@@ -183,9 +183,9 @@ public partial class AtmosphereSystem
         return ev.Result;
     }
 
-    public bool IsTileSpace(EntityUid? gridUid, EntityUid? mapUid, Vector2i tile, MapGridComponent? mapGridComp = null)
+    public bool IsTileSpace(EntityUid? gridUid, EntityUid? mapUid, Vector2i gridTile, MapGridComponent? mapGridComp = null)
     {
-        var ev = new IsTileSpaceMethodEvent(gridUid, mapUid, tile, mapGridComp);
+        var ev = new IsTileSpaceMethodEvent(gridUid, mapUid, gridTile, mapGridComp);
 
         // Try to let the grid (if any) handle it...
         if (gridUid.HasValue)
@@ -314,7 +314,7 @@ public partial class AtmosphereSystem
         (EntityUid? GridUid, EntityUid? MapUid, List<Vector2i> Tiles, bool Excite = false, GasMixture?[]? Mixtures = null, bool Handled = false);
 
     [ByRefEvent] private record struct GetTileMixtureMethodEvent
-        (EntityUid? GridUid, EntityUid? MapUid, Vector2i Tile, bool Excite = false, GasMixture? Mixture = null, bool Handled = false);
+        (EntityUid? GridUid, EntityUid? MapUid, Vector2i GridTile, bool Excite = false, GasMixture? Mixture = null, bool Handled = false);
 
     [ByRefEvent] private record struct ReactTileMethodEvent
         (EntityUid GridId, Vector2i Tile, ReactionResult Result = default, bool Handled = false);
@@ -330,7 +330,7 @@ public partial class AtmosphereSystem
     }
 
     [ByRefEvent] private record struct IsTileSpaceMethodEvent
-        (EntityUid? Grid, EntityUid? Map, Vector2i Tile, MapGridComponent? MapGridComponent = null, bool Result = true, bool Handled = false);
+        (EntityUid? Grid, EntityUid? Map, Vector2i GridTile, MapGridComponent? MapGridComponent = null, bool Result = true, bool Handled = false);
 
     [ByRefEvent] private record struct GetAdjacentTilesMethodEvent
         (EntityUid Grid, Vector2i Tile, IEnumerable<Vector2i>? Result = null, bool Handled = false);
