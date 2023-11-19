@@ -28,7 +28,7 @@ public sealed partial class AtmosphereSystem
         SubscribeLocalEvent<GridAtmosphereComponent, IsTileSpaceMethodEvent>(GridIsTileSpace);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAdjacentTilesMethodEvent>(GridGetAdjacentTiles);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAdjacentTileMixturesMethodEvent>(GridGetAdjacentTileMixtures);
-        SubscribeLocalEvent<GridAtmosphereComponent, UpdateAdjacentMethodEvent>(GridUpdateAdjacent);
+        SubscribeLocalEvent<UpdateAdjacentMethodEvent>(GridUpdateAdjacent);
         SubscribeLocalEvent<GridAtmosphereComponent, HotspotExposeMethodEvent>(GridHotspotExpose);
         SubscribeLocalEvent<GridAtmosphereComponent, HotspotExtinguishMethodEvent>(GridHotspotExtinguish);
         SubscribeLocalEvent<GridAtmosphereComponent, IsHotspotActiveMethodEvent>(GridIsHotspotActive);
@@ -48,7 +48,7 @@ public sealed partial class AtmosphereSystem
         if (!TryComp(uid, out MapGridComponent? mapGrid))
             return;
 
-        EnsureComp<GasTileOverlayComponent>(uid);
+        var vis = EnsureComp<GasTileOverlayComponent>(uid);
 
         foreach (var (indices, tile) in gridAtmosphere.Tiles)
         {
@@ -56,7 +56,7 @@ public sealed partial class AtmosphereSystem
             tile.GridUid = uid;
         }
 
-        GridRepopulateTiles((uid, mapGrid, gridAtmosphere));
+        GridRepopulateTiles((uid, gridAtmosphere, vis, mapGrid, Transform(uid)));
     }
 
     private void OnGridSplit(EntityUid uid, GridAtmosphereComponent originalGridAtmos, ref GridSplitEvent args)
@@ -316,19 +316,13 @@ public sealed partial class AtmosphereSystem
         args.Handled = true;
     }
 
-    private void GridUpdateAdjacent(EntityUid uid, GridAtmosphereComponent component,
-        ref UpdateAdjacentMethodEvent args)
+    private void GridUpdateAdjacent(ref UpdateAdjacentMethodEvent args)
     {
         if (args.Handled)
             return;
 
-        var mapGridComp = args.MapGridComponent;
-
-        if (!Resolve(uid, ref mapGridComp))
-            return;
-
-        var xform = Transform(uid);
-        EntityUid? mapUid = _mapManager.MapExists(xform.MapID) ? _mapManager.GetMapEntityId(xform.MapID) : null;
+        var (uid, component, mapGridComp, xform) = args.Grid;
+        var mapUid = xform.MapUid;
 
         if (!component.Tiles.TryGetValue(args.Tile, out var tile))
             return;
@@ -542,9 +536,9 @@ public sealed partial class AtmosphereSystem
     /// </summary>
     /// <param name="mapGrid">The grid where to get all valid tiles from.</param>
     /// <param name="gridAtmosphere">The grid atmosphere where the tiles will be repopulated.</param>
-    private void GridRepopulateTiles(Entity<MapGridComponent, GridAtmosphereComponent> grid)
+    private void GridRepopulateTiles(Entity<GridAtmosphereComponent, GasTileOverlayComponent, MapGridComponent, TransformComponent> ent)
     {
-        var (uid, mapGrid, gridAtmosphere) = grid;
+        var (uid, gridAtmosphere, _, mapGrid, _) = ent;
         var volume = GetVolumeForTiles(mapGrid, 1);
 
         foreach (var tile in mapGrid.GetAllTiles())
@@ -561,14 +555,13 @@ public sealed partial class AtmosphereSystem
             gridAtmosphere.InvalidatedCoords.Add(tile.GridIndices);
         }
 
-        TryComp(uid, out GasTileOverlayComponent? overlay);
-
         // Gotta do this afterwards so we can properly update adjacent tiles.
+        var ent2 = new Entity<GridAtmosphereComponent, MapGridComponent, TransformComponent>(ent, ent.Comp1, ent.Comp3, ent.Comp4);
         foreach (var (position, _) in gridAtmosphere.Tiles.ToArray())
         {
-            var ev = new UpdateAdjacentMethodEvent(uid, position);
-            GridUpdateAdjacent(uid, gridAtmosphere, ref ev);
-            InvalidateVisuals(uid, position, overlay);
+            var ev = new UpdateAdjacentMethodEvent(ent2, position);
+            GridUpdateAdjacent(ref ev);
+            InvalidateVisuals(uid, position, ent.Comp2);
         }
     }
 }

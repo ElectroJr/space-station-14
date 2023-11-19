@@ -31,16 +31,16 @@ namespace Content.Server.Atmos.EntitySystems
         private int _currentRunAtmosphereIndex;
         private bool _simulationPaused;
 
-        private readonly List<Entity<GridAtmosphereComponent>> _currentRunAtmosphere = new();
+        private readonly List<Entity<GridAtmosphereComponent, GasTileOverlayComponent, MapGridComponent, TransformComponent>> _currentRunAtmosphere = new();
 
         /// <summary>
         ///     Revalidates all invalid coordinates in a grid atmosphere.
         /// </summary>
         /// <param name="ent">The grid atmosphere in question.</param>
         /// <returns>Whether the process succeeded or got paused due to time constrains.</returns>
-        private bool ProcessRevalidate(Entity<GridAtmosphereComponent> ent, GasTileOverlayComponent? visuals)
+        private bool ProcessRevalidate(Entity<GridAtmosphereComponent, GasTileOverlayComponent, MapGridComponent, TransformComponent> ent)
         {
-            var (owner, atmosphere) = ent;
+            var (owner, atmosphere, _, mapGridComp, xform) = ent;
             if (!atmosphere.ProcessingPaused)
             {
                 atmosphere.CurrentRunInvalidatedCoordinates.Clear();
@@ -51,10 +51,7 @@ namespace Content.Server.Atmos.EntitySystems
                 atmosphere.InvalidatedCoords.Clear();
             }
 
-            if (!TryComp(owner, out MapGridComponent? mapGridComp))
-                return true;
-
-            var mapUid = _mapManager.GetMapEntityIdOrThrow(Transform(owner).MapID);
+            var mapUid = xform.MapUid;
 
             var volume = GetVolumeForTiles(mapGridComp);
 
@@ -75,8 +72,8 @@ namespace Content.Server.Atmos.EntitySystems
                 var isAirBlocked = airBlockedEv.Result;
 
                 var oldBlocked = tile.BlockedAirflow;
-                var updateAdjacentEv = new UpdateAdjacentMethodEvent(owner, indices, mapGridComp);
-                GridUpdateAdjacent(owner, atmosphere, ref updateAdjacentEv);
+                var updateAdjacentEv = new UpdateAdjacentMethodEvent((ent.Owner, ent.Comp1, ent.Comp3, ent.Comp4), indices);
+                GridUpdateAdjacent(ref updateAdjacentEv);
 
                 // Blocked airflow changed, rebuild excited groups!
                 if (tile.Excited && tile.BlockedAirflow != oldBlocked)
@@ -133,7 +130,7 @@ namespace Content.Server.Atmos.EntitySystems
 
                 tile.ThermalConductivity = tileDef?.ThermalConductivity ?? 0.5f;
                 tile.HeatCapacity = tileDef?.HeatCapacity ?? float.PositiveInfinity;
-                InvalidateVisuals(owner, indices, visuals);
+                InvalidateVisuals(owner, indices, ent.Comp2);
 
                 for (var i = 0; i < Atmospherics.Directions; i++)
                 {
@@ -158,19 +155,16 @@ namespace Content.Server.Atmos.EntitySystems
             return true;
         }
 
-        private bool ProcessTileEqualize(Entity<GridAtmosphereComponent> ent, GasTileOverlayComponent? visuals)
+        private bool ProcessTileEqualize(Entity<GridAtmosphereComponent, GasTileOverlayComponent, MapGridComponent, TransformComponent> ent)
         {
-            var (uid, atmosphere) = ent;
+            var atmosphere = ent.Comp1;
             if (!atmosphere.ProcessingPaused)
                 atmosphere.CurrentRunTiles = new Queue<TileAtmosphere>(atmosphere.ActiveTiles);
-
-            if (!TryComp(uid, out MapGridComponent? mapGridComp))
-                throw new Exception("Tried to process a grid atmosphere on an entity that isn't a grid!");
 
             var number = 0;
             while (atmosphere.CurrentRunTiles.TryDequeue(out var tile))
             {
-                EqualizePressureInZone((uid, mapGridComp, atmosphere), tile, atmosphere.UpdateCounter, visuals);
+                EqualizePressureInZone(ent, tile, atmosphere.UpdateCounter);
 
                 if (number++ < LagCheckIterations)
                     continue;
@@ -401,10 +395,10 @@ namespace Content.Server.Atmos.EntitySystems
                 _currentRunAtmosphereIndex = 0;
                 _currentRunAtmosphere.Clear();
 
-                var query = EntityQueryEnumerator<GridAtmosphereComponent>();
-                while (query.MoveNext(out var uid, out var grid))
+                var query = EntityQueryEnumerator<GridAtmosphereComponent, GasTileOverlayComponent, MapGridComponent, TransformComponent>();
+                while (query.MoveNext(out var uid, out var atmos, out var overlay, out var grid, out var xform ))
                 {
-                    _currentRunAtmosphere.Add((uid, grid));
+                    _currentRunAtmosphere.Add((uid, atmos, overlay, grid, xform));
                 }
             }
 
@@ -414,10 +408,8 @@ namespace Content.Server.Atmos.EntitySystems
             for (; _currentRunAtmosphereIndex < _currentRunAtmosphere.Count; _currentRunAtmosphereIndex++)
             {
                 var ent = _currentRunAtmosphere[_currentRunAtmosphereIndex];
-                var (owner, atmosphere) = ent;
-                TryComp(owner, out GasTileOverlayComponent? visuals);
-
-                if (atmosphere.LifeStage >= ComponentLifeStage.Stopping || Paused(owner) || !atmosphere.Simulated)
+                var atmosphere = ent.Comp1;
+                if (atmosphere.LifeStage >= ComponentLifeStage.Stopping || Paused(ent) || !atmosphere.Simulated)
                     continue;
 
                 atmosphere.Timer += frameTime;
@@ -431,7 +423,7 @@ namespace Content.Server.Atmos.EntitySystems
                 switch (atmosphere.State)
                 {
                     case AtmosphereProcessingState.Revalidate:
-                        if (!ProcessRevalidate(ent, visuals))
+                        if (!ProcessRevalidate(ent))
                         {
                             atmosphere.ProcessingPaused = true;
                             return;
@@ -446,7 +438,7 @@ namespace Content.Server.Atmos.EntitySystems
                             : AtmosphereProcessingState.ActiveTiles;
                         continue;
                     case AtmosphereProcessingState.TileEqualize:
-                        if (!ProcessTileEqualize(ent, visuals))
+                        if (!ProcessTileEqualize(ent))
                         {
                             atmosphere.ProcessingPaused = true;
                             return;
@@ -456,7 +448,7 @@ namespace Content.Server.Atmos.EntitySystems
                         atmosphere.State = AtmosphereProcessingState.ActiveTiles;
                         continue;
                     case AtmosphereProcessingState.ActiveTiles:
-                        if (!ProcessActiveTiles(atmosphere, visuals))
+                        if (!ProcessActiveTiles(atmosphere, ent.Comp2))
                         {
                             atmosphere.ProcessingPaused = true;
                             return;
@@ -477,7 +469,7 @@ namespace Content.Server.Atmos.EntitySystems
                         atmosphere.State = AtmosphereProcessingState.HighPressureDelta;
                         continue;
                     case AtmosphereProcessingState.HighPressureDelta:
-                        if (!ProcessHighPressureDelta(ent))
+                        if (!ProcessHighPressureDelta((ent.Owner, ent.Comp1)))
                         {
                             atmosphere.ProcessingPaused = true;
                             return;
