@@ -2,6 +2,7 @@ using Content.Server.Atmos.Components;
 using Content.Server.Explosion.EntitySystems;
 using Content.Shared.Atmos;
 using JetBrains.Annotations;
+using Robust.Server.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 
@@ -11,6 +12,8 @@ namespace Content.Server.Atmos.EntitySystems
     public sealed class AirtightSystem : EntitySystem
     {
         [Dependency] private readonly IMapManager _mapManager = default!;
+        [Dependency] private readonly MapSystem _map = default!;
+        [Dependency] private readonly TransformSystem _transform = default!;
         [Dependency] private readonly AtmosphereSystem _atmosphereSystem = default!;
         [Dependency] private readonly ExplosionSystem _explosionSystem = default!;
 
@@ -121,19 +124,21 @@ namespace Content.Server.Atmos.EntitySystems
             if (!xform.Anchored || !TryComp(xform.GridUid, out MapGridComponent? grid))
                 return;
 
-            airtight.LastPosition = (xform.GridUid.Value, grid.TileIndicesFor(xform.Coordinates));
-            InvalidatePosition(airtight.LastPosition.Item1, airtight.LastPosition.Item2, airtight.FixVacuum && !airtight.AirBlocked);
+            var indices = _transform.GetGridIndices((ent, xform), grid);
+            airtight.LastPosition = (xform.GridUid.Value, indices);
+            var fixVacum = airtight.FixVacuum && !airtight.AirBlocked;
+            InvalidatePosition((xform.GridUid.Value, grid), indices, fixVacum);
         }
 
-        public void InvalidatePosition(EntityUid gridId, Vector2i pos, bool fixVacuum = false)
+        public void InvalidatePosition(Entity<MapGridComponent?> grid, Vector2i pos, bool fixVacuum = false)
         {
-            if (!TryComp(gridId, out MapGridComponent? grid))
+            if (!Resolve(grid.Owner, ref grid.Comp))
                 return;
 
             var query = EntityManager.GetEntityQuery<AirtightComponent>();
-            _explosionSystem.UpdateAirtightMap(gridId, pos, grid, query);
+            _explosionSystem.UpdateAirtightMap(grid.Owner, pos, grid.Comp, query);
             // TODO make atmos system use query
-            _atmosphereSystem.InvalidateTile(gridId, pos);
+            _atmosphereSystem.InvalidateTile(grid.Owner, pos);
         }
 
         private AtmosDirection Rotate(AtmosDirection myDirection, Angle myAngle)
