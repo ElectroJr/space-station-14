@@ -17,6 +17,12 @@ public sealed partial class AtmosphereSystem
 
         #region Atmos API Subscriptions
 
+        SubscribeLocalEvent<IsTileAirBlockedMethodEvent>(GridIsTileAirBlocked);
+        SubscribeLocalEvent<UpdateAdjacentMethodEvent>(GridUpdateAdjacent);
+
+        // TODO atmos performance
+        // Convert these into broadcast subscriptions. These subscriptions generally require unnecessary dictionary lookups
+        // Or maybe break vera's heart and convert them back into methods.
         SubscribeLocalEvent<GridAtmosphereComponent, HasAtmosphereMethodEvent>(GridHasAtmosphere);
         SubscribeLocalEvent<GridAtmosphereComponent, IsSimulatedGridMethodEvent>(GridIsSimulated);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAllMixturesMethodEvent>(GridGetAllMixtures);
@@ -24,11 +30,9 @@ public sealed partial class AtmosphereSystem
         SubscribeLocalEvent<GridAtmosphereComponent, GetTileMixtureMethodEvent>(GridGetTileMixture);
         SubscribeLocalEvent<GridAtmosphereComponent, GetTileMixturesMethodEvent>(GridGetTileMixtures);
         SubscribeLocalEvent<GridAtmosphereComponent, ReactTileMethodEvent>(GridReactTile);
-        SubscribeLocalEvent<IsTileAirBlockedMethodEvent>(GridIsTileAirBlocked);
         SubscribeLocalEvent<GridAtmosphereComponent, IsTileSpaceMethodEvent>(GridIsTileSpace);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAdjacentTilesMethodEvent>(GridGetAdjacentTiles);
         SubscribeLocalEvent<GridAtmosphereComponent, GetAdjacentTileMixturesMethodEvent>(GridGetAdjacentTileMixtures);
-        SubscribeLocalEvent<UpdateAdjacentMethodEvent>(GridUpdateAdjacent);
         SubscribeLocalEvent<GridAtmosphereComponent, HotspotExposeMethodEvent>(GridHotspotExpose);
         SubscribeLocalEvent<GridAtmosphereComponent, HotspotExtinguishMethodEvent>(GridHotspotExtinguish);
         SubscribeLocalEvent<GridAtmosphereComponent, IsHotspotActiveMethodEvent>(GridIsHotspotActive);
@@ -223,7 +227,7 @@ public sealed partial class AtmosphereSystem
         if (args.Handled)
             return;
 
-        var mapGridComp = args.MapGridComponent;
+        var mapGridComp = args.MapGridComponent ?? Comp<MapGridComponent>(args.Grid);
         var directions = AtmosDirection.Invalid;
 
         var enumerator = GetObstructingComponentsEnumerator(mapGridComp, args.Tile);
