@@ -34,7 +34,7 @@ namespace Content.Server.Atmos.Reactions
             // Remove the moles from the mixture...
             mixture.AdjustMoles(GasId, -MolesPerUnit);
 
-            var tileRef = tile.GridIndices.GetTileRef(tile.GridIndex);
+            var tileRef = tile.GridIndices.GetTileRef(tile.GridUid);
             EntitySystem.Get<PuddleSystem>()
                 .TrySpillAt(tileRef, new Solution(Reagent, FixedPoint2.New(MolesPerUnit)), out _, sound: false);
 

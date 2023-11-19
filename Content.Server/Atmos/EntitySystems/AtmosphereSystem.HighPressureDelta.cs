@@ -100,7 +100,7 @@ namespace Content.Server.Atmos.EntitySystems
             {
                 if(_spaceWindSoundCooldown == 0 && !string.IsNullOrEmpty(SpaceWindSound))
                 {
-                    var coordinates = tile.GridIndices.ToEntityCoordinates(tile.GridIndex, _mapManager);
+                    var coordinates = tile.GridIndices.ToEntityCoordinates(tile.GridUid, _mapManager);
                     SoundSystem.Play(SpaceWindSound, Filter.Pvs(coordinates),
                         coordinates, AudioHelpers.WithVariation(0.125f).WithVolume(MathHelper.Clamp(tile.PressureDifference / 10, 10, 100)));
                 }
@@ -141,7 +141,7 @@ namespace Content.Server.Atmos.EntitySystems
                     tile.PressureSpecificTarget = curTile;
             }
 
-            foreach (var entity in _lookup.GetEntitiesIntersecting(tile.GridIndex, tile.GridIndices, 0f))
+            foreach (var entity in _lookup.GetEntitiesIntersecting(tile.GridUid, tile.GridIndices, 0f))
             {
                 // Ideally containers would have their own EntityQuery internally or something given recursively it may need to slam GetComp<T> anyway.
                 // Also, don't care about static bodies (but also due to collisionwakestate can't query dynamic directly atm).
@@ -161,7 +161,7 @@ namespace Content.Server.Atmos.EntitySystems
                         gridAtmosphere.Comp.UpdateCounter,
                         tile.PressureDifference,
                         tile.PressureDirection, 0,
-                        tile.PressureSpecificTarget?.GridIndices.ToEntityCoordinates(tile.GridIndex, _mapManager) ?? EntityCoordinates.Invalid,
+                        tile.PressureSpecificTarget?.GridIndices.ToEntityCoordinates(tile.GridUid, _mapManager) ?? EntityCoordinates.Invalid,
                         gridWorldRotation,
                         xforms.GetComponent(entity),
                         body);

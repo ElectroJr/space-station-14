@@ -70,10 +70,10 @@ namespace Content.Server.Atmos
 
         [ViewVariables]
         [Access(typeof(AtmosphereSystem))]
-        public EntityUid GridIndex { get; set; }
+        public EntityUid GridUid { get; set; }
 
         [ViewVariables, Obsolete]
-        public TileRef? Tile => GridIndices.GetTileRef(GridIndex);
+        public TileRef? Tile => GridIndices.GetTileRef(GridUid);
 
         [ViewVariables]
         public Vector2i GridIndices;
@@ -111,9 +111,9 @@ namespace Content.Server.Atmos
         {
         }
 
-        public TileAtmosphere(EntityUid gridIndex, Vector2i gridIndices, GasMixture? mixture = null, bool immutable = false, bool space = false)
+        public TileAtmosphere(EntityUid gridUid, Vector2i gridIndices, GasMixture? mixture = null, bool immutable = false, bool space = false)
         {
-            GridIndex = gridIndex;
+            GridUid = gridUid;
             GridIndices = gridIndices;
             Air = mixture;
             Space = space;

@@ -565,7 +565,7 @@ namespace Content.Server.Atmos.EntitySystems
                     otherTile.Air.Temperature = Atmospherics.TCMB;
                 }
 
-                InvalidateVisuals(otherTile.GridIndex, otherTile.GridIndices, visuals);
+                InvalidateVisuals(otherTile.GridUid, otherTile.GridIndices, visuals);
                 HandleDecompressionFloorRip(mapGrid, otherTile, otherTile.MonstermosInfo.CurrentTransferAmount);
             }
 
@@ -582,7 +582,7 @@ namespace Content.Server.Atmos.EntitySystems
 
             if(tileCount > 10 && (totalMolesRemoved / tileCount) > 10)
                 _adminLog.Add(LogType.ExplosiveDepressurization, LogImpact.High,
-                    $"Explosive depressurization removed {totalMolesRemoved} moles from {tileCount} tiles starting from position {tile.GridIndices:position} on grid ID {tile.GridIndex:grid}");
+                    $"Explosive depressurization removed {totalMolesRemoved} moles from {tileCount} tiles starting from position {tile.GridIndices:position} on grid ID {tile.GridUid:grid}");
 
             Array.Clear(_depressurizeTiles, 0, Atmospherics.MonstermosHardTileLimit);
             Array.Clear(_depressurizeSpaceTiles, 0, Atmospherics.MonstermosHardTileLimit);
@@ -617,8 +617,8 @@ namespace Content.Server.Atmos.EntitySystems
             var otherEv = new UpdateAdjacentMethodEvent(owner, other.GridIndices);
             GridUpdateAdjacent(owner, gridAtmosphere, ref tileEv);
             GridUpdateAdjacent(owner, gridAtmosphere, ref otherEv);
-            InvalidateVisuals(tile.GridIndex, tile.GridIndices, visuals);
-            InvalidateVisuals(other.GridIndex, other.GridIndices, visuals);
+            InvalidateVisuals(tile.GridUid, tile.GridIndices, visuals);
+            InvalidateVisuals(other.GridUid, other.GridIndices, visuals);
         }
 
         private void FinalizeEq(GridAtmosphereComponent gridAtmosphere, TileAtmosphere tile, GasTileOverlayComponent? visuals)
@@ -652,8 +652,8 @@ namespace Content.Server.Atmos.EntitySystems
 
                 otherTile.MonstermosInfo[direction.GetOpposite()] = 0;
                 Merge(otherTile.Air, tile.Air.Remove(amount));
-                InvalidateVisuals(tile.GridIndex, tile.GridIndices, visuals);
-                InvalidateVisuals(otherTile.GridIndex, otherTile.GridIndices, visuals);
+                InvalidateVisuals(tile.GridUid, tile.GridIndices, visuals);
+                InvalidateVisuals(otherTile.GridUid, otherTile.GridIndices, visuals);
                 ConsiderPressureDifference(gridAtmosphere, tile, direction, amount);
             }
         }

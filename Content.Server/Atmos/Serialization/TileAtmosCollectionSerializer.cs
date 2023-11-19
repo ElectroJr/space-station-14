@@ -185,7 +185,7 @@ public sealed partial class TileAtmosCollectionSerializer : ITypeSerializer<Dict
         {
             target.Add(key,
                 new TileAtmosphere(
-                    val.GridIndex,
+                    val.GridUid,
                     val.GridIndices,
                     val.Air?.Clone(),
                     val.Air?.Immutable ?? false,

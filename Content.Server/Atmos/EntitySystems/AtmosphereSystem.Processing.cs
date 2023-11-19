@@ -64,7 +64,7 @@ namespace Content.Server.Atmos.EntitySystems
                 var tile = atmosphere.Tiles.GetOrNew(indices, out var exists);
                 if (!exists)
                 {
-                    tile.GridIndex = owner;
+                    tile.GridUid = owner;
                     tile.GridIndices = indices;
                     tile.Air = new GasMixture(volume) { Temperature = Atmospherics.T20C };
                     tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;

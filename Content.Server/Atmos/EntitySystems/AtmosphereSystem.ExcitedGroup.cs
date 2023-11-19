@@ -100,7 +100,7 @@ namespace Content.Server.Atmos.EntitySystems
             {
                 if (tile?.Air == null) continue;
                 tile.Air.CopyFromMutable(combined);
-                InvalidateVisuals(tile.GridIndex, tile.GridIndices);
+                InvalidateVisuals(tile.GridUid, tile.GridIndices);
             }
 
             excitedGroup.BreakdownCooldown = 0;

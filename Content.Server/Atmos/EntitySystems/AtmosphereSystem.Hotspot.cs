@@ -46,7 +46,7 @@ namespace Content.Server.Atmos.EntitySystems
                 || tile.Air == null || tile.Air.GetMoles(Gas.Oxygen) < 0.5f || (tile.Air.GetMoles(Gas.Plasma) < 0.5f && tile.Air.GetMoles(Gas.Tritium) < 0.5f))
             {
                 tile.Hotspot = new Hotspot();
-                InvalidateVisuals(tile.GridIndex, tile.GridIndices);
+                InvalidateVisuals(tile.GridUid, tile.GridIndices);
                 return;
             }
 
@@ -81,7 +81,7 @@ namespace Content.Server.Atmos.EntitySystems
 
             if (_hotspotSoundCooldown++ == 0 && !string.IsNullOrEmpty(HotspotSound))
             {
-                var coordinates = tile.GridIndices.ToEntityCoordinates(tile.GridIndex, _mapManager);
+                var coordinates = tile.GridIndices.ToEntityCoordinates(tile.GridUid, _mapManager);
                 // A few details on the audio parameters for fire.
                 // The greater the fire state, the lesser the pitch variation.
                 // The greater the fire state, the greater the volume.
@@ -167,7 +167,7 @@ namespace Content.Server.Atmos.EntitySystems
 
             var fireEvent = new TileFireEvent(tile.Hotspot.Temperature, tile.Hotspot.Volume);
 
-            foreach (var entity in _lookup.GetEntitiesIntersecting(tile.GridIndex, tile.GridIndices, 0f))
+            foreach (var entity in _lookup.GetEntitiesIntersecting(tile.GridUid, tile.GridIndices, 0f))
             {
                 RaiseLocalEvent(entity, ref fireEvent);
             }

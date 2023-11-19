@@ -101,7 +101,7 @@ namespace Content.Server.Atmos.EntitySystems
             if(tile.Air != null)
                 React(tile.Air, tile);
 
-            InvalidateVisuals(tile.GridIndex, tile.GridIndices, visuals);
+            InvalidateVisuals(tile.GridUid, tile.GridIndices, visuals);
 
             var remove = true;
 

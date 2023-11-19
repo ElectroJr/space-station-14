@@ -53,7 +53,7 @@ public sealed partial class AtmosphereSystem
         foreach (var (indices, tile) in gridAtmosphere.Tiles)
         {
             gridAtmosphere.InvalidatedCoords.Add(indices);
-            tile.GridIndex = uid;
+            tile.GridUid = uid;
         }
 
         GridRepopulateTiles((uid, mapGrid, gridAtmosphere));
@@ -349,7 +349,7 @@ public sealed partial class AtmosphereSystem
                 adjacent = component.Tiles.GetOrNew(otherIndices, out var exists);
                 if (!exists)
                 {
-                    adjacent.GridIndex = tile.GridIndex;
+                    adjacent.GridUid = tile.GridUid;
                     adjacent.GridIndices = otherIndices;
                     adjacent.Air = GetTileMixture(null, mapUid, default);
                     adjacent.Space = IsTileSpace(null, mapUid, default);
@@ -553,7 +553,7 @@ public sealed partial class AtmosphereSystem
             var atmos = gridAtmosphere.Tiles.GetOrNew(tile.GridIndices, out var exists);
             if (!exists)
             {
-                atmos.GridIndex = tile.GridUid;
+                atmos.GridUid = tile.GridUid;
                 atmos.GridIndices = tile.GridIndices;
                 atmos.Air = new GasMixture(volume) {Temperature = Atmospherics.T20C};
                 atmos.MolesArchived = atmos.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
