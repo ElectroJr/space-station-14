@@ -68,7 +68,7 @@ namespace Content.Server.Atmos.EntitySystems
                     tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
                 }
 
-                var (blocked, noAir) = GetBlockedDirections(ent, indices);
+                var (blocked, noAir, fixVacuum) = GetBlockedDirections((ent.Owner, ent.Comp3), indices);
                 var isAirBlocked = blocked == AtmosDirection.All;
 
                 var oldBlocked = tile.BlockedAirflow;
@@ -99,7 +99,7 @@ namespace Content.Server.Atmos.EntitySystems
                 }
                 else
                 {
-                    if (tile.Air == null && NeedsVacuumFixing(mapGridComp, indices))
+                    if (tile.Air == null && fixVacuum)
                     {
                         var vacuumEv = new FixTileVacuumMethodEvent(owner, indices);
                         GridFixTileVacuum(owner, atmosphere, ref vacuumEv);
