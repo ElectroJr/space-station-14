@@ -164,7 +164,7 @@ public partial class AtmosphereSystem
         return ev.Mixture ?? GasMixture.SpaceGas;
     }
 
-    public (GasMixture? Air, bool IsSpace) GetDefaultMapMixture(EntityUid? mapUid)
+    public (GasMixture Air, bool IsSpace) GetDefaultMapMixture(EntityUid? mapUid)
     {
         var ev = new GetDefaultMapMixtureMethodEvent(mapUid);
         if(mapUid.HasValue)

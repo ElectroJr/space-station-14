@@ -5,6 +5,7 @@ using Content.Server.NodeContainer.NodeGroups;
 using Content.Shared.Atmos;
 using Content.Shared.Atmos.Components;
 using Content.Shared.Maps;
+using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Physics.Components;
 using Robust.Shared.Timing;
@@ -74,9 +75,13 @@ namespace Content.Server.Atmos.EntitySystems
                 var updateAdjacentEv = new UpdateAdjacentMethodEvent((ent.Owner, ent.Comp1, ent.Comp3, ent.Comp4), indices);
                 GridUpdateAdjacent(tile, ref updateAdjacentEv, blocked: blocked);
 
+                ContentTileDefinition? tileDef = null;
+                if (_map.TryGetTileRef(ent.Owner, ent.Comp3, indices, out var tileRef))
+                    tileDef = (ContentTileDefinition)_tileDefinitionManager[tileRef.Tile.TypeId];
+                var isSpace = tileDef?.IsSpace ?? true;
 
                 // Call this instead of the grid method as the map has a say on whether the tile is space or not.
-                if ((!mapGridComp.TryGetTileRef(indices, out var t) || t.IsSpace(_tileDefinitionManager)) && !isAirBlocked)
+                if (isSpace && !isAirBlocked)
                 {
                     (tile.Air, tile.Space) = GetDefaultMapMixture(mapUid);
                     tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
@@ -119,10 +124,6 @@ namespace Content.Server.Atmos.EntitySystems
                     ExcitedGroupDispose(atmosphere, tile.ExcitedGroup);
                 }
 
-                // TODO ATMOS: Query all the contents of this tile (like walls) and calculate the correct thermal conductivity and heat capacity
-                var tileDef = mapGridComp.TryGetTileRef(indices, out var tileRef)
-                    ? tileRef.GetContentTileDefinition(_tileDefinitionManager)
-                    : null;
                 if (tile.Air == null)
                 {
                     tile.Excited = true;
@@ -134,6 +135,8 @@ namespace Content.Server.Atmos.EntitySystems
                     atmosphere.ActiveTiles.Remove(tile);
                 }
 
+                // TODO ATMOS: Query all the contents of this tile (like walls) and calculate the correct thermal conductivity and heat capacity
+                // If someone does this, this should be combined with the airtight query, as that already gets all anchored entities.
                 tile.ThermalConductivity = tileDef?.ThermalConductivity ?? 0.5f;
                 tile.HeatCapacity = tileDef?.HeatCapacity ?? float.PositiveInfinity;
                 InvalidateVisuals(owner, indices, ent.Comp2);

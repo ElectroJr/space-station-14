@@ -30,6 +30,7 @@ public sealed partial class AtmosphereSystem : SharedAtmosphereSystem
     [Dependency] private readonly GasTileOverlaySystem _gasTileOverlaySystem = default!;
     [Dependency] private readonly TransformSystem _transformSystem = default!;
     [Dependency] private readonly TileSystem _tile = default!;
+    [Dependency] private readonly MapSystem _map = default!;
 
     private const float ExposedUpdateDelay = 1f;
     private float _exposedTimer = 0f;
