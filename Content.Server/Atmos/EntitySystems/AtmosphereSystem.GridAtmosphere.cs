@@ -342,11 +342,19 @@ public sealed partial class AtmosphereSystem
 
             var otherIndices = tile.GridIndices.Offset(direction);
 
-            if (!component.Tiles.TryGetValue(otherIndices, out var adjacent))
+            var adjacent = tile.AdjacentTiles[i];
+            DebugTools.Assert(adjacent == null || component.Tiles[otherIndices] == adjacent);
+            if (adjacent == null)
             {
-                adjacent = new TileAtmosphere(tile.GridIndex, otherIndices,
-                    GetTileMixture(null, mapUid, otherIndices),
-                    space: IsTileSpace(null, mapUid, otherIndices, mapGridComp));
+                adjacent = component.Tiles.GetOrNew(otherIndices, out var exists);
+                if (!exists)
+                {
+                    adjacent.GridIndex = tile.GridIndex;
+                    adjacent.GridIndices = otherIndices;
+                    adjacent.Air = GetTileMixture(null, mapUid, default);
+                    adjacent.Space = IsTileSpace(null, mapUid, default);
+                    adjacent.MolesArchived = adjacent.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
+                }
             }
 
             var oppositeDirection = direction.GetOpposite();
@@ -372,15 +380,16 @@ public sealed partial class AtmosphereSystem
                 adjacent.AdjacentTiles[oppositeDirection.ToIndex()] = null;
             }
 
+            DebugTools.AssertEqual(direction.ToIndex(), i);
             if (!tile.BlockedAirflow.IsFlagSet(direction) && !adjacentBlockedEv.Result)
             {
                 tile.AdjacentBits |= direction;
-                tile.AdjacentTiles[direction.ToIndex()] = adjacent;
+                tile.AdjacentTiles[i] = adjacent;
             }
             else
             {
                 tile.AdjacentBits &= ~direction;
-                tile.AdjacentTiles[direction.ToIndex()] = null;
+                tile.AdjacentTiles[i] = null;
             }
 
             DebugTools.Assert(!(tile.AdjacentBits.IsFlagSet(direction) ^
@@ -541,9 +550,14 @@ public sealed partial class AtmosphereSystem
 
         foreach (var tile in mapGrid.GetAllTiles())
         {
-            if (!gridAtmosphere.Tiles.ContainsKey(tile.GridIndices))
-                gridAtmosphere.Tiles[tile.GridIndices] = new TileAtmosphere(tile.GridUid, tile.GridIndices,
-                    new GasMixture(volume) { Temperature = Atmospherics.T20C });
+            var atmos = gridAtmosphere.Tiles.GetOrNew(tile.GridIndices, out var exists);
+            if (!exists)
+            {
+                atmos.GridIndex = tile.GridUid;
+                atmos.GridIndices = tile.GridIndices;
+                atmos.Air = new GasMixture(volume) {Temperature = Atmospherics.T20C};
+                atmos.MolesArchived = atmos.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
+            }
 
             gridAtmosphere.InvalidatedCoords.Add(tile.GridIndices);
         }

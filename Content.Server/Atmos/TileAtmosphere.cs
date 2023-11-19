@@ -1,3 +1,4 @@
+using Content.Server.Atmos.Components;
 using Content.Server.Atmos.EntitySystems;
 using Content.Shared.Atmos;
 using Content.Shared.Maps;
@@ -46,7 +47,7 @@ namespace Content.Server.Atmos
         public bool Space { get; set; }
 
         /// <summary>
-        ///     Adjacent tiles in the same order as <see cref="AtmosDirection"/>. (NSEW)
+        ///     Adjacent tiles in the same order as <see cref="AtmosDirection"/> (NSEW).
         /// </summary>
         [ViewVariables]
         public readonly TileAtmosphere?[] AdjacentTiles = new TileAtmosphere[Atmospherics.Directions];
@@ -75,7 +76,7 @@ namespace Content.Server.Atmos
         public TileRef? Tile => GridIndices.GetTileRef(GridIndex);
 
         [ViewVariables]
-        public Vector2i GridIndices { get; }
+        public Vector2i GridIndices;
 
         [ViewVariables]
         public ExcitedGroup? ExcitedGroup { get; set; }
@@ -105,6 +106,10 @@ namespace Content.Server.Atmos
 
         [ViewVariables]
         public AtmosDirection BlockedAirflow { get; set; } = AtmosDirection.Invalid;
+
+        public TileAtmosphere()
+        {
+        }
 
         public TileAtmosphere(EntityUid gridIndex, Vector2i gridIndices, GasMixture? mixture = null, bool immutable = false, bool space = false)
         {

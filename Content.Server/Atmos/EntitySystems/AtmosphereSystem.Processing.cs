@@ -8,6 +8,7 @@ using Content.Shared.Maps;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Physics.Components;
 using Robust.Shared.Timing;
+using Robust.Shared.Utility;
 
 namespace Content.Server.Atmos.EntitySystems
 {
@@ -60,11 +61,13 @@ namespace Content.Server.Atmos.EntitySystems
             var number = 0;
             while (atmosphere.CurrentRunInvalidatedCoordinates.TryDequeue(out var indices))
             {
-                if (!atmosphere.Tiles.TryGetValue(indices, out var tile))
+                var tile = atmosphere.Tiles.GetOrNew(indices, out var exists);
+                if (!exists)
                 {
-                    tile = new TileAtmosphere(owner, indices,
-                        new GasMixture(volume) { Temperature = Atmospherics.T20C });
-                    atmosphere.Tiles[indices] = tile;
+                    tile.GridIndex = owner;
+                    tile.GridIndices = indices;
+                    tile.Air = new GasMixture(volume) { Temperature = Atmospherics.T20C };
+                    tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
                 }
 
                 var airBlockedEv = new IsTileAirBlockedMethodEvent(owner, indices, MapGridComponent:mapGridComp);
@@ -84,9 +87,9 @@ namespace Content.Server.Atmos.EntitySystems
                 // Call this instead of the grid method as the map has a say on whether the tile is space or not.
                 if ((!mapGridComp.TryGetTileRef(indices, out var t) || t.IsSpace(_tileDefinitionManager)) && !isAirBlocked)
                 {
-                    tile.Air = GetTileMixture(null, mapUid, indices);
+                    tile.Air = GetTileMixture(null, mapUid, default);
+                    tile.Space = IsTileSpace(null, mapUid, default);
                     tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
-                    tile.Space = IsTileSpace(null, mapUid, indices, mapGridComp);
                 }
                 else if (isAirBlocked)
                 {
