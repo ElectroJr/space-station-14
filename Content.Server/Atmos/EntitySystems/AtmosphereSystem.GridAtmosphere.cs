@@ -317,7 +317,7 @@ public sealed partial class AtmosphereSystem
             GridUpdateAdjacent(tile, ref args);
     }
 
-    private void GridUpdateAdjacent(TileAtmosphere tile, ref UpdateAdjacentMethodEvent args)
+    private void GridUpdateAdjacent(TileAtmosphere tile, ref UpdateAdjacentMethodEvent args, AtmosDirection? blocked = null)
     {
         DebugTools.AssertEqual(args.Grid.Comp1.Tiles[args.Tile], tile);
         if (args.Handled)
@@ -327,7 +327,7 @@ public sealed partial class AtmosphereSystem
         var mapUid = xform.MapUid;
 
         tile.AdjacentBits = AtmosDirection.Invalid;
-        tile.BlockedAirflow = GetBlockedDirections(mapGridComp, tile.GridIndices);
+        tile.BlockedAirflow = blocked ?? GetBlockedDirections(mapGridComp, tile.GridIndices).Blocked;
 
         for (var i = 0; i < Atmospherics.Directions; i++)
         {
@@ -351,7 +351,7 @@ public sealed partial class AtmosphereSystem
 
             var oppositeDirection = direction.GetOpposite();
 
-            adjacent.BlockedAirflow = GetBlockedDirections(mapGridComp, adjacent.GridIndices);
+            adjacent.BlockedAirflow = GetBlockedDirections(mapGridComp, adjacent.GridIndices).Blocked;
 
             // Pass in MapGridComponent so we don't have to resolve it for every adjacent direction.
             var tileBlockedEv = new IsTileAirBlockedMethodEvent(uid, tile.GridIndices, direction, mapGridComp);

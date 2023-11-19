@@ -67,13 +67,12 @@ namespace Content.Server.Atmos.EntitySystems
                     tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
                 }
 
-                var airBlockedEv = new IsTileAirBlockedMethodEvent(owner, indices, MapGridComponent:mapGridComp);
-                GridIsTileAirBlocked(owner, atmosphere, ref airBlockedEv);
-                var isAirBlocked = airBlockedEv.Result;
+                var (blocked, noAir) = GetBlockedDirections(ent, indices);
+                var isAirBlocked = blocked == AtmosDirection.All;
 
                 var oldBlocked = tile.BlockedAirflow;
                 var updateAdjacentEv = new UpdateAdjacentMethodEvent((ent.Owner, ent.Comp1, ent.Comp3, ent.Comp4), indices);
-                GridUpdateAdjacent(tile, ref updateAdjacentEv);
+                GridUpdateAdjacent(tile, ref updateAdjacentEv, blocked: blocked);
 
                 // Blocked airflow changed, rebuild excited groups!
                 if (tile.Excited && tile.BlockedAirflow != oldBlocked)
@@ -89,7 +88,7 @@ namespace Content.Server.Atmos.EntitySystems
                 }
                 else if (isAirBlocked)
                 {
-                    if (airBlockedEv.NoAir)
+                    if (noAir)
                     {
                         tile.Air = null;
                         tile.MolesArchived = null;

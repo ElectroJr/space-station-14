@@ -81,19 +81,26 @@ public partial class AtmosphereSystem
         return enumerator;
     }
 
-    private AtmosDirection GetBlockedDirections(MapGridComponent mapGrid, Vector2i indices)
+    private  (AtmosDirection Blocked, bool NoAir) GetBlockedDirections(MapGridComponent mapGrid, Vector2i indices)
     {
-        var value = AtmosDirection.Invalid;
+        var directions = AtmosDirection.Invalid;
+        var noAir = false;
 
         var enumerator = GetObstructingComponentsEnumerator(mapGrid, indices);
 
         while (enumerator.MoveNext(out var airtight))
         {
-            if(airtight.AirBlocked)
-                value |= airtight.AirBlockedDirection;
+            if(!airtight.AirBlocked)
+                continue;
+
+            directions |= airtight.AirBlockedDirection;
+            noAir |= airtight.NoAirWhenFullyAirBlocked;
+
+            if (directions == AtmosDirection.All && noAir)
+                break;
         }
 
-        return value;
+        return (directions, noAir);
     }
 
     /// <summary>
