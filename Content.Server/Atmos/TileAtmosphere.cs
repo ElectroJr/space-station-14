@@ -71,7 +71,7 @@ namespace Content.Server.Atmos
         [Access(typeof(AtmosphereSystem))]
         public EntityUid GridIndex { get; set; }
 
-        [ViewVariables]
+        [ViewVariables, Obsolete]
         public TileRef? Tile => GridIndices.GetTileRef(GridIndex);
 
         [ViewVariables]
