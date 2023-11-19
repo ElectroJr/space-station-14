@@ -164,6 +164,21 @@ public partial class AtmosphereSystem
         return ev.Mixture ?? GasMixture.SpaceGas;
     }
 
+    public (GasMixture? Air, bool IsSpace) GetDefaultMapMixture(EntityUid? mapUid)
+    {
+        var ev = new GetDefaultMapMixtureMethodEvent(mapUid);
+        if(mapUid.HasValue)
+        {
+            DebugTools.Assert(_mapManager.IsMap(mapUid.Value));
+            RaiseLocalEvent(mapUid.Value, ref ev);
+        }
+
+        if (!ev.Handled)
+            RaiseLocalEvent(ref ev);
+
+        return (ev.Mixture ?? GasMixture.SpaceGas, ev.IsSpace);
+    }
+
     public ReactionResult ReactTile(EntityUid gridId, Vector2i tile)
     {
         var ev = new ReactTileMethodEvent(gridId, tile);
@@ -331,6 +346,9 @@ public partial class AtmosphereSystem
 
     [ByRefEvent] private record struct IsTileSpaceMethodEvent
         (EntityUid? Grid, EntityUid? Map, Vector2i GridTile, MapGridComponent? MapGridComponent = null, bool Result = true, bool Handled = false);
+
+    [ByRefEvent] private record struct GetDefaultMapMixtureMethodEvent
+        (EntityUid? Map, GasMixture? Mixture = null, bool IsSpace = true, bool Handled = false);
 
     [ByRefEvent] private record struct GetAdjacentTilesMethodEvent
         (EntityUid Grid, Vector2i Tile, IEnumerable<Vector2i>? Result = null, bool Handled = false);

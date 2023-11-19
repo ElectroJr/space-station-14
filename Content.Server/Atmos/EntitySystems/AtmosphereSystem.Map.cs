@@ -11,7 +11,18 @@ public partial class AtmosphereSystem
         SubscribeLocalEvent<MapAtmosphereComponent, IsTileSpaceMethodEvent>(MapIsTileSpace);
         SubscribeLocalEvent<MapAtmosphereComponent, GetTileMixtureMethodEvent>(MapGetTileMixture);
         SubscribeLocalEvent<MapAtmosphereComponent, GetTileMixturesMethodEvent>(MapGetTileMixtures);
+        SubscribeLocalEvent<MapAtmosphereComponent, GetDefaultMapMixtureMethodEvent>(OnGetDefaultMixture);
         SubscribeLocalEvent<MapAtmosphereComponent, ComponentGetState>(OnMapGetState);
+    }
+
+    private void OnGetDefaultMixture(EntityUid uid, MapAtmosphereComponent component, GetDefaultMapMixtureMethodEvent args)
+    {
+        if (args.Handled)
+            return;
+
+        args.Mixture = component.Mixture?.Clone();
+        args.IsSpace = component.Space;
+        args.Handled = true;
     }
 
     private void MapIsTileSpace(EntityUid uid, MapAtmosphereComponent component, ref IsTileSpaceMethodEvent args)

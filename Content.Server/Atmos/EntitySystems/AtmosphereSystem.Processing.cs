@@ -87,8 +87,7 @@ namespace Content.Server.Atmos.EntitySystems
                 // Call this instead of the grid method as the map has a say on whether the tile is space or not.
                 if ((!mapGridComp.TryGetTileRef(indices, out var t) || t.IsSpace(_tileDefinitionManager)) && !isAirBlocked)
                 {
-                    tile.Air = GetTileMixture(null, mapUid, default);
-                    tile.Space = IsTileSpace(null, mapUid, default);
+                    (tile.Air, tile.Space) = GetDefaultMapMixture(mapUid);
                     tile.MolesArchived = tile.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
                 }
                 else if (isAirBlocked)

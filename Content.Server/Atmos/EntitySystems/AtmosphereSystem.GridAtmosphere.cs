@@ -351,8 +351,7 @@ public sealed partial class AtmosphereSystem
                 {
                     adjacent.GridUid = tile.GridUid;
                     adjacent.GridIndices = otherIndices;
-                    adjacent.Air = GetTileMixture(null, mapUid, default);
-                    adjacent.Space = IsTileSpace(null, mapUid, default);
+                    (adjacent.Air, adjacent.Space) = GetDefaultMapMixture(mapUid);
                     adjacent.MolesArchived = adjacent.Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
                 }
             }
