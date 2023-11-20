@@ -111,16 +111,20 @@ namespace Content.Server.Atmos
         {
         }
 
-        public TileAtmosphere(EntityUid gridUid, Vector2i gridIndices, GasMixture? mixture = null, bool immutable = false, bool space = false)
+        public TileAtmosphere(EntityUid gridUid, Vector2i gridIndices, GasMixture? mixture = null)
         {
             GridUid = gridUid;
             GridIndices = gridIndices;
             Air = mixture;
-            Space = space;
             MolesArchived = Air != null ? new float[Atmospherics.AdjustedNumberOfGases] : null;
+        }
 
-            if(immutable)
-                Air?.MarkImmutable();
+        public TileAtmosphere(TileAtmosphere toCopy) : this(
+            toCopy.GridUid,
+            toCopy.GridIndices,
+            toCopy.Air?.Clone())
+        {
+            Space = toCopy.Space;
         }
     }
 }

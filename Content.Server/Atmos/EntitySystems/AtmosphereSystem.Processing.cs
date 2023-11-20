@@ -105,8 +105,11 @@ namespace Content.Server.Atmos.EntitySystems
                         GridFixTileVacuum(owner, atmosphere, ref vacuumEv);
                     }
 
-                    // Tile used to be space, but isn't anymore.
-                    if (tile.Space || (tile.Air?.Immutable ?? false))
+                    // Space must be immutable.
+                    DebugTools.Assert(!tile.Space || tile.Air?.Immutable == true);
+
+                    // Tile used to be the map's atmosphere, but isn't anymore.
+                    if (tile.Air?.Immutable == true)
                     {
                         tile.Air = null;
                         tile.MolesArchived = null;

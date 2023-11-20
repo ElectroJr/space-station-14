@@ -176,6 +176,7 @@ public partial class AtmosphereSystem
         if (!ev.Handled)
             RaiseLocalEvent(ref ev);
 
+        DebugTools.Assert(ev.Mixture == null || ev.Mixture.Immutable);
         return (ev.Mixture ?? GasMixture.SpaceGas, ev.IsSpace);
     }
 
