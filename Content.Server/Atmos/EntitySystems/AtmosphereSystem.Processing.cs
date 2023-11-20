@@ -128,7 +128,7 @@ namespace Content.Server.Atmos.EntitySystems
                     ExcitedGroupDispose(atmosphere, tile.ExcitedGroup);
                 }
 
-                if (tile.Air == null)
+                if (tile.Air != null)
                 {
                     tile.Excited = true;
                     atmosphere.ActiveTiles.Add(tile);
@@ -163,7 +163,6 @@ namespace Content.Server.Atmos.EntitySystems
             Queue<TileAtmosphere> queue,
             HashSet<TileAtmosphere> tiles)
         {
-
             queue.Clear();
             queue.EnsureCapacity(tiles.Count);
             foreach (var tile in tiles)
