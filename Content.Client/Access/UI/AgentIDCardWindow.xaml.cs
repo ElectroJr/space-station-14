@@ -65,7 +65,6 @@ namespace Content.Client.Access.UI
                     StyleClasses = { styleBase },
                     MaxSize = new Vector2(42, 28),
                     Group = jobIconGroup,
-                    Pressed = i == 0,
                 };
 
                 // Generate buttons textures
