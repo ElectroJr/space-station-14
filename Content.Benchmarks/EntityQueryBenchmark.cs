@@ -11,6 +11,7 @@ using CommunityToolkit.HighPerformance;
 using Content.IntegrationTests;
 using Content.IntegrationTests.Pair;
 using Content.Shared.Clothing.Components;
+using Content.Shared.Doors.Components;
 using Content.Shared.Item;
 using Robust.Server.GameObjects;
 using Robust.Shared;
@@ -150,12 +151,9 @@ public class EntityQueryBenchmark
 
     #region Enumeration
 
-    /// <summary>
-    /// Enumerate all entities with an item component.
-    /// </summary>
     [Benchmark]
-    [BenchmarkCategory("Enumerator")]
-    public int SingleEnumerator()
+    [BenchmarkCategory("Item Enumerator")]
+    public int SingleItemEnumerator()
     {
         var hashCode = 0;
         var enumerator = _entMan.AllEntityQueryEnumerator<ItemComponent>();
@@ -167,12 +165,9 @@ public class EntityQueryBenchmark
         return hashCode;
     }
 
-    /// <summary>
-    /// Enumerate all entities with both an item and clothing component.
-    /// </summary>
     [Benchmark]
-    [BenchmarkCategory("Enumerator")]
-    public int DoubleEnumerator()
+    [BenchmarkCategory("Item Enumerator")]
+    public int DoubleItemEnumerator()
     {
         var hashCode = 0;
         var enumerator = _entMan.AllEntityQueryEnumerator<ClothingComponent, ItemComponent>();
@@ -184,24 +179,60 @@ public class EntityQueryBenchmark
         return hashCode;
     }
 
-    /// <summary>
-    /// How long it takes to get/construct a single component enumerator.
-    /// </summary>
-    [Benchmark(Baseline = true)]
-    [BenchmarkCategory("GetEnumerator")]
-    public AllEntityQueryEnumerator<ItemComponent> GetSingleEnumerator()
+    [Benchmark]
+    [BenchmarkCategory("Item Enumerator")]
+    public int TripleItemEnumerator()
     {
-        return _entMan.AllEntityQueryEnumerator<ItemComponent>();
+        var hashCode = 0;
+        var enumerator = _entMan.AllEntityQueryEnumerator<ClothingComponent, ItemComponent, TransformComponent>();
+        while (enumerator.MoveNext(out _, out _, out var xform))
+        {
+            hashCode = HashCode.Combine(hashCode, xform.GetHashCode());
+        }
+
+        return hashCode;
     }
 
-    /// <summary>
-    /// How long it takes to get/construct a double component enumerator.
-    /// </summary>
     [Benchmark]
-    [BenchmarkCategory("GetEnumerator")]
-    public AllEntityQueryEnumerator<ClothingComponent, ItemComponent> GetDoubleEnumerator()
+    [BenchmarkCategory("Airlock Enumerator")]
+    public int SingleAirlockEnumerator()
     {
-        return _entMan.AllEntityQueryEnumerator<ClothingComponent, ItemComponent>();
+        var hashCode = 0;
+        var enumerator = _entMan.AllEntityQueryEnumerator<AirlockComponent>();
+        while (enumerator.MoveNext(out var airlock))
+        {
+            hashCode = HashCode.Combine(hashCode, airlock.GetHashCode());
+        }
+
+        return hashCode;
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("Airlock Enumerator")]
+    public int DoubleAirlockEnumerator()
+    {
+        var hashCode = 0;
+        var enumerator = _entMan.AllEntityQueryEnumerator<AirlockComponent, DoorComponent>();
+        while (enumerator.MoveNext(out _, out var door))
+        {
+            hashCode = HashCode.Combine(hashCode, door.GetHashCode());
+        }
+
+        return hashCode;
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("Airlock Enumerator")]
+    public int TripleAirlockEnumerator()
+    {
+        var hashCode = 0;
+        var enumerator = _entMan.AllEntityQueryEnumerator<AirlockComponent, DoorComponent, TransformComponent>();
+        while (enumerator.MoveNext(out _, out _, out var xform))
+        {
+            hashCode = HashCode.Combine(hashCode, xform.GetHashCode());
+        }
+
+        return hashCode;
     }
 
     #endregion
