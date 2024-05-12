@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Content.Benchmarks.EntityQueryBenchmark-20240512-121631</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.13.12, Windows 10 (10.0.19042.1081/20H2/October2020Update)
+AMD Ryzen 7 3800X, 1 CPU, 16 logical and 8 physical cores
+.NET SDK 8.0.203
+  [Host]     : .NET 8.0.3 (8.0.324.11423), X64 RyuJIT AVX2
+  DefaultJob : .NET 8.0.3 (8.0.324.11423), X64 RyuJIT AVX2
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>Method       </th><th>Categories</th><th>Mean  </th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th>
+</tr>
+</thead><tbody><tr><td>SingleEnumerator</td><td>Enumerator</td><td>234,946.3 ns</td><td>124.02 ns</td><td>109.94 ns</td><td>?</td><td>?</td>
+</tr><tr><td>DoubleEnumerator</td><td>Enumerator</td><td>33,727.0 ns</td><td>50.44 ns</td><td>47.18 ns</td><td>?</td><td>?</td>
+</tr><tr><td>StructEvents</td><td>Events</td><td>477,189.2 ns</td><td>636.05 ns</td><td>594.96 ns</td><td>1.00</td><td>0.00</td>
+</tr><tr><td>GetSingleEnumerator</td><td>GetEnumerator</td><td>177.7 ns</td><td>0.56 ns</td><td>0.52 ns</td><td>1.00</td><td>0.00</td>
+</tr><tr><td>GetDoubleEnumerator</td><td>GetEnumerator</td><td>188.3 ns</td><td>0.64 ns</td><td>0.60 ns</td><td>1.06</td><td>0.00</td>
+</tr><tr><td>TryComp</td><td>TryComp</td><td>113,485.8 ns</td><td>128.74 ns</td><td>107.50 ns</td><td>1.00</td><td>0.00</td>
+</tr><tr><td>TryCompFail</td><td>TryComp</td><td>88,929.7 ns</td><td>43.92 ns</td><td>38.93 ns</td><td>0.78</td><td>0.00</td>
+</tr><tr><td>TryCompSucceed</td><td>TryComp</td><td>274,630.7 ns</td><td>256.89 ns</td><td>214.51 ns</td><td>2.42</td><td>0.00</td>
+</tr></tbody></table>
+</body>
+</html>
