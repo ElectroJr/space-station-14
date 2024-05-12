@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>Content.Benchmarks.EntityQueryBenchmark-20240512-121631</title>
+<title>Content.Benchmarks.EntityQueryBenchmark-20240512-151504</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -22,16 +22,19 @@ AMD Ryzen 7 3800X, 1 CPU, 16 logical and 8 physical cores
 <pre><code></code></pre>
 
 <table>
-<thead><tr><th>Method       </th><th>Categories</th><th>Mean  </th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th>
+<thead><tr><th>Method           </th><th>Categories  </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th>
 </tr>
-</thead><tbody><tr><td>SingleEnumerator</td><td>Enumerator</td><td>234,946.3 ns</td><td>124.02 ns</td><td>109.94 ns</td><td>?</td><td>?</td>
-</tr><tr><td>DoubleEnumerator</td><td>Enumerator</td><td>33,727.0 ns</td><td>50.44 ns</td><td>47.18 ns</td><td>?</td><td>?</td>
-</tr><tr><td>StructEvents</td><td>Events</td><td>477,189.2 ns</td><td>636.05 ns</td><td>594.96 ns</td><td>1.00</td><td>0.00</td>
-</tr><tr><td>GetSingleEnumerator</td><td>GetEnumerator</td><td>177.7 ns</td><td>0.56 ns</td><td>0.52 ns</td><td>1.00</td><td>0.00</td>
-</tr><tr><td>GetDoubleEnumerator</td><td>GetEnumerator</td><td>188.3 ns</td><td>0.64 ns</td><td>0.60 ns</td><td>1.06</td><td>0.00</td>
-</tr><tr><td>TryComp</td><td>TryComp</td><td>113,485.8 ns</td><td>128.74 ns</td><td>107.50 ns</td><td>1.00</td><td>0.00</td>
-</tr><tr><td>TryCompFail</td><td>TryComp</td><td>88,929.7 ns</td><td>43.92 ns</td><td>38.93 ns</td><td>0.78</td><td>0.00</td>
-</tr><tr><td>TryCompSucceed</td><td>TryComp</td><td>274,630.7 ns</td><td>256.89 ns</td><td>214.51 ns</td><td>2.42</td><td>0.00</td>
+</thead><tbody><tr><td>SingleAirlockEnumerator</td><td>Airlock Enumerator</td><td>6.116 &mu;s</td><td>0.0087 &mu;s</td><td>0.0081 &mu;s</td><td>?</td><td>?</td>
+</tr><tr><td>DoubleAirlockEnumerator</td><td>Airlock Enumerator</td><td>7.020 &mu;s</td><td>0.0038 &mu;s</td><td>0.0034 &mu;s</td><td>?</td><td>?</td>
+</tr><tr><td>TripleAirlockEnumerator</td><td>Airlock Enumerator</td><td>8.487 &mu;s</td><td>0.0086 &mu;s</td><td>0.0077 &mu;s</td><td>?</td><td>?</td>
+</tr><tr><td>StructEvents</td><td>Events</td><td>476.205 &mu;s</td><td>0.6870 &mu;s</td><td>0.6426 &mu;s</td><td>1.00</td><td>0.00</td>
+</tr><tr><td>SingleItemEnumerator</td><td>Item Enumerator</td><td>234.402 &mu;s</td><td>0.0744 &mu;s</td><td>0.0622 &mu;s</td><td>?</td><td>?</td>
+</tr><tr><td>DoubleItemEnumerator</td><td>Item Enumerator</td><td>33.445 &mu;s</td><td>0.0940 &mu;s</td><td>0.0879 &mu;s</td><td>?</td><td>?</td>
+</tr><tr><td>TripleItemEnumerator</td><td>Item Enumerator</td><td>42.084 &mu;s</td><td>0.0828 &mu;s</td><td>0.0775 &mu;s</td><td>?</td><td>?</td>
+</tr><tr><td>TryComp</td><td>TryComp</td><td>116.498 &mu;s</td><td>0.1344 &mu;s</td><td>0.1257 &mu;s</td><td>1.00</td><td>0.00</td>
+</tr><tr><td>TryCompCached</td><td>TryComp</td><td>8.823 &mu;s</td><td>0.0222 &mu;s</td><td>0.0197 &mu;s</td><td>0.08</td><td>0.00</td>
+</tr><tr><td>TryCompFail</td><td>TryComp</td><td>89.373 &mu;s</td><td>0.0379 &mu;s</td><td>0.0316 &mu;s</td><td>0.77</td><td>0.00</td>
+</tr><tr><td>TryCompSucceed</td><td>TryComp</td><td>272.554 &mu;s</td><td>0.1699 &mu;s</td><td>0.1589 &mu;s</td><td>2.34</td><td>0.00</td>
 </tr></tbody></table>
 </body>
 </html>

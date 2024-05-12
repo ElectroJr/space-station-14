@@ -8,16 +8,19 @@ AMD Ryzen 7 3800X, 1 CPU, 16 logical and 8 physical cores
 
 
 ```
-| Method              | Categories    | Mean         | Error     | StdDev    | Ratio | RatioSD |
-|-------------------- |-------------- |-------------:|----------:|----------:|------:|--------:|
-| SingleEnumerator    | Enumerator    | 234,946.3 ns | 124.02 ns | 109.94 ns |     ? |       ? |
-| DoubleEnumerator    | Enumerator    |  33,727.0 ns |  50.44 ns |  47.18 ns |     ? |       ? |
-|                     |               |              |           |           |       |         |
-| StructEvents        | Events        | 477,189.2 ns | 636.05 ns | 594.96 ns |  1.00 |    0.00 |
-|                     |               |              |           |           |       |         |
-| GetSingleEnumerator | GetEnumerator |     177.7 ns |   0.56 ns |   0.52 ns |  1.00 |    0.00 |
-| GetDoubleEnumerator | GetEnumerator |     188.3 ns |   0.64 ns |   0.60 ns |  1.06 |    0.00 |
-|                     |               |              |           |           |       |         |
-| TryComp             | TryComp       | 113,485.8 ns | 128.74 ns | 107.50 ns |  1.00 |    0.00 |
-| TryCompFail         | TryComp       |  88,929.7 ns |  43.92 ns |  38.93 ns |  0.78 |    0.00 |
-| TryCompSucceed      | TryComp       | 274,630.7 ns | 256.89 ns | 214.51 ns |  2.42 |    0.00 |
+| Method                  | Categories         | Mean       | Error     | StdDev    | Ratio | RatioSD |
+|------------------------ |------------------- |-----------:|----------:|----------:|------:|--------:|
+| SingleAirlockEnumerator | Airlock Enumerator |   6.116 μs | 0.0087 μs | 0.0081 μs |     ? |       ? |
+| DoubleAirlockEnumerator | Airlock Enumerator |   7.020 μs | 0.0038 μs | 0.0034 μs |     ? |       ? |
+| TripleAirlockEnumerator | Airlock Enumerator |   8.487 μs | 0.0086 μs | 0.0077 μs |     ? |       ? |
+|                         |                    |            |           |           |       |         |
+| StructEvents            | Events             | 476.205 μs | 0.6870 μs | 0.6426 μs |  1.00 |    0.00 |
+|                         |                    |            |           |           |       |         |
+| SingleItemEnumerator    | Item Enumerator    | 234.402 μs | 0.0744 μs | 0.0622 μs |     ? |       ? |
+| DoubleItemEnumerator    | Item Enumerator    |  33.445 μs | 0.0940 μs | 0.0879 μs |     ? |       ? |
+| TripleItemEnumerator    | Item Enumerator    |  42.084 μs | 0.0828 μs | 0.0775 μs |     ? |       ? |
+|                         |                    |            |           |           |       |         |
+| TryComp                 | TryComp            | 116.498 μs | 0.1344 μs | 0.1257 μs |  1.00 |    0.00 |
+| TryCompCached           | TryComp            |   8.823 μs | 0.0222 μs | 0.0197 μs |  0.08 |    0.00 |
+| TryCompFail             | TryComp            |  89.373 μs | 0.0379 μs | 0.0316 μs |  0.77 |    0.00 |
+| TryCompSucceed          | TryComp            | 272.554 μs | 0.1699 μs | 0.1589 μs |  2.34 |    0.00 |
