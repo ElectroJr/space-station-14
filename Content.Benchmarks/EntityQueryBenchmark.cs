@@ -35,7 +35,7 @@ public class EntityQueryBenchmark
     public const string Map = "Maps/atlas.yml";
 
     private TestPair _pair = default!;
-    private IEntityManager _entMan = default!;
+    private EntityManager _entMan = default!;
     private MapId _mapId = new(10);
     private EntityUid[] _items = default!;
     private BenchEnt[] _itemEnts = default!;
@@ -49,7 +49,7 @@ public class EntityQueryBenchmark
         PoolManager.Startup(typeof(QueryBenchSystem).Assembly);
 
         _pair = PoolManager.GetServerClient().GetAwaiter().GetResult();
-        _entMan = _pair.Server.ResolveDependency<IEntityManager>();
+        _entMan = _pair.Server.ResolveDependency<EntityManager>();
 
         _pair.Server.ResolveDependency<IRobustRandom>().SetSeed(42);
         _pair.Server.WaitPost(() =>
@@ -60,8 +60,7 @@ public class EntityQueryBenchmark
             _pair.Server.MapMan.DoMapInitialize(_mapId);
         }).GetAwaiter().GetResult();
 
-        var e = (EntityManager) _entMan;
-        _world = e._world;
+        _world = _entMan._world;
 
         _items = new EntityUid[_entMan.Count<ItemComponent>()];
         _itemEnts = new BenchEnt[_entMan.Count<ItemComponent>()];
