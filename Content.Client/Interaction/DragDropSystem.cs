@@ -302,31 +302,21 @@ public sealed class DragDropSystem : SharedDragDropSystem
                 {
                     var savedValue = _savedMouseDown.Value;
                     _isReplaying = true;
-                    // adjust the timing info based on the current tick so it appears as if it happened now
-                    var replayMsg = savedValue.OriginalMessage;
 
-                    switch (replayMsg)
+                    var replayMsg = savedValue.OriginalMessage switch
                     {
-                        case ClientFullInputCmdMessage clientInput:
-                            replayMsg = new ClientFullInputCmdMessage(args.OriginalMessage.Tick,
-                                args.OriginalMessage.SubTick,
-                                replayMsg.InputFunctionId)
-                            {
-                                State = replayMsg.State,
-                                Coordinates = clientInput.Coordinates,
-                                ScreenCoordinates = clientInput.ScreenCoordinates,
-                                Uid = clientInput.Uid,
-                            };
-                            break;
-                        case FullInputCmdMessage fullInput:
-                            replayMsg = new FullInputCmdMessage(args.OriginalMessage.Tick,
-                                args.OriginalMessage.SubTick,
-                                replayMsg.InputFunctionId, replayMsg.State, fullInput.Coordinates, fullInput.ScreenCoordinates,
-                                fullInput.Uid);
-                            break;
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
+                        ClientFullInputCmdMessage clientInput => clientInput,
+                        FullInputCmdMessage fullInput => new ClientFullInputCmdMessage(
+                            args.OriginalMessage.Tick,
+                            args.OriginalMessage.SubTick,
+                            fullInput.InputFunctionId,
+                            GetCoordinates(fullInput.Coordinates),
+                            fullInput.ScreenCoordinates,
+                            fullInput.State,
+                            GetEntity(fullInput.Uid)),
+
+                        _ => throw new ArgumentOutOfRangeException()
+                    };
 
                     if (savedValue.Session != null)
                     {
