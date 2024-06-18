@@ -1,7 +1,9 @@
+using Content.Shared.DragDrop;
 using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Interaction;
 using Content.Shared.Verbs;
 using Content.Shared.Examine;
+using Content.Shared.Hands.Components;
 using Content.Shared.Item.ItemToggle.Components;
 using Content.Shared.Storage;
 using JetBrains.Annotations;
@@ -28,6 +30,34 @@ public abstract class SharedItemSystem : EntitySystem
         SubscribeLocalEvent<ItemComponent, ExaminedEvent>(OnExamine);
 
         SubscribeLocalEvent<ItemToggleSizeComponent, ItemToggledEvent>(OnItemToggle);
+
+        SubscribeLocalEvent<HandsComponent, CanDropTargetEvent>(OnCanDropOn);
+        SubscribeLocalEvent<ItemComponent, CanDropDraggedEvent>(OnCanDrop);
+        SubscribeLocalEvent<ItemComponent, DragDropDraggedEvent>(OnDragDrop);
+        SubscribeLocalEvent<ItemComponent, CanDragEvent>(OnCanDrag);
+    }
+
+    private void OnCanDrag(Entity<ItemComponent> ent, ref CanDragEvent args)
+    {
+        args.Handled = true;
+    }
+
+    private void OnDragDrop(Entity<ItemComponent> ent, ref DragDropDraggedEvent args)
+    {
+        args.Handled = true;
+        _handsSystem.TryPickup(args.Target, ent);
+    }
+
+    private void OnCanDrop(Entity<ItemComponent> ent, ref CanDropDraggedEvent args)
+    {
+        args.Handled = true;
+        args.CanDrop = true;
+    }
+
+    private void OnCanDropOn(Entity<HandsComponent> ent, ref CanDropTargetEvent args)
+    {
+        args.Handled = true;
+        args.CanDrop = true;
     }
 
     private void OnItemAutoState(EntityUid uid, ItemComponent component, ref AfterAutoHandleStateEvent args)
@@ -88,10 +118,6 @@ public abstract class SharedItemSystem : EntitySystem
 
     private void OnHandInteract(EntityUid uid, ItemComponent component, InteractHandEvent args)
     {
-        if (args.Handled)
-            return;
-
-        args.Handled = _handsSystem.TryPickup(args.User, uid, animateUser: false);
     }
 
     private void AddPickupVerb(EntityUid uid, ItemComponent component, GetVerbsEvent<InteractionVerb> args)
