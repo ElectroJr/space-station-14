@@ -1,0 +1,7 @@
+- type: lightMask
+  id: cone
+  texture: /Textures/Effects/LightMasks/cone.png
+
+- type: lightMask
+  id: doubleCone
+  texture: /Textures/Effects/LightMasks/double_cone.png

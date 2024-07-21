@@ -205,6 +205,8 @@ namespace Content.Server.Entry
 #if DEBUG
             Load(CCVars.ConfigPresetDebug, "debug");
 #endif
+            Load(CCVars.ConfigPresetDevelopment, "development");
+            Load(CCVars.ConfigPresetDebug, "debug");
 
             void Load(CVarDef<bool> cVar, string name)
             {
