@@ -18,6 +18,7 @@
     - iota
     - rep
     - to
+    - cat # in QUERY, because that's where prototype uploading is, and this is probably useful for inspecting uploaded yml files. But maybe it should be in DEBUG instead.
 
 - Flags: DEBUG
   Commands:
